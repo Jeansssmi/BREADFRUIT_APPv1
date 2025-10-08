@@ -1,0 +1,139 @@
+[debug] [2025-10-08T00:41:02.979Z] ----------------------------------------------------------------------
+[debug] [2025-10-08T00:41:02.981Z] Command:       C:\nvm4w\nodejs\node.exe C:\Users\Brendaline\AppData\Roaming\npm\node_modules\firebase-tools\lib\bin\firebase.js emulators:start --debug
+[debug] [2025-10-08T00:41:02.981Z] CLI Version:   14.17.0
+[debug] [2025-10-08T00:41:02.982Z] Platform:      win32
+[debug] [2025-10-08T00:41:02.982Z] Node Version:  v20.19.5
+[debug] [2025-10-08T00:41:02.982Z] Time:          Wed Oct 08 2025 08:41:02 GMT+0800 (Philippine Standard Time)
+[debug] [2025-10-08T00:41:02.982Z] ----------------------------------------------------------------------
+[debug] 
+[debug] [2025-10-08T00:41:03.176Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2025-10-08T00:41:03.178Z] > authorizing via signed-in user (dmarklouil@gmail.com)
+[info] i  emulators: Starting emulators: functions, extensions {"metadata":{"emulator":{"name":"hub"},"message":"Starting emulators: functions, extensions"}}
+[debug] [2025-10-08T00:41:03.181Z] Checked if tokens are valid: true, expires at: 1759885642074
+[debug] [2025-10-08T00:41:03.182Z] Checked if tokens are valid: true, expires at: 1759885642074
+[debug] [2025-10-08T00:41:03.183Z] >>> [apiv2][query] GET https://cloudresourcemanager.googleapis.com/v1/projects/breadfruit-tracker [none]
+[debug] [2025-10-08T00:41:06.118Z] <<< [apiv2][status] GET https://cloudresourcemanager.googleapis.com/v1/projects/breadfruit-tracker 200
+[debug] [2025-10-08T00:41:06.119Z] <<< [apiv2][body] GET https://cloudresourcemanager.googleapis.com/v1/projects/breadfruit-tracker {"projectNumber":"1002993131736","projectId":"breadfruit-tracker","lifecycleState":"ACTIVE","name":"breadfruit-tracker","labels":{"firebase":"enabled","firebase-core":"disabled"},"createTime":"2025-06-05T03:25:55.570670Z"}
+[warn] !  hub: emulator hub unable to start on port 4400, starting on 4401 instead. {"metadata":{"emulator":{"name":"hub"},"message":"emulator hub unable to start on port 4400, starting on 4401 instead."}}
+[warn] !  ui: Emulator UI unable to start on port 4000, starting on 4001 instead. {"metadata":{"emulator":{"name":"ui"},"message":"Emulator UI unable to start on port 4000, starting on 4001 instead."}}
+[warn] !  logging: Logging Emulator unable to start on port 4500, starting on 4501 instead. {"metadata":{"emulator":{"name":"logging"},"message":"Logging Emulator unable to start on port 4500, starting on 4501 instead."}}
+[debug] [2025-10-08T00:41:06.131Z] [logging] Logging Emulator only supports listening on one address (127.0.0.1). Not listening on ::1
+[debug] [2025-10-08T00:41:06.132Z] assigned listening specs for emulators {"user":{"hub":[{"address":"127.0.0.1","family":"IPv4","port":4401},{"address":"::1","family":"IPv6","port":4401}],"ui":[{"address":"127.0.0.1","family":"IPv4","port":4001},{"address":"::1","family":"IPv6","port":4001}],"logging":[{"address":"127.0.0.1","family":"IPv4","port":4501}]},"metadata":{"message":"assigned listening specs for emulators"}}
+[debug] [2025-10-08T00:41:06.135Z] Emulator locator file path: C:\Users\BRENDA~1\AppData\Local\Temp\hub-breadfruit-tracker.json
+[warn] !  emulators: It seems that you are running multiple instances of the emulator suite for project breadfruit-tracker. This may result in unexpected behavior. 
+[debug] [2025-10-08T00:41:06.136Z] [hub] writing locator at C:\Users\BRENDA~1\AppData\Local\Temp\hub-breadfruit-tracker.json
+[debug] [2025-10-08T00:41:06.143Z] [Extensions] Started Extensions emulator, this is a noop.
+[warn] !  functions: Port 5001 is not open on localhost (127.0.0.1), could not start Functions Emulator. {"metadata":{"emulator":{"name":"functions"},"message":"Port 5001 is not open on localhost (127.0.0.1), could not start Functions Emulator."}}
+[warn] !  functions: To select a different host/port, specify that host/port in a firebase.json config file:
+      {
+        // ...
+        "emulators": {
+          "functions": {
+            "host": "HOST",
+            "port": "PORT"
+          }
+        }
+      } {"metadata":{"emulator":{"name":"functions"},"message":"To select a different host/port, specify that host/port in a firebase.json config file:\n      {\n        // ...\n        \"emulators\": {\n          \"functions\": {\n            \"host\": \"\u001b[33mHOST\u001b[39m\",\n            \"port\": \"\u001b[33mPORT\u001b[39m\"\n          }\n        }\n      }"}}
+[warn] !  eventarc: Eventarc Emulator unable to start on port 9299, starting on 9300 instead. {"metadata":{"emulator":{"name":"eventarc"},"message":"Eventarc Emulator unable to start on port 9299, starting on 9300 instead."}}
+[debug] [2025-10-08T00:41:06.151Z] [eventarc] Eventarc Emulator only supports listening on one address (127.0.0.1). Not listening on ::1
+[warn] !  tasks: Cloud Tasks Emulator unable to start on port 9499, starting on 9500 instead. {"metadata":{"emulator":{"name":"tasks"},"message":"Cloud Tasks Emulator unable to start on port 9499, starting on 9500 instead."}}
+[debug] [2025-10-08T00:41:06.152Z] [tasks] Cloud Tasks Emulator only supports listening on one address (127.0.0.1). Not listening on ::1
+[debug] [2025-10-08T00:41:06.155Z] Could not find VSCode notification endpoint: FetchError: request to http://localhost:40001/vscode/notify failed, reason: . If you are not running the Firebase Data Connect VSCode extension, this is expected and not an issue.
+[info] i  emulators: Shutting down emulators. {"metadata":{"emulator":{"name":"hub"},"message":"Shutting down emulators."}}
+[info] i  hub: Stopping emulator hub {"metadata":{"emulator":{"name":"hub"},"message":"Stopping emulator hub"}}
+[debug] [2025-10-08T00:41:06.157Z] Emulator locator file path: C:\Users\BRENDA~1\AppData\Local\Temp\hub-breadfruit-tracker.json
+[debug] [2025-10-08T00:41:06.174Z] Could not find VSCode notification endpoint: FetchError: request to http://localhost:40001/vscode/notify failed, reason: . If you are not running the Firebase Data Connect VSCode extension, this is expected and not an issue.
+[error] 
+[error] Error: Could not start Functions Emulator, port taken.
+[debug] [2025-10-08T00:50:02.171Z] ----------------------------------------------------------------------
+[debug] [2025-10-08T00:50:02.174Z] Command:       C:\nvm4w\nodejs\node.exe C:\Users\Brendaline\AppData\Roaming\npm\node_modules\firebase-tools\lib\bin\firebase.js emulators:start --debug
+[debug] [2025-10-08T00:50:02.174Z] CLI Version:   14.17.0
+[debug] [2025-10-08T00:50:02.174Z] Platform:      win32
+[debug] [2025-10-08T00:50:02.174Z] Node Version:  v20.19.5
+[debug] [2025-10-08T00:50:02.174Z] Time:          Wed Oct 08 2025 08:50:02 GMT+0800 (Philippine Standard Time)
+[debug] [2025-10-08T00:50:02.174Z] ----------------------------------------------------------------------
+[debug] 
+[debug] [2025-10-08T00:50:02.377Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2025-10-08T00:50:02.379Z] > authorizing via signed-in user (dmarklouil@gmail.com)
+[info] i  emulators: Starting emulators: functions, extensions {"metadata":{"emulator":{"name":"hub"},"message":"Starting emulators: functions, extensions"}}
+[debug] [2025-10-08T00:50:02.385Z] Checked if tokens are valid: true, expires at: 1759885642074
+[debug] [2025-10-08T00:50:02.385Z] Checked if tokens are valid: true, expires at: 1759885642074
+[debug] [2025-10-08T00:50:02.387Z] >>> [apiv2][query] GET https://cloudresourcemanager.googleapis.com/v1/projects/breadfruit-tracker [none]
+[debug] [2025-10-08T00:50:04.134Z] <<< [apiv2][status] GET https://cloudresourcemanager.googleapis.com/v1/projects/breadfruit-tracker 200
+[debug] [2025-10-08T00:50:04.134Z] <<< [apiv2][body] GET https://cloudresourcemanager.googleapis.com/v1/projects/breadfruit-tracker {"projectNumber":"1002993131736","projectId":"breadfruit-tracker","lifecycleState":"ACTIVE","name":"breadfruit-tracker","labels":{"firebase":"enabled","firebase-core":"disabled"},"createTime":"2025-06-05T03:25:55.570670Z"}
+[warn] !  hub: emulator hub unable to start on port 4400, starting on 4401 instead. {"metadata":{"emulator":{"name":"hub"},"message":"emulator hub unable to start on port 4400, starting on 4401 instead."}}
+[warn] !  ui: Emulator UI unable to start on port 4000, starting on 4001 instead. {"metadata":{"emulator":{"name":"ui"},"message":"Emulator UI unable to start on port 4000, starting on 4001 instead."}}
+[warn] !  logging: Logging Emulator unable to start on port 4500, starting on 4501 instead. {"metadata":{"emulator":{"name":"logging"},"message":"Logging Emulator unable to start on port 4500, starting on 4501 instead."}}
+[debug] [2025-10-08T00:50:04.147Z] [logging] Logging Emulator only supports listening on one address (127.0.0.1). Not listening on ::1
+[debug] [2025-10-08T00:50:04.148Z] assigned listening specs for emulators {"user":{"hub":[{"address":"127.0.0.1","family":"IPv4","port":4401},{"address":"::1","family":"IPv6","port":4401}],"ui":[{"address":"127.0.0.1","family":"IPv4","port":4001},{"address":"::1","family":"IPv6","port":4001}],"logging":[{"address":"127.0.0.1","family":"IPv4","port":4501}]},"metadata":{"message":"assigned listening specs for emulators"}}
+[debug] [2025-10-08T00:50:04.151Z] Emulator locator file path: C:\Users\BRENDA~1\AppData\Local\Temp\hub-breadfruit-tracker.json
+[debug] [2025-10-08T00:50:04.152Z] [hub] writing locator at C:\Users\BRENDA~1\AppData\Local\Temp\hub-breadfruit-tracker.json
+[debug] [2025-10-08T00:50:04.158Z] [Extensions] Started Extensions emulator, this is a noop.
+[warn] !  functions: Port 5001 is not open on localhost (127.0.0.1), could not start Functions Emulator. {"metadata":{"emulator":{"name":"functions"},"message":"Port 5001 is not open on localhost (127.0.0.1), could not start Functions Emulator."}}
+[warn] !  functions: To select a different host/port, specify that host/port in a firebase.json config file:
+      {
+        // ...
+        "emulators": {
+          "functions": {
+            "host": "HOST",
+            "port": "PORT"
+          }
+        }
+      } {"metadata":{"emulator":{"name":"functions"},"message":"To select a different host/port, specify that host/port in a firebase.json config file:\n      {\n        // ...\n        \"emulators\": {\n          \"functions\": {\n            \"host\": \"\u001b[33mHOST\u001b[39m\",\n            \"port\": \"\u001b[33mPORT\u001b[39m\"\n          }\n        }\n      }"}}
+[warn] !  eventarc: Eventarc Emulator unable to start on port 9299, starting on 9300 instead. {"metadata":{"emulator":{"name":"eventarc"},"message":"Eventarc Emulator unable to start on port 9299, starting on 9300 instead."}}
+[debug] [2025-10-08T00:50:04.168Z] [eventarc] Eventarc Emulator only supports listening on one address (127.0.0.1). Not listening on ::1
+[warn] !  tasks: Cloud Tasks Emulator unable to start on port 9499, starting on 9500 instead. {"metadata":{"emulator":{"name":"tasks"},"message":"Cloud Tasks Emulator unable to start on port 9499, starting on 9500 instead."}}
+[debug] [2025-10-08T00:50:04.168Z] [tasks] Cloud Tasks Emulator only supports listening on one address (127.0.0.1). Not listening on ::1
+[debug] [2025-10-08T00:50:04.172Z] Could not find VSCode notification endpoint: FetchError: request to http://localhost:40001/vscode/notify failed, reason: . If you are not running the Firebase Data Connect VSCode extension, this is expected and not an issue.
+[info] i  emulators: Shutting down emulators. {"metadata":{"emulator":{"name":"hub"},"message":"Shutting down emulators."}}
+[info] i  hub: Stopping emulator hub {"metadata":{"emulator":{"name":"hub"},"message":"Stopping emulator hub"}}
+[debug] [2025-10-08T00:50:04.174Z] Emulator locator file path: C:\Users\BRENDA~1\AppData\Local\Temp\hub-breadfruit-tracker.json
+[debug] [2025-10-08T00:50:04.177Z] Could not find VSCode notification endpoint: FetchError: request to http://localhost:40001/vscode/notify failed, reason: . If you are not running the Firebase Data Connect VSCode extension, this is expected and not an issue.
+[error] 
+[error] Error: Could not start Functions Emulator, port taken.
+[debug] [2025-10-08T01:47:03.657Z] ----------------------------------------------------------------------
+[debug] [2025-10-08T01:47:03.661Z] Command:       C:\nvm4w\nodejs\node.exe C:\Users\Brendaline\AppData\Roaming\npm\node_modules\firebase-tools\lib\bin\firebase.js emulators:start --debug
+[debug] [2025-10-08T01:47:03.661Z] CLI Version:   14.17.0
+[debug] [2025-10-08T01:47:03.662Z] Platform:      win32
+[debug] [2025-10-08T01:47:03.662Z] Node Version:  v20.19.5
+[debug] [2025-10-08T01:47:03.662Z] Time:          Wed Oct 08 2025 09:47:03 GMT+0800 (Philippine Standard Time)
+[debug] [2025-10-08T01:47:03.662Z] ----------------------------------------------------------------------
+[debug] 
+[debug] [2025-10-08T01:47:03.911Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2025-10-08T01:47:03.914Z] > authorizing via signed-in user (dmarklouil@gmail.com)
+[info] i  emulators: Starting emulators: functions, extensions {"metadata":{"emulator":{"name":"hub"},"message":"Starting emulators: functions, extensions"}}
+[debug] [2025-10-08T01:47:03.918Z] Checked if tokens are valid: true, expires at: 1759889999665
+[debug] [2025-10-08T01:47:03.918Z] Checked if tokens are valid: true, expires at: 1759889999665
+[debug] [2025-10-08T01:47:03.919Z] >>> [apiv2][query] GET https://cloudresourcemanager.googleapis.com/v1/projects/breadfruit-tracker [none]
+[debug] [2025-10-08T01:47:08.351Z] <<< [apiv2][status] GET https://cloudresourcemanager.googleapis.com/v1/projects/breadfruit-tracker 200
+[debug] [2025-10-08T01:47:08.352Z] <<< [apiv2][body] GET https://cloudresourcemanager.googleapis.com/v1/projects/breadfruit-tracker {"projectNumber":"1002993131736","projectId":"breadfruit-tracker","lifecycleState":"ACTIVE","name":"breadfruit-tracker","labels":{"firebase":"enabled","firebase-core":"disabled"},"createTime":"2025-06-05T03:25:55.570670Z"}
+[warn] !  hub: emulator hub unable to start on port 4400, starting on 4401 instead. {"metadata":{"emulator":{"name":"hub"},"message":"emulator hub unable to start on port 4400, starting on 4401 instead."}}
+[warn] !  ui: Emulator UI unable to start on port 4000, starting on 4001 instead. {"metadata":{"emulator":{"name":"ui"},"message":"Emulator UI unable to start on port 4000, starting on 4001 instead."}}
+[warn] !  logging: Logging Emulator unable to start on port 4500, starting on 4501 instead. {"metadata":{"emulator":{"name":"logging"},"message":"Logging Emulator unable to start on port 4500, starting on 4501 instead."}}
+[debug] [2025-10-08T01:47:08.362Z] [logging] Logging Emulator only supports listening on one address (127.0.0.1). Not listening on ::1
+[debug] [2025-10-08T01:47:08.362Z] assigned listening specs for emulators {"user":{"hub":[{"address":"127.0.0.1","family":"IPv4","port":4401},{"address":"::1","family":"IPv6","port":4401}],"ui":[{"address":"127.0.0.1","family":"IPv4","port":4001},{"address":"::1","family":"IPv6","port":4001}],"logging":[{"address":"127.0.0.1","family":"IPv4","port":4501}]},"metadata":{"message":"assigned listening specs for emulators"}}
+[debug] [2025-10-08T01:47:08.366Z] Emulator locator file path: C:\Users\BRENDA~1\AppData\Local\Temp\hub-breadfruit-tracker.json
+[debug] [2025-10-08T01:47:08.367Z] [hub] writing locator at C:\Users\BRENDA~1\AppData\Local\Temp\hub-breadfruit-tracker.json
+[debug] [2025-10-08T01:47:08.373Z] [Extensions] Started Extensions emulator, this is a noop.
+[warn] !  functions: Port 5001 is not open on localhost (127.0.0.1), could not start Functions Emulator. {"metadata":{"emulator":{"name":"functions"},"message":"Port 5001 is not open on localhost (127.0.0.1), could not start Functions Emulator."}}
+[warn] !  functions: To select a different host/port, specify that host/port in a firebase.json config file:
+      {
+        // ...
+        "emulators": {
+          "functions": {
+            "host": "HOST",
+            "port": "PORT"
+          }
+        }
+      } {"metadata":{"emulator":{"name":"functions"},"message":"To select a different host/port, specify that host/port in a firebase.json config file:\n      {\n        // ...\n        \"emulators\": {\n          \"functions\": {\n            \"host\": \"\u001b[33mHOST\u001b[39m\",\n            \"port\": \"\u001b[33mPORT\u001b[39m\"\n          }\n        }\n      }"}}
+[warn] !  eventarc: Eventarc Emulator unable to start on port 9299, starting on 9300 instead. {"metadata":{"emulator":{"name":"eventarc"},"message":"Eventarc Emulator unable to start on port 9299, starting on 9300 instead."}}
+[debug] [2025-10-08T01:47:08.393Z] [eventarc] Eventarc Emulator only supports listening on one address (127.0.0.1). Not listening on ::1
+[warn] !  tasks: Cloud Tasks Emulator unable to start on port 9499, starting on 9500 instead. {"metadata":{"emulator":{"name":"tasks"},"message":"Cloud Tasks Emulator unable to start on port 9499, starting on 9500 instead."}}
+[debug] [2025-10-08T01:47:08.394Z] [tasks] Cloud Tasks Emulator only supports listening on one address (127.0.0.1). Not listening on ::1
+[debug] [2025-10-08T01:47:08.398Z] Could not find VSCode notification endpoint: FetchError: request to http://localhost:40001/vscode/notify failed, reason: . If you are not running the Firebase Data Connect VSCode extension, this is expected and not an issue.
+[info] i  emulators: Shutting down emulators. {"metadata":{"emulator":{"name":"hub"},"message":"Shutting down emulators."}}
+[info] i  hub: Stopping emulator hub {"metadata":{"emulator":{"name":"hub"},"message":"Stopping emulator hub"}}
+[debug] [2025-10-08T01:47:08.401Z] Emulator locator file path: C:\Users\BRENDA~1\AppData\Local\Temp\hub-breadfruit-tracker.json
+[debug] [2025-10-08T01:47:08.405Z] Could not find VSCode notification endpoint: FetchError: request to http://localhost:40001/vscode/notify failed, reason: . If you are not running the Firebase Data Connect VSCode extension, this is expected and not an issue.
+[error] 
+[error] Error: Could not start Functions Emulator, port taken.

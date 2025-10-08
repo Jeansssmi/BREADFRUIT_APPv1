@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "1002993131736",
+    "project_id": "breadfruit-tracker",
+    "storage_bucket": "breadfruit-tracker.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1002993131736:android:f6db4bebbe50b6f48537ad",
+        "android_client_info": {
+          "package_name": "com.breadfruit"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDuOTKgcAExN7ynUFEULhkhGBS5lrsBDRw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1002993131736:android:865f3aedc2301fb68537ad",
+        "android_client_info": {
+          "package_name": "com.dmarklouil21.BreadfruitMapping"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDuOTKgcAExN7ynUFEULhkhGBS5lrsBDRw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
