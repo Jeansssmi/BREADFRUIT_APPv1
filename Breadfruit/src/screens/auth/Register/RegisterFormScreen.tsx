@@ -50,50 +50,81 @@ const handleRegister = async () => {
     return;
   }
 
-  const createNewUser = httpsCallable(functions, 'createNewUser');
-  setLoading(true);
 
-  try {
-    console.log('📤 Sending data:', { name, email, password, role: type, status: type === 'viewer' ? 'verified' : 'pending', image: null }) ;
-    const result = await createNewUser({
-      name,
-      email,
-      password,
-      role: type,
-      status: type === 'viewer' ? 'verified' : 'pending',
-      image: null,
-    
-    });
 
-    console.log('✅ Function result:', result?.data);
-    setNotificationMessage('Your registration was successful. Please wait for admin approval.');
-    setNotificationType('success');
-    setNotificationVisible(true);
-  } catch (error: any) {
-      console.log("rwerwer");
-    console.error('❌ Registration error:', error);
+ setLoading(true);
 
-    let errorMessage = 'Registration failed. Please try again later.';
-    let errorType: 'error' | 'info' = 'error';
+ try {
+   console.log('📤 Sending data:', {
+     name,
+     email,
+     password,
+     role: type,
+     status: type === 'viewer' ? 'verified' : 'pending',
+     image: null,
+   });
 
-    // ✅ Handle known Firebase errors
-    if (error.code === 'already-exists' || error.message?.includes('auth/email-already-exists')) {
-      errorMessage = 'An account with this email already exists. Please use another email or log in.';
-      errorType = 'info';
-    } else if (error.message?.includes('auth/invalid-email')) {
-      errorMessage = 'Invalid email format. Please enter a valid email address.';
-    } else if (error.message?.includes('auth/weak-password')) {
-      errorMessage = 'Password is too weak. Try a stronger password.';
-    } else if (error.message) {
-      errorMessage = error.message;
-    }
+   const response = await fetch(
+     'https://us-central1-breadfruit-tracker.cloudfunctions.net/createNewUser',
+     {
+       method: 'POST',
+       headers: {
+         'Content-Type': 'application/json',
+       },
+       body: JSON.stringify({
+         data: {
+           name,
+           email,
+           password,
+           role: type,
+           status: type === 'viewer' ? 'verified' : 'pending',
+           image: null,
+           joined: new Date().toISOString(),
+         },
+       }),
+     }
+   );
 
-    setNotificationMessage(errorMessage);
-    setNotificationType(errorType);
-    setNotificationVisible(true);
-  } finally {
-    setLoading(false);
-  }
+   if (!response.ok) {
+     const errorText = await response.text();
+     throw new Error(`HTTP error! Status: ${response.status} | ${errorText}`);
+   }
+
+   const result = await response.json();
+   console.log('✅ Function result:', result);
+
+   if (result?.result?.success || result?.data?.success) {
+     setNotificationMessage(
+       'Your registration was successful. Please wait for admin approval.'
+     );
+     setNotificationType('success');
+     setNotificationVisible(true);
+   } else {
+     throw new Error(result?.error?.message || 'Registration failed.');
+   }
+ } catch (error: any) {
+   console.error('❌ Registration error:', error);
+
+   let errorMessage = 'Registration failed. Please try again later.';
+   let errorType: 'error' | 'info' = 'error';
+
+   if (error.message?.includes('already-exists')) {
+     errorMessage =
+       'An account with this email already exists. Please use another email or log in.';
+     errorType = 'info';
+   } else if (error.message?.includes('invalid-email')) {
+     errorMessage = 'Invalid email format. Please enter a valid email address.';
+   } else if (error.message?.includes('weak-password')) {
+     errorMessage = 'Password is too weak. Try a stronger password.';
+   }
+
+   setNotificationMessage(errorMessage);
+   setNotificationType(errorType);
+   setNotificationVisible(true);
+ } finally {
+   setLoading(false);
+ }
+
 };
 
   return (

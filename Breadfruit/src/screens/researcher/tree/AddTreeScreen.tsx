@@ -135,76 +135,104 @@ const uploadImageAndGetURL = async (uri: string): Promise<string | null> => {
   return await getDownloadURL(storageRef);
 };
   // --- THIS IS THE CORRECT AND ONLY 'handleSave' FUNCTION ---
-  const handleSave = async () => {
-    if (!city || !barangay || !diameterInput || !latitudeInput || !longitudeInput) {
-      Alert.alert("Validation Error", "Please fill all required fields before saving.");
+const handleSave = async () => {
+  if (!city || !barangay || !diameterInput || !latitudeInput || !longitudeInput) {
+    Alert.alert("Validation Error", "Please fill all required fields before saving.");
+    return;
+  }
+
+  setSaving(true);
+
+  try {
+    const authInstance = getAuth();
+    const currentUser = authInstance.currentUser;
+    if (!currentUser) {
+      Alert.alert("Authentication Required", "You must be logged in.");
+      setSaving(false);
       return;
     }
 
-    setSaving(true);
-
-    try {
-      const authInstance = getAuth();
-      const currentUser = authInstance.currentUser;
-      if (!currentUser) {
-        Alert.alert("Authentication Required", "You must be logged in.");
-        setSaving(false);
-        return;
-      }
-
-      // --- FIX IS HERE ---
-      // 1. Upload the image to Storage first (if an image was selected)
-      let imageUrl: string | null = null;
-      if (image) {
-        imageUrl = await uploadImageAndGetURL(image);
-      }
-
-      // 2. Prepare the data with the NEW imageUrl
-      const treeData = {
-        city,
-        barangay,
-        diameter: parseFloat(diameterInput),
-        dateTracked: new Date().toISOString(),
-        fruitStatus,
-        coordinates: {
-          latitude: parseFloat(latitudeInput),
-          longitude: parseFloat(longitudeInput),
-        },
-        image: imageUrl, // Use the public download URL
-        status: "verified",
-        trackedBy: currentUser.uid,
-      };
-
-      // 3. Call the Cloud Function
-      const addNewTree = httpsCallable(functions, "addNewTree");
-      const result = await addNewTree(treeData);
-
-      if (result?.data?.success) {
-        Alert.alert("Success", "Tree added successfully!");
-        navigation.goBack();
-      } else {
-        // @ts-ignore
-        Alert.alert("Error", result?.data?.message || "An unexpected server error occurred.");
-      }
-    } catch (error: any) {
-      console.error("Error saving tree:", error);
-      let errorMessage = "Failed to save tree data: Internal error.";
-         // FIX: Improved error handling for HttpsError
-            if (error.code === 'resource-exhausted') {
-                // Handle specific error from addNewTree logic (max ID limit reached)
-                errorMessage = "Cannot save tree. The maximum ID limit for the year has been reached.";
-            } else if (error.code && error.message) {
-                // General HttpsError code from the server (e.g., 'internal', 'invalid-argument')
-                errorMessage = `Failed to save tree: ${error.message}`;
-            } else if (error.message) {
-                // General client-side or network error
-                errorMessage = error.message;
-            }
-      Alert.alert("Error", error.message || "Failed to save tree data.");
-    } finally {
-      setSaving(false);
+    // 1️⃣ Upload image (if available)
+    let imageUrl: string | null = null;
+    if (image) {
+      imageUrl = await uploadImageAndGetURL(image);
     }
-  };
+
+    // 2️⃣ Prepare data for request
+    const treeData = {
+      city,
+      barangay,
+      diameter: parseFloat(diameterInput),
+      dateTracked: new Date().toISOString(),
+      fruitStatus,
+      coordinates: {
+        latitude: parseFloat(latitudeInput),
+        longitude: parseFloat(longitudeInput),
+      },
+      image: imageUrl,
+      status: "verified",
+      trackedBy: currentUser.uid,
+    };
+
+    console.log("📤 Sending to Cloud Function:", treeData);
+
+    // 3️⃣ Get Auth token (optional, but recommended if your function requires auth)
+    const token = await currentUser.getIdToken();
+
+    // 4️⃣ Call Cloud Function using fetch()
+    const response = await fetch(
+      "https://us-central1-breadfruit-tracker.cloudfunctions.net/addNewTree",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`, // include auth token for security
+        },
+        body: JSON.stringify({ data: treeData }),
+      }
+    );
+
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(`HTTP ${response.status}: ${text}`);
+    }
+
+    const result = await response.json();
+    console.log("✅ Cloud Function result:", result);
+
+    // Firebase v2 functions return { result: { ... } } or { data: { ... } }
+    const success = result?.data?.success || result?.result?.success;
+
+    if (success) {
+      Alert.alert("Success", "Tree added successfully!");
+      navigation.goBack();
+    } else {
+      const message =
+        result?.data?.message ||
+        result?.error?.message ||
+        "An unexpected server error occurred.";
+      Alert.alert("Error", message);
+    }
+  } catch (error: any) {
+    console.error("❌ Error saving tree:", error);
+
+    let errorMessage = "Failed to save tree data.";
+    if (error.message?.includes("resource-exhausted")) {
+      errorMessage = "Cannot save tree. The maximum ID limit for the year has been reached.";
+    } else if (error.message?.includes("invalid-argument")) {
+      errorMessage = "Invalid tree data. Please check your inputs.";
+    } else if (error.message) {
+      errorMessage = error.message;
+    }
+
+    Alert.alert("Error", errorMessage);
+  } finally {
+    setSaving(false);
+  }
+};
+
+
+
   const handleNavigateToScanner = () => {
     if (!image) {
       Alert.alert("Image Required", "Please select an image first.");

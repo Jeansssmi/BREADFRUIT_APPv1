@@ -7,12 +7,13 @@ import { getFunctions } from 'firebase/functions';
 import { getStorage } from 'firebase/storage';
 
 const firebaseConfig = {
-  apiKey: FIREBASE_API_KEY,
-  authDomain: 'breadfruit-tracker.firebaseapp.com',
-  projectId: 'breadfruit-tracker',
-  storageBucket: 'breadfruit-tracker.appspot.com',
-  messagingSenderId: '1002993131736',
-  appId: '1:1002993131736:android:865f3aedc2301fb68537ad',
+  apiKey: "AIzaSyDuOTKgcAExN7ynUFEULhkhGBS5lrsBDRw",
+  authDomain: "breadfruit-tracker.firebaseapp.com",
+   projectId: "breadfruit-tracker",
+   storageBucket: "gs://breadfruit-tracker.firebasestorage.app",
+   messagingSenderId: "1002993131736",
+   appId: "1:1002993131736:android:865f3aedc2301fb68537ad",
+
 };
 
 const app = initializeApp(firebaseConfig);
