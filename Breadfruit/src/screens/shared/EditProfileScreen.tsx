@@ -1,110 +1,108 @@
 import { useAuth } from '@/context/AuthContext';
 import { useNavigation } from '@react-navigation/native';
-import React, { useEffect, useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ActivityIndicator, Alert, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Appbar, Button, TextInput } from 'react-native-paper';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { launchCamera, launchImageLibrary } from 'react-native-image-picker';
 
+// ✅ Correct imports for react-native-firebase
+import auth from '@react-native-firebase/auth';
+import firestore from '@react-native-firebase/firestore';
+import storage from '@react-native-firebase/storage';
+
 export default function EditProfileScreen() {
   const navigation = useNavigation();
-  const { user } = useAuth();
+  const { user, fetchUserData } = useAuth(); // Assuming fetchUserData is exposed by your context to refresh it
 
-  const [name, setName] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [profileImageUri, setProfileImageUri] = useState(null); // Holds selected image URI or user's photoURL
+  const [name, setName] = React.useState('');
+  const [loading, setLoading] = React.useState(false);
+  const [profileImageUri, setProfileImageUri] = React.useState(null);
 
-  useEffect(() => {
+  React.useEffect(() => {
     if (user) {
       setName(user.name || '');
-      setProfileImageUri(user.photoURL || null);
+      setProfileImageUri(user.image || null);
     }
   }, [user]);
 
-  // --- NEW: Function to clear the profile image URI ---
-  const handleRemovePhoto = () => {
-    setProfileImageUri(null);
-    Alert.alert("Photo Removed", "The photo has been removed. Tap 'Save Changes' to confirm the update.");
-  };
+  const handleRemovePhoto = () => setProfileImageUri(null);
 
-  // --- Updated: Function to handle the image selection logic ---
   const handleImagePick = () => {
     let options = [
       { text: "Take Photo", onPress: () => selectImage('camera') },
       { text: "Choose from Gallery", onPress: () => selectImage('gallery') },
     ];
-
-    // Only show "Remove Photo" if there is an image to remove
     if (profileImageUri) {
       options.push({ text: "Remove Photo", onPress: handleRemovePhoto, style: "destructive" });
     }
-
     options.push({ text: "Cancel", style: "cancel" });
-
-    Alert.alert(
-      "Update Profile Picture",
-      "Choose an option",
-      options,
-      { cancelable: true }
-    );
+    Alert.alert("Update Profile Picture", "Choose an option", options, { cancelable: true });
   };
 
   const selectImage = async (type) => {
-    const options = {
-      mediaType: 'photo',
-      quality: 0.8,
-    };
+    const options = { mediaType: 'photo' as const, quality: 0.8 };
     const action = type === 'camera' ? launchCamera : launchImageLibrary;
 
     try {
       const result = await action(options);
-      if (result.didCancel || result.errorCode) {
-        // Handle cancel/error
-        return;
-      }
-      if (result.assets && result.assets.length > 0) {
-        // Set the selected image URI to state
-        setProfileImageUri(result.assets[0].uri);
-      }
+      if (result.didCancel || !result.assets) return;
+      setProfileImageUri(result.assets[0].uri);
     } catch (error) {
-        console.error("An error occurred", error);
-        Alert.alert("Error", "An unexpected error occurred.");
+      console.error("An error occurred", error);
+      Alert.alert("Error", "An unexpected error occurred.");
     }
   };
 
   const handleSaveChanges = async () => {
-    if (!name.trim()) {
-      alert('Name cannot be empty.');
+    if (!name.trim() || !user) {
+      Alert.alert('Name cannot be empty.');
       return;
     }
 
     setLoading(true);
     try {
-      let newPhotoURL = user.photoURL;
+      let newPhotoURL = user.image;
 
-      // 1. Logic for REMOVING the photo
-      if (user.photoURL && profileImageUri === null) {
-        newPhotoURL = null; // Tell the backend to clear the photo URL
-        // Optionally, add logic here to delete the old photo from storage
-        console.log("Photo marked for removal.");
+      // Case 1: Photo was removed
+      if (user.image && profileImageUri === null) {
+        newPhotoURL = null;
+        const oldImageRef = storage().refFromURL(user.image);
+        await oldImageRef.delete();
       }
-      // 2. Logic for UPLOADING a new photo
+      // Case 2: A new photo was selected
       else if (profileImageUri && profileImageUri.startsWith('file://')) {
-        // --- YOUR IMAGE UPLOAD LOGIC GOES HERE ---
-        // const uploadResponse = await uploadImageToFirebaseStorage(profileImageUri);
-        // newPhotoURL = uploadResponse.downloadURL;
-        console.log("Image needs to be uploaded. URI:", profileImageUri);
-        // We assume newPhotoURL is set after a successful upload
+        if (user.image) {
+          const oldImageRef = storage().refFromURL(user.image);
+          await oldImageRef.delete().catch(e => console.log("Old image deletion failed, may not exist.", e));
+        }
+        const fileName = `images/user-profile/${user.uid}/${Date.now()}.jpg`;
+        const reference = storage().ref(fileName);
+        await reference.putFile(profileImageUri.replace('file://', ''));
+        newPhotoURL = await reference.getDownloadURL();
       }
-      // 3. Otherwise, newPhotoURL remains the old user.photoURL
 
-      // Now, update the user's profile with the new name and new photo URL
-      // await updateUserProfile({ name, photoURL: newPhotoURL });
+      // Update Firebase Auth profile
+      await auth().currentUser.updateProfile({
+        displayName: name,
+        photoURL: newPhotoURL,
+      });
 
-      alert('Profile updated successfully! (Upload/Removal logic is a placeholder)');
+      // Update Firestore document
+      await firestore().collection('users').doc(user.uid).update({
+        name: name,
+        image: newPhotoURL,
+      });
+
+      // Optional: Refresh user data in your AuthContext if you have a function for it
+      if (fetchUserData) {
+        await fetchUserData(auth().currentUser);
+      }
+
+      Alert.alert('Success', 'Profile updated successfully!');
       navigation.goBack();
     } catch (error) {
-      alert('Failed to update profile. Please try again.');
+      Alert.alert('Error', 'Failed to update profile. Please try again.');
       console.error(error);
     } finally {
       setLoading(false);
@@ -112,12 +110,11 @@ export default function EditProfileScreen() {
   };
 
   const getJoinDate = () => {
-    if (user?.metadata?.creationTime) {
-      return new Date(user.metadata.creationTime).toISOString();
-    }
-    return '2025-08-17T05:27:29.124Z';
+    // Assuming 'joined' field is a Firestore Timestamp or ISO string
+    if (user?.joined?.toDate) return user.joined.toDate().toLocaleDateString();
+    if (user?.joined) return new Date(user.joined).toLocaleDateString();
+    return 'N/A';
   };
-
   return (
     <View style={styles.container}>
       <Appbar.Header style={styles.appbarHeader}>

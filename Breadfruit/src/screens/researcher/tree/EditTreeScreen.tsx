@@ -1,11 +1,7 @@
 import { LoadingAlert, NotificationAlert } from '@/components/NotificationModal';
-
 import barangayData from "@/constants/barangayData";
-import { storage } from '@/firebaseConfig';
 import { useTreeData } from '@/hooks/useTreeData';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import { doc, getFirestore, updateDoc } from "firebase/firestore";
-import { deleteObject, getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, KeyboardAvoidingView, Platform, Image as ReactImage, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import Geolocation from 'react-native-geolocation-service';
@@ -14,12 +10,14 @@ import { Button, Menu, Text, TextInput } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 
+// ✅ Correct imports for react-native-firebase
+import firestore from '@react-native-firebase/firestore';
+import storage from '@react-native-firebase/storage';
+
 const FRUIT_STATUS_OPTIONS = ['none', 'unripe', 'ripe'];
-const CITY_OPTIONS = Object.keys(barangayData);
 
 export default function EditTreeScreen() {
   const navigation = useNavigation();
-  // @ts-ignore
   const route = useRoute();
   // @ts-ignore
   const { treeID } = route.params;
@@ -50,7 +48,6 @@ export default function EditTreeScreen() {
       setCity(tree.city || '');
       setBarangay(tree.barangay || '');
       setFruitStatus(tree.fruitStatus || '');
-      // Safely initialize data
       setDiameter(tree.diameter?.toString() || '');
       setLatitudeInput(tree.coordinates?.latitude?.toString() || '');
       setLongitudeInput(tree.coordinates?.longitude?.toString() || '');
@@ -83,7 +80,7 @@ export default function EditTreeScreen() {
 
   const handleCitySelect = (selectedCity: string) => {
     setCity(selectedCity);
-    setBarangay(''); // Reset barangay when city changes
+    setBarangay('');
     setCityOptionsMenuVisible(false);
   };
 
@@ -99,43 +96,38 @@ export default function EditTreeScreen() {
         onPress: async () => {
           setLoading(true);
           try {
-            const db = getFirestore();
-            const docRef = doc(db, 'trees', currentTreeID);
+            const docRef = firestore().collection('trees').doc(currentTreeID);
             let newImageURL = tree.image;
 
             if (image && image.startsWith('file://')) {
-              // Delete old image logic
               if (tree.image) {
                 try {
-                  const prevRef = ref(storage, tree.image);
-                  await deleteObject(prevRef);
+                  const prevRef = storage().refFromURL(tree.image);
+                  await prevRef.delete();
                 } catch (deleteError) {
                   console.warn('Failed to delete previous image:', deleteError);
                 }
               }
 
-              // Upload new image
-              const fileName = image.split('/').pop() || `image_${Date.now()}.jpeg`;
-              const res = await fetch(image);
-              const blob = await res.blob();
-              const storageRef = ref(storage, `images/${fileName}`);
-              await uploadBytes(storageRef, blob, { contentType: 'image/jpeg' });
-              newImageURL = await getDownloadURL(storageRef);
+              const fileName = `images/${Date.now()}_${image.split('/').pop()}`;
+              const reference = storage().ref(fileName);
+              await reference.putFile(image.replace('file://', ''));
+              newImageURL = await reference.getDownloadURL();
             }
 
-            // Prepare data for Firestore update
             const treeData = {
-              city, barangay, fruitStatus,
+              city,
+              barangay,
+              fruitStatus,
               diameter: parseFloat(diameter) || 0,
-              coordinates: {
-                latitude: parseFloat(latitudeInput) || 0,
-                longitude: parseFloat(longitudeInput) || 0,
-              },
+              coordinates: new firestore.GeoPoint(
+                parseFloat(latitudeInput) || 0,
+                parseFloat(longitudeInput) || 0,
+              ),
               image: newImageURL,
             };
 
-            // Update Firestore document
-            await updateDoc(docRef, treeData);
+            await docRef.update(treeData);
 
             setNotificationMessage('Successfully saved.');
             setNotificationType('success');

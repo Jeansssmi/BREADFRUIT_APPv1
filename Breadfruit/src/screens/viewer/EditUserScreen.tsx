@@ -1,19 +1,24 @@
+import React, { useEffect, useState } from 'react';
+import {
+  ActivityIndicator, Alert, KeyboardAvoidingView, Platform, Image as ReactImage,
+  SafeAreaView, ScrollView, StyleSheet, TouchableOpacity, View
+} from 'react-native';
+import { Button, Text, TextInput } from 'react-native-paper';
+import { useNavigation, useRoute } from '@react-navigation/native';
+import { launchImageLibrary } from 'react-native-image-picker';
+import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
+
+// ✅ Correct imports for react-native-firebase
+import firestore from '@react-native-firebase/firestore';
+import storage from '@react-native-firebase/storage';
 
 import { useUserData } from '@/hooks/useUserData';
-import { useNavigation, useRoute } from '@react-navigation/native';
-import { ActivityIndicator, Alert, KeyboardAvoidingView, Platform, Image as ReactImage, SafeAreaView, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
-import { doc, getFirestore, updateDoc } from "firebase/firestore";
-import { deleteObject, getDownloadURL, ref, uploadBytes } from 'firebase/storage';
-import { storage } from '@/firebaseConfig';
-import { useEffect, useState } from 'react';
-import { Button, Text, TextInput } from 'react-native-paper';
-import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { LoadingAlert, NotificationAlert } from '@/components/NotificationModal';
-import { launchImageLibrary } from 'react-native-image-picker';
 
 export default function EditUserScreen() {
   const navigation = useNavigation();
   const route = useRoute();
+  // @ts-ignore
   const { userID } = route.params;
 
   const { users, isLoading } = useUserData({ mode: 'single', uid: userID.toString() });
@@ -50,28 +55,26 @@ export default function EditUserScreen() {
         onPress: async () => {
           setLoading(true);
           try {
-            const db = getFirestore();
-            const docRef = doc(db, 'users', uid);
+            // ✅ Correct syntax for react-native-firebase
+            const docRef = firestore().collection('users').doc(uid);
             let newImageURL = user.image;
 
             if (image && image.startsWith('file://')) {
               if (user.image) {
                 try {
-                  const prevRef = ref(storage, user.image);
-                  await deleteObject(prevRef);
+                  const prevRef = storage().refFromURL(user.image);
+                  await prevRef.delete();
                 } catch (deleteError) {
                   console.warn('Failed to delete previous image:', deleteError);
                 }
               }
-              const fileName = image.split('/').pop() || `image_${Date.now()}.jpeg`;
-              const res = await fetch(image);
-              const blob = await res.blob();
-              const storageRef = ref(storage, `images/user-profile/${fileName}`);
-              await uploadBytes(storageRef, blob, { contentType: 'image/jpeg' });
-              newImageURL = await getDownloadURL(storageRef);
+              const fileName = `images/user-profile/${Date.now()}_${image.split('/').pop()}`;
+              const reference = storage().ref(fileName);
+              await reference.putFile(image.replace('file://', ''));
+              newImageURL = await reference.getDownloadURL();
             }
 
-            await updateDoc(docRef, { name, role, image: newImageURL });
+            await docRef.update({ name, role, image: newImageURL });
 
             setNotificationMessage('Successfully saved.');
             setNotificationType('success');

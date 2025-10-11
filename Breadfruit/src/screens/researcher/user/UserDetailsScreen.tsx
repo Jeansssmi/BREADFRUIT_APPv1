@@ -1,19 +1,22 @@
-import { LoadingAlert, NotificationAlert } from '@/components/NotificationModal';
-import { functions } from '@/firebaseConfig';
-import { useUserData } from '@/hooks/useUserData';
-import { useNavigation, useRoute } from '@react-navigation/native';
-import { doc, getFirestore, updateDoc } from "firebase/firestore";
-import { httpsCallable } from "firebase/functions";
-import { useState } from "react";
+import React, { useState } from "react";
 import { Alert, Image, ScrollView, StyleSheet, View } from 'react-native';
 import { ActivityIndicator, Button, Card, Text } from 'react-native-paper';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
+
+// ✅ Correct imports for react-native-firebase
+import firestore from '@react-native-firebase/firestore';
+import functions from '@react-native-firebase/functions';
+
+import { LoadingAlert, NotificationAlert } from '@/components/NotificationModal';
+import { useUserData } from '@/hooks/useUserData';
 
 export default function UserDetailsScreen() {
   const navigation = useNavigation();
   const route = useRoute();
+  // @ts-ignore
   const { userID } = route.params;
-  const { users, isLoading } = useUserData({ mode: 'single', uid: userID.toString() }); 
+  const { users, isLoading } = useUserData({ mode: 'single', uid: userID.toString() });
   const [loading, setLoading] = useState(false);
   const user = users[0];
 
@@ -24,16 +27,18 @@ export default function UserDetailsScreen() {
   const handleDelete = (uid: string) => {
     Alert.alert('Confirm Delete', 'Are you sure you want to delete this user?', [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive',
+      {
+        text: 'Delete', style: 'destructive',
         onPress: async () => {
-          const deleteUser = httpsCallable(functions, 'deleteUser');
           setLoading(true);
           try {
+            // ✅ Correct syntax for react-native-firebase
+            const deleteUser = functions().httpsCallable('deleteUser');
             await deleteUser({ uid });
             setNotificationMessage('User deleted successfully.');
             setNotificationType('success');
             setNotificationVisible(true);
-          } catch(error) {
+          } catch (error) {
             console.error(error);
           } finally {
             setLoading(false);
@@ -46,17 +51,18 @@ export default function UserDetailsScreen() {
   const handleApprove = (uid: string) => {
     Alert.alert('Confirm Approval', 'Are you sure you want to approve this user?', [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Approve',
+      {
+        text: 'Approve',
         onPress: async () => {
           setLoading(true);
           try {
-            const db = getFirestore();
-            const docRef = doc(db, 'users', uid);
-            await updateDoc(docRef, { status: 'verified' });
+            // ✅ Correct syntax for react-native-firebase
+            const docRef = firestore().collection('users').doc(uid);
+            await docRef.update({ status: 'verified' });
             setNotificationMessage('Successfully approved!');
             setNotificationType('success');
             setNotificationVisible(true);
-          } catch(error) {
+          } catch (error) {
             console.error(error);
           } finally {
             setLoading(false);
@@ -72,7 +78,6 @@ export default function UserDetailsScreen() {
   if (!user) {
     return <View style={styles.center}><Text>User not found</Text></View>;
   }
-
   return (
     <ScrollView contentContainerStyle={styles.scrollContainer}>
       <View style={styles.container}>

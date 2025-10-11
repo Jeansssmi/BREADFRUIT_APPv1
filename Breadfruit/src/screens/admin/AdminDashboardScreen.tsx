@@ -1,9 +1,11 @@
-import { useNavigation } from '@react-navigation/native';
-import { getFirestore, collection, getDocs, query, where } from "firebase/firestore";
-import { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { Card, Text } from 'react-native-paper';
+import { useNavigation } from '@react-navigation/native';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
+
+// ✅ Correct import for react-native-firebase
+import firestore from '@react-native-firebase/firestore';
 
 export default function AdminDashboardScreen() {
   const navigation = useNavigation();
@@ -12,26 +14,21 @@ export default function AdminDashboardScreen() {
   const [researchers, setResearchers] = useState(0);
   const [pendingUsers, setPendingUsers] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
-  const db = getFirestore();
 
   const fetchAllCounts = useCallback(async () => {
+    setRefreshing(true);
     try {
-      // trees
-      const treesSnap = await getDocs(collection(db, "trees"));
+      // ✅ Correct syntax for react-native-firebase
+      const treesSnap = await firestore().collection('trees').get();
       setAllTrees(treesSnap.size);
 
-      // users
-      const usersSnap = await getDocs(collection(db, "users"));
+      const usersSnap = await firestore().collection('users').get();
       setAllUsers(usersSnap.size);
 
-      // researchers (role = researcher)
-      const researcherQ = query(collection(db, "users"), where("role", "==", "researcher"));
-      const researcherSnap = await getDocs(researcherQ);
+      const researcherSnap = await firestore().collection('users').where("role", "==", "researcher").get();
       setResearchers(researcherSnap.size);
 
-      // pending approvals (status = pending)
-      const pendingQ = query(collection(db, "users"), where("status", "==", "pending"));
-      const pendingSnap = await getDocs(pendingQ);
+      const pendingSnap = await firestore().collection('users').where("status", "==", "pending").get();
       setPendingUsers(pendingSnap.size);
 
     } catch (error) {
@@ -39,7 +36,7 @@ export default function AdminDashboardScreen() {
     } finally {
       setRefreshing(false);
     }
-  }, [db]);
+  }, []);
 
   useEffect(() => {
     fetchAllCounts();

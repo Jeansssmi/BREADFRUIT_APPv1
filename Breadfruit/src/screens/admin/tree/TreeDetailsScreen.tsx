@@ -1,26 +1,30 @@
-import { LoadingAlert, NotificationAlert } from '@/components/NotificationModal';
-import { useTreeData } from '@/hooks/useTreeData';
-import { useNavigation, useRoute } from '@react-navigation/native';
-import { deleteDoc, doc, getFirestore, updateDoc } from "firebase/firestore";
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { Alert, Image, ScrollView, StyleSheet, View } from 'react-native';
 import { ActivityIndicator, Button, Card, Text } from 'react-native-paper';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 
-export default function TreeDetailsScreen() { 
+// ✅ Correct import for react-native-firebase
+import firestore from '@react-native-firebase/firestore';
+
+import { LoadingAlert, NotificationAlert } from '@/components/NotificationModal';
+import { useTreeData } from '@/hooks/useTreeData';
+
+export default function TreeDetailsScreen() {
   const route = useRoute();
   const navigation = useNavigation();
+  // @ts-ignore
   const { treeID } = route.params;
-  const { trees, isLoading } = useTreeData({ mode: 'single', treeID: treeID.toString() }); 
+  const { trees, isLoading } = useTreeData({ mode: 'single', treeID: treeID.toString() });
   const tree = trees[0];
 
-   const [loading, setLoading] = useState(false);
-     const [notificationVisible, setNotificationVisible] = useState(false);
-     const [notificationMessage, setNotificationMessage] = useState('');
-     const [notificationType, setNotificationType] = useState<'success' | 'error' | 'info'>('info');
+  const [loading, setLoading] = useState(false);
+  const [notificationVisible, setNotificationVisible] = useState(false);
+  const [notificationMessage, setNotificationMessage] = useState('');
+  const [notificationType, setNotificationType] = useState<'success' | 'error' | 'info'>('info');
 
-  const handleDelete = async (treeID: string) => {
+  const handleDelete = async (currentTreeID: string) => {
     Alert.alert('Confirm Deletion', 'Are you sure you want to delete this tree?', [
       { text: 'Cancel', style: 'cancel' },
       {
@@ -29,8 +33,8 @@ export default function TreeDetailsScreen() {
         onPress: async () => {
           setLoading(true);
           try {
-            const db = getFirestore();
-            await deleteDoc(doc(db, 'trees', treeID));
+            // ✅ Correct syntax for react-native-firebase
+            await firestore().collection('trees').doc(currentTreeID).delete();
             setNotificationVisible(true);
             setNotificationMessage('Successfully deleted.');
             setNotificationType('success');
@@ -44,7 +48,7 @@ export default function TreeDetailsScreen() {
     ])
   }
 
-  const handleApprove = (treeID: string) => {
+  const handleApprove = (currentTreeID: string) => {
     Alert.alert('Confirm Approve', 'Are you sure you want to approve this tree?', [
       { text: 'Cancel', style: 'cancel' },
       {
@@ -53,9 +57,8 @@ export default function TreeDetailsScreen() {
         onPress: async () => {
           setLoading(true);
           try {
-            const db = getFirestore();
-            const docRef = doc(db, 'trees', treeID);
-            await updateDoc(docRef, { status: 'verified' });
+            // ✅ Correct syntax for react-native-firebase
+            await firestore().collection('trees').doc(currentTreeID).update({ status: 'verified' });
             setNotificationVisible(true);
             setNotificationMessage('Successfully approved!');
             setNotificationType('success');
@@ -68,14 +71,14 @@ export default function TreeDetailsScreen() {
       },
     ])
   }
-  
+
+  // ... Your JSX and styles remain the same
   if (isLoading) {
     return <View style={styles.center}><ActivityIndicator size="large" color='#2ecc71' /></View>;
-  } 
+  }
   if (!tree) {
     return <View style={styles.errorContainer}><Text>Tree not found</Text></View>;
   }
-
   return (
     <ScrollView contentContainerStyle={styles.scrollContainer}>
       <View style={styles.container}>

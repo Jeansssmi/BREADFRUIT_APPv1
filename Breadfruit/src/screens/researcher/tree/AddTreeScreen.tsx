@@ -9,18 +9,20 @@ import {
   Platform,
   PermissionsAndroid,
   Alert,
-  ActionSheetIOS,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Button, Text, TextInput, Menu } from "react-native-paper";
 import MaterialIcons from "react-native-vector-icons/MaterialIcons";
 import Geolocation from "react-native-geolocation-service";
 import { useNavigation, useRoute } from "@react-navigation/native";
-import { fireStore as db, storage, functions } from "../../../firebaseConfig";
-import { httpsCallable } from "firebase/functions";
-import { getAuth } from "firebase/auth";
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { launchCamera, launchImageLibrary } from "react-native-image-picker";
+
+// ✅ Correct imports for react-native-firebase
+import auth from '@react-native-firebase/auth';
+import firestore from '@react-native-firebase/firestore';
+import functions from '@react-native-firebase/functions';
+import storage from '@react-native-firebase/storage';
+
 import barangayData from "@/constants/barangayData";
 
 const FRUIT_STATUS_OPTIONS = ["none", "unripe", "ripe"];
@@ -30,7 +32,9 @@ export default function AddTreeScreen() {
   const navigation = useNavigation();
   const route = useRoute();
 
+  // @ts-ignore
   const [image, setImage] = useState<string | null>(route.params?.imageUri || null);
+  // @ts-ignore
   const [diameterInput, setDiameterInput] = useState(route.params?.diameter?.toString() || "");
   const [latitudeInput, setLatitudeInput] = useState<string>("");
   const [longitudeInput, setLongitudeInput] = useState<string>("");
@@ -49,7 +53,9 @@ export default function AddTreeScreen() {
   const BARANGAY_OPTIONS = barangayData[city] || [];
 
   useEffect(() => {
+    // @ts-ignore
     if (route.params?.diameter) {
+      // @ts-ignore
       setDiameterInput(route.params.diameter.toString());
     }
   }, [route.params?.diameter]);
@@ -117,127 +123,81 @@ export default function AddTreeScreen() {
     }
   };
 
- const handleRemoveImage = () => setImage(null);
+  const handleRemoveImage = () => setImage(null);
 
-const uploadImageAndGetURL = async (uri: string): Promise<string | null> => {
-  if (!uri.startsWith('file://')) {
-    // If it's already a web URL, no need to re-upload
-    return uri;
-  }
+  const uploadImageAndGetURL = async (uri: string): Promise<string | null> => {
+    if (!uri.startsWith('file://')) {
+      return uri;
+    }
+    const fileName = `trees/${Date.now()}.jpg`;
+    // ✅ Correct syntax for react-native-firebase
+    const reference = storage().ref(fileName);
+    // ✅ Correct (and simpler) syntax for uploading local files
+    await reference.putFile(uri.replace('file://', ''));
+    return reference.getDownloadURL();
+  };
 
-  const response = await fetch(uri);
-  const blob = await response.blob();
-
-  const fileName = `trees/${Date.now()}.jpg`;
-  const storageRef = ref(storage, fileName);
-
-  await uploadBytes(storageRef, blob);
-  return await getDownloadURL(storageRef);
-};
-  // --- THIS IS THE CORRECT AND ONLY 'handleSave' FUNCTION ---
-const handleSave = async () => {
-  if (!city || !barangay || !diameterInput || !latitudeInput || !longitudeInput) {
-    Alert.alert("Validation Error", "Please fill all required fields before saving.");
-    return;
-  }
-
-  setSaving(true);
-
-  try {
-    const authInstance = getAuth();
-    const currentUser = authInstance.currentUser;
-    if (!currentUser) {
-      Alert.alert("Authentication Required", "You must be logged in.");
-      setSaving(false);
+  const handleSave = async () => {
+    if (!city || !barangay || !diameterInput || !latitudeInput || !longitudeInput) {
+      Alert.alert("Validation Error", "Please fill all required fields before saving.");
       return;
     }
-
-    // 1️⃣ Upload image (if available)
-    let imageUrl: string | null = null;
-    if (image) {
-      imageUrl = await uploadImageAndGetURL(image);
-    }
-
-    // 2️⃣ Prepare data for request
-    const treeData = {
-      city,
-      barangay,
-      diameter: parseFloat(diameterInput),
-      dateTracked: new Date().toISOString(),
-      fruitStatus,
-      coordinates: {
-        latitude: parseFloat(latitudeInput),
-        longitude: parseFloat(longitudeInput),
-      },
-      image: imageUrl,
-      status: "verified",
-      trackedBy: currentUser.uid,
-    };
-
-    console.log("📤 Sending to Cloud Function:", treeData);
-
-    // 3️⃣ Get Auth token (optional, but recommended if your function requires auth)
-    const token = await currentUser.getIdToken();
-
-    // 4️⃣ Call Cloud Function using fetch()
-    const response = await fetch(
-      "https://us-central1-breadfruit-tracker.cloudfunctions.net/addNewTree",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`, // include auth token for security
-        },
-        body: JSON.stringify({ data: treeData }),
+    setSaving(true);
+    try {
+      // ✅ Correct syntax for react-native-firebase
+      const currentUser = auth().currentUser;
+      if (!currentUser) {
+        Alert.alert("Authentication Required", "You must be logged in.");
+        setSaving(false);
+        return;
       }
-    );
 
-    if (!response.ok) {
-      const text = await response.text();
-      throw new Error(`HTTP ${response.status}: ${text}`);
+      let imageUrl: string | null = null;
+      if (image) {
+        imageUrl = await uploadImageAndGetURL(image);
+      }
+
+      const treeData = {
+        city,
+        barangay,
+        diameter: parseFloat(diameterInput),
+        dateTracked: new Date().toISOString(),
+        fruitStatus,
+        // ✅ Best practice for storing locations
+        coordinates: new firestore.GeoPoint(
+          parseFloat(latitudeInput),
+          parseFloat(longitudeInput)
+        ),
+        image: imageUrl,
+        status: "verified",
+        trackedBy: currentUser.uid,
+      };
+
+      // ✅ Correct and simpler syntax for calling Cloud Functions
+      const addNewTree = functions().httpsCallable("addNewTree");
+      const result = await addNewTree(treeData);
+
+      if (result?.data?.success) {
+        Alert.alert("Success", "Tree added successfully!");
+        navigation.goBack();
+      } else {
+        // @ts-ignore
+        Alert.alert("Error", result?.data?.message || "An unexpected server error occurred.");
+      }
+    } catch (error: any) {
+      console.error("❌ Error saving tree:", error);
+      Alert.alert("Error", error.message || "Failed to save tree data.");
+    } finally {
+      setSaving(false);
     }
-
-    const result = await response.json();
-    console.log("✅ Cloud Function result:", result);
-
-    // Firebase v2 functions return { result: { ... } } or { data: { ... } }
-    const success = result?.data?.success || result?.result?.success;
-
-    if (success) {
-      Alert.alert("Success", "Tree added successfully!");
-      navigation.goBack();
-    } else {
-      const message =
-        result?.data?.message ||
-        result?.error?.message ||
-        "An unexpected server error occurred.";
-      Alert.alert("Error", message);
-    }
-  } catch (error: any) {
-    console.error("❌ Error saving tree:", error);
-
-    let errorMessage = "Failed to save tree data.";
-    if (error.message?.includes("resource-exhausted")) {
-      errorMessage = "Cannot save tree. The maximum ID limit for the year has been reached.";
-    } else if (error.message?.includes("invalid-argument")) {
-      errorMessage = "Invalid tree data. Please check your inputs.";
-    } else if (error.message) {
-      errorMessage = error.message;
-    }
-
-    Alert.alert("Error", errorMessage);
-  } finally {
-    setSaving(false);
-  }
-};
-
-
+  };
 
   const handleNavigateToScanner = () => {
     if (!image) {
       Alert.alert("Image Required", "Please select an image first.");
       return;
     }
+    // @ts-ignore
     navigation.navigate("DiameterScannerScreen", { imageUri: image });
   };
 
@@ -403,13 +363,15 @@ const handleSave = async () => {
               Image Processing
             </Button>
              <Button
-              mode="contained"
-              onPress={handleSave}
-              style={styles.secondaryButton}
-              loading={saving}
-            >
-              {saving ? "Saving..." : "Save Tree"}
-            </Button>
+               mode="contained"
+               onPress={handleSave}
+               style={styles.secondaryButton}
+               loading={saving}
+             >
+               <Text style={{ color: 'white', fontWeight: 'bold' }}>
+                 {saving ? "Saving..." : "Save Tree"}
+               </Text>
+             </Button>
           </View>
         </ScrollView>
       </SafeAreaView>

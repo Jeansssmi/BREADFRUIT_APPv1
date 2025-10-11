@@ -1,21 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
-  Alert,
-  Image,
-  Modal,
-  SafeAreaView,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
+  ActivityIndicator, Alert, Image, Modal, SafeAreaView, ScrollView,
+  StyleSheet, Text, TouchableOpacity, View,
 } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { launchCamera, launchImageLibrary } from 'react-native-image-picker';
 import Tflite from 'tflite-react-native';
-import { doc, getFirestore, updateDoc } from 'firebase/firestore';
 import { Button } from 'react-native-paper';
+
+// ✅ Correct import for react-native-firebase
+import firestore from '@react-native-firebase/firestore';
 
 // TFLite instance
 const tflite = new Tflite();
@@ -114,12 +108,13 @@ export default function FruitScannerScreen() {
     }
     setIsUpdating(true);
     try {
-      const db = getFirestore();
-      const docRef = doc(db, 'trees', treeID);
-      await updateDoc(docRef, { fruitStatus: result.label });
-      Alert.alert('Success', `Fruit status updated to: ${result.label}`, [
-        { text: 'OK', onPress: () => navigation.goBack() },
-      ]);
+      // ✅ Correct syntax for react-native-firebase
+            const docRef = firestore().collection('trees').doc(treeID);
+            await docRef.update({ fruitStatus: result.label });
+
+            Alert.alert('Success', `Fruit status updated to: ${result.label}`, [
+              { text: 'OK', onPress: () => navigation.goBack() },
+            ]);
     } catch (error) {
       console.error('Update failed:', error);
       Alert.alert('Error', 'Failed to update fruit status.');

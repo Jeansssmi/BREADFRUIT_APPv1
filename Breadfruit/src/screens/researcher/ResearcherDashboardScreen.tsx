@@ -1,9 +1,11 @@
-import { useNavigation } from '@react-navigation/native';
-import { getFirestore, collection, getDocs, query, where, orderBy, limit } from "firebase/firestore";
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { Card, Text } from 'react-native-paper';
+import { useNavigation } from '@react-navigation/native';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
+
+// ✅ Correct import for react-native-firebase
+import firestore from '@react-native-firebase/firestore';
 
 export default function ResearcherDashboardScreen() {
   const navigation = useNavigation();
@@ -12,31 +14,26 @@ export default function ResearcherDashboardScreen() {
   const [scansLogged, setScansLogged] = useState(0);
   const [recentActivity, setRecentActivity] = useState<any[]>([]);
   const [refreshing, setRefreshing] = useState(false);
-  const db = getFirestore();
 
   const fetchAllCounts = async () => {
     setRefreshing(true);
     try {
-      // 1. Total trees tracked
-      const allTreesSnap = await getDocs(collection(db, "trees"));
+      // ✅ Correct syntax for react-native-firebase
+      const allTreesSnap = await firestore().collection('trees').get();
       setAllTrees(allTreesSnap.size);
 
-      // 2. Harvest ready trees
-      const harvestQuery = query(collection(db, "trees"), where("status", "==", "harvest-ready"));
-      const harvestSnap = await getDocs(harvestQuery);
+      const harvestSnap = await firestore().collection('trees').where("status", "==", "harvest-ready").get();
       setHarvestReady(harvestSnap.size);
 
-      // 3. Scans logged
-      const scansSnap = await getDocs(collection(db, "scans"));
+      const scansSnap = await firestore().collection('scans').get();
       setScansLogged(scansSnap.size);
 
-      // 4. Recent activity (limit 5, latest first)
-      const activityQuery = query(
-        collection(db, "activity"),
-        orderBy("timestamp", "desc"),
-        limit(5)
-      );
-      const activitySnap = await getDocs(activityQuery);
+      const activitySnap = await firestore()
+        .collection('activity')
+        .orderBy("timestamp", "desc")
+        .limit(5)
+        .get();
+
       const activities = activitySnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       setRecentActivity(activities);
 
@@ -50,7 +47,6 @@ export default function ResearcherDashboardScreen() {
   useEffect(() => {
     fetchAllCounts();
   }, []);
-
   // ✅ Icon mapping for activity types
   const getActivityIcon = (type: string) => {
     switch (type) {

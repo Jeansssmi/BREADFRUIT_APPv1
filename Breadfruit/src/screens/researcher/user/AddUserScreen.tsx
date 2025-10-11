@@ -1,13 +1,15 @@
-import { LoadingAlert, NotificationAlert } from '@/components/NotificationModal';
-import { functions, storage } from '@/firebaseConfig';
-import { useNavigation } from '@react-navigation/native';
-import { httpsCallable } from 'firebase/functions';
-import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { Image, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
-import { launchImageLibrary } from 'react-native-image-picker';
 import { Button, Menu, Text, TextInput } from 'react-native-paper';
+import { useNavigation } from '@react-navigation/native';
+import { launchImageLibrary } from 'react-native-image-picker';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
+
+// ✅ Correct imports for react-native-firebase
+import functions from '@react-native-firebase/functions';
+import storage from '@react-native-firebase/storage';
+
+import { LoadingAlert, NotificationAlert } from '@/components/NotificationModal';
 
 export default function AddUserScreen() {
   const navigation = useNavigation();
@@ -35,18 +37,15 @@ export default function AddUserScreen() {
       return;
     }
 
-    const createNewUser = httpsCallable(functions, 'createNewUser');
     setLoading(true);
-
     try {
       let downloadURL = '';
       if (image) {
-        const fileName = image.split('/').pop() || `image_${Date.now()}.jpeg`;
-        const res = await fetch(image);
-        const blob = await res.blob();
-        const storageRef = ref(storage, `images/user-profile/${fileName}`);
-        await uploadBytes(storageRef, blob, { contentType: 'image/jpeg' });
-        downloadURL = await getDownloadURL(storageRef);
+        const fileName = `images/user-profile/${Date.now()}_${image.split('/').pop()}`;
+        // ✅ Correct syntax for react-native-firebase
+        const reference = storage().ref(fileName);
+        await reference.putFile(image.replace('file://', ''));
+        downloadURL = await reference.getDownloadURL();
       }
 
       const userData = {
@@ -55,29 +54,25 @@ export default function AddUserScreen() {
         status: 'verified',
         joined: new Date().toISOString(),
       };
+
+      // ✅ Correct syntax for react-native-firebase
+      const createNewUser = functions().httpsCallable('createNewUser');
       await createNewUser(userData);
+
       setNotificationMessage('User created successfully.');
       setNotificationType('success');
       setNotificationVisible(true);
     } catch (error: any) {
       console.error('User creation error:', error);
-
-      let errorMessage = 'User creation failed: Internal server error.';
+      let errorMessage = 'User creation failed: ' + error.message;
       let errorType: 'success' | 'info' | 'error' = 'error';
-
-      // FIX: Improved error handling for HttpsError
       if (error.code === 'already-exists') {
           errorMessage = 'An account with this email already exists.';
           errorType = 'info';
-      } else if (error.message) {
-          // Fallback to the message if it's more specific
-          errorMessage = error.message;
       }
-
       setNotificationMessage(errorMessage);
       setNotificationType(errorType);
       setNotificationVisible(true);
-
     } finally {
       setLoading(false);
     }

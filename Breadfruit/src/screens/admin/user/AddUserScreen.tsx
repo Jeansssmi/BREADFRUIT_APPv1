@@ -1,11 +1,4 @@
-
-import { LoadingAlert, NotificationAlert } from '@/components/NotificationModal';
-import { auth, fireStore, storage } from '@/firebaseConfig';
-import { useNavigation } from '@react-navigation/native';
-import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
-import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
-import { useState } from 'react';
+import React, { useState } from 'react';
 import {
   Image,
   KeyboardAvoidingView,
@@ -15,14 +8,21 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { launchImageLibrary } from 'react-native-image-picker';
 import { Button, Menu, Text, TextInput } from 'react-native-paper';
+import { useNavigation } from '@react-navigation/native';
+import { launchImageLibrary } from 'react-native-image-picker';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
+
+// ✅ Correct imports for react-native-firebase
+import auth from '@react-native-firebase/auth';
+import firestore from '@react-native-firebase/firestore';
+import storage from '@react-native-firebase/storage';
+
+import { LoadingAlert, NotificationAlert } from '@/components/NotificationModal';
 
 export default function AddUserScreen() {
   const navigation = useNavigation();
 
-  // States
   const [image, setImage] = useState<string | null>(null);
   const [showRoleMenu, setShowRoleMenu] = useState(false);
   const [name, setName] = useState('');
@@ -32,19 +32,16 @@ export default function AddUserScreen() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // Notifications
   const [notificationVisible, setNotificationVisible] = useState(false);
   const [notificationMessage, setNotificationMessage] = useState('');
   const [notificationType, setNotificationType] = useState<'success' | 'info' | 'error'>('info');
 
-  // Pick profile picture
   const pickImage = async () => {
     const result = await launchImageLibrary({ mediaType: 'photo', quality: 0.8 });
     if (result.didCancel || !result.assets || result.assets.length === 0) return;
     setImage(result.assets[0].uri || null);
   };
 
-  // Handle submit
   const handleSubmit = async () => {
     if (!name || !email || !password || !confirmPassword || !role) {
       setNotificationMessage('All fields are required.');
@@ -52,18 +49,8 @@ export default function AddUserScreen() {
       setNotificationVisible(true);
       return;
     }
-
     if (password !== confirmPassword) {
       setNotificationMessage('Passwords do not match.');
-      setNotificationType('error');
-      setNotificationVisible(true);
-      return;
-    }
-
-    // Basic email check
-    const emailRegex = /\S+@\S+\.\S+/;
-    if (!emailRegex.test(email)) {
-      setNotificationMessage('Invalid email format.');
       setNotificationType('error');
       setNotificationVisible(true);
       return;
@@ -72,35 +59,34 @@ export default function AddUserScreen() {
     setLoading(true);
 
     try {
-      // Create user in Firebase Authentication
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      // ✅ Correct syntax for react-native-firebase
+      const userCredential = await auth().createUserWithEmailAndPassword(email, password);
       const user = userCredential.user;
 
       let downloadURL = '';
       if (image) {
-        const fileName = image.split('/').pop() || `image_${Date.now()}.jpeg`;
-        const res = await fetch(image);
-        const blob = await res.blob();
-        const storageRef = ref(storage, `images/user-profile/${fileName}`);
-        await uploadBytes(storageRef, blob, { contentType: 'image/jpeg' });
-        downloadURL = await getDownloadURL(storageRef);
+        const fileName = `images/user-profile/${Date.now()}_${image.split('/').pop()}`;
+        // ✅ Correct syntax for react-native-firebase
+        const reference = storage().ref(fileName);
+        await reference.putFile(image.replace('file://', ''));
+        downloadURL = await reference.getDownloadURL();
       }
 
-      // Update display name and photo
-      await updateProfile(user, {
+      // ✅ Correct syntax for react-native-firebase
+      await user.updateProfile({
         displayName: name,
         photoURL: downloadURL || null,
       });
 
-      // Save user info in Firestore
-      await addDoc(collection(fireStore, 'users'), {
+      // ✅ Correct syntax for react-native-firebase (using .set with UID)
+      await firestore().collection('users').doc(user.uid).set({
         uid: user.uid,
         name,
         email,
         role,
         image: downloadURL,
         status: 'verified',
-        joined: serverTimestamp(),
+        joined: firestore.FieldValue.serverTimestamp(),
       });
 
       setNotificationMessage('User created successfully.');

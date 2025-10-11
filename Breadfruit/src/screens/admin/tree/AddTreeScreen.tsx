@@ -12,15 +12,17 @@ import {
   ActionSheetIOS,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Button, Text, TextInput, Menu } from "react-native-paper";
+import { Button, Text, TextInput, Menu, Appbar} from "react-native-paper";
 import MaterialIcons from "react-native-vector-icons/MaterialIcons";
 import Geolocation from "react-native-geolocation-service";
 import { useNavigation, useRoute } from "@react-navigation/native";
-import { fireStore as db, storage, functions } from "../../../firebaseConfig";
-import { httpsCallable } from "firebase/functions";
-import { getAuth } from "firebase/auth";
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { launchCamera, launchImageLibrary } from "react-native-image-picker";
+
+import auth from '@react-native-firebase/auth';
+import firestore from '@react-native-firebase/firestore';
+import functions from '@react-native-firebase/functions';
+import storage from '@react-native-firebase/storage';
+
 import barangayData from "@/constants/barangayData";
 
 const FRUIT_STATUS_OPTIONS = ["none", "unripe", "ripe"];
@@ -125,14 +127,12 @@ const uploadImageAndGetURL = async (uri: string): Promise<string | null> => {
     return uri;
   }
 
-  const response = await fetch(uri);
-  const blob = await response.blob();
-
   const fileName = `trees/${Date.now()}.jpg`;
-  const storageRef = ref(storage, fileName);
-
-  await uploadBytes(storageRef, blob);
-  return await getDownloadURL(storageRef);
+      // ✅ Correct syntax for react-native-firebase
+      const reference = storage().ref(fileName);
+      // ✅ Correct syntax for react-native-firebase
+      await reference.putFile(uri.replace('file://', ''));
+      return reference.getDownloadURL();
 };
   // --- THIS IS THE CORRECT AND ONLY 'handleSave' FUNCTION ---
   const handleSave = async () => {
@@ -144,15 +144,14 @@ const uploadImageAndGetURL = async (uri: string): Promise<string | null> => {
     setSaving(true);
 
     try {
-      const authInstance = getAuth();
-      const currentUser = authInstance.currentUser;
-      if (!currentUser) {
-        Alert.alert("Authentication Required", "You must be logged in.");
-        setSaving(false);
-        return;
-      }
 
-      // --- FIX IS HERE ---
+            const currentUser = auth().currentUser;
+            if (!currentUser) {
+              Alert.alert("Authentication Required", "You must be logged in.");
+              setSaving(false);
+              return;
+            }
+
       // 1. Upload the image to Storage first (if an image was selected)
       let imageUrl: string | null = null;
       if (image) {
@@ -166,17 +165,14 @@ const uploadImageAndGetURL = async (uri: string): Promise<string | null> => {
         diameter: parseFloat(diameterInput),
         dateTracked: new Date().toISOString(),
         fruitStatus,
-        coordinates: {
-          latitude: parseFloat(latitudeInput),
-          longitude: parseFloat(longitudeInput),
-        },
+        coordinates: new firestore.GeoPoint(parseFloat(latitudeInput), parseFloat(longitudeInput)),
         image: imageUrl, // Use the public download URL
         status: "active",
         trackedBy: currentUser.uid,
       };
 
       // 3. Call the Cloud Function
-      const addNewTree = httpsCallable(functions, "addNewTree");
+      const addNewTree = functions().httpsCallable("addNewTree");
       const result = await addNewTree(treeData);
 
       if (result?.data?.success) {
@@ -207,6 +203,11 @@ const uploadImageAndGetURL = async (uri: string): Promise<string | null> => {
       style={{ flex: 1 }}
     >
       <SafeAreaView style={styles.safeArea}>
+      {/* ✅ 2. Add the Appbar here */}
+        <Appbar.Header style={styles.appbarHeader}>
+         <Appbar.BackAction onPress={() => navigation.goBack()} color="#333" />
+          <Appbar.Content title="Add Tree" titleStyle={styles.appbarTitle} />
+            </Appbar.Header>
         <ScrollView contentContainerStyle={styles.scrollContainer} keyboardShouldPersistTaps="handled">
           <Text style={styles.title}>Log New Breadfruit Tree</Text>
 
@@ -379,6 +380,17 @@ const uploadImageAndGetURL = async (uri: string): Promise<string | null> => {
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: "#fff" },
+// ✅ 3. Add styles for the Appbar
+  appbarHeader: {
+    backgroundColor: '#fff',
+    elevation: 0, // Remove shadow on Android
+  },
+  appbarTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+
   scrollContainer: { padding: 20, flexGrow: 1 },
   title: { fontSize: 24, fontWeight: "bold", marginBottom: 20, color: "#333", textAlign: 'center' },
   imageContainer: {

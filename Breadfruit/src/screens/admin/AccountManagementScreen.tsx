@@ -1,34 +1,27 @@
-import { useNavigation } from '@react-navigation/native';
-import { collection, getCountFromServer, getFirestore, query, where } from "firebase/firestore";
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { Card, FAB, Text } from 'react-native-paper';
+import { useNavigation } from '@react-navigation/native';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
+import firestore from '@react-native-firebase/firestore';
 
 export default function AccountManagementScreen() {
-  const navigation = useNavigation();
+  const navigation = useNavigation<any>();
   const [allUsers, setAllUsers] = useState(0);
   const [researchers, setResearchers] = useState(0);
   const [pendings, setPendings] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
-  const db = getFirestore();
 
   const fetchAllCounts = async () => {
+    setRefreshing(true);
     try {
-      // Count ALL users
-      const allUsersSnap = await getCountFromServer(collection(db, "users"));
-      setAllUsers(allUsersSnap.data().count);
-
-      // Count Researchers
-      const researcherQuery = query(collection(db, "users"), where("role", "==", "researcher"));
-      const researcherSnap = await getCountFromServer(researcherQuery);
-      setResearchers(researcherSnap.data().count);
-
-      // Count Pending Users (status = pending)
-      const pendingQuery = query(collection(db, "users"), where("status", "==", "pending"));
-      const pendingSnap = await getCountFromServer(pendingQuery);
-      setPendings(pendingSnap.data().count);
-
+      const usersCollection = firestore().collection("users");
+      const allUsersSnap = await usersCollection.get();
+      setAllUsers(allUsersSnap.size);
+      const researcherSnap = await usersCollection.where("role", "==", "researcher").get();
+      setResearchers(researcherSnap.size);
+      const pendingSnap = await usersCollection.where("status", "==", "pending").get();
+      setPendings(pendingSnap.size);
     } catch (error) {
       console.error("Error fetching user counts:", error);
     } finally {
@@ -37,8 +30,11 @@ export default function AccountManagementScreen() {
   };
 
   useEffect(() => {
-    fetchAllCounts();
-  }, []);
+    const unsubscribe = navigation.addListener('focus', () => {
+      fetchAllCounts();
+    });
+    return unsubscribe;
+  }, [navigation]);
 
   return (
     <ScrollView
@@ -49,6 +45,7 @@ export default function AccountManagementScreen() {
         <MaterialCommunityIcons name="account-group" size={24} color="#2ecc71" />{'  '}Account Management
       </Text>
       <View style={styles.gridContainer}>
+        {/* ✅ FIX: Correct navigation calls */}
         <Pressable style={styles.gridItem} onPress={() => navigation.navigate('UserList', { filter: 'researcher' })}>
           <Card style={[styles.card, styles.primaryCard]}>
             <Card.Content>

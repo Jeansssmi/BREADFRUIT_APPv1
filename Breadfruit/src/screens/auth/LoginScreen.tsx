@@ -16,24 +16,34 @@ export default function LoginScreen() {
   const [loading, setLoading] = useState(false);
   const [passwordVisible, setPasswordVisible] = useState(false);
 
-  const handleLogin = async () => {
-    if (!email || !password) {
-      setError('Please enter both email and password.');
-      return;
-    }
+   const handleLogin = async () => {
+      if (!email || !password) {
+        setNotificationMessage('Email and password are required.');
+        setNotificationType('error');
+        setNotificationVisible(true);
+        return;
+      }
+      setLoading(true);
+      try {
+        await login(email, password);
+        // If login is successful, the RootNavigator will handle the redirection automatically.
+      } catch (error: any) {
+        let errorMessage = 'Login failed. Please check your credentials.';
 
-    setLoading(true);
-    setError(''); // Clear previous errors
-    try {
-      await login(email, password);
-      // Success: RootNavigator switches to the app automatically
-    } catch (e) {
-      setError('Invalid email or password. Please try again.');
-      console.error("Login Error:", e);
-    } finally {
-      setLoading(false);
-    }
-  };
+          // ✅ FIX: Catch the specific error for pending approval
+              if (error.message === 'auth/pending-approval') {
+                errorMessage = 'Your account is pending approval by an administrator.';
+              } else if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
+                errorMessage = 'Invalid email or password.';
+              }
+     // ✅ FIX: Changed from setting notification state to console.log and setting the local error state
+          console.log('Login Error:', errorMessage);
+          console.log('Raw Error:', err); // Log the full error object for debugging
+          setError(errorMessage);
+      } finally {
+        setLoading(false);
+      }
+    };
 
   return (
     <ScrollView contentContainerStyle={styles.scrollContainer} keyboardShouldPersistTaps="handled">

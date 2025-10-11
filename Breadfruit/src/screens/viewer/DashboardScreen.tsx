@@ -1,27 +1,27 @@
-import { useNavigation } from '@react-navigation/native';
-import { collection, getCountFromServer, getFirestore, query, where } from "firebase/firestore";
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, View, Text } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
+
+// ✅ Correct import for react-native-firebase
+import firestore from '@react-native-firebase/firestore';
 
 export default function DashboardScreen() {
   const navigation = useNavigation();
   const [allTrees, setAllTrees] = useState(0);
   const [harvestReady, setHarvestReady] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
-  const db = getFirestore();
 
   const fetchAllCounts = async () => {
     setRefreshing(true);
     try {
-      // Example fetch logic (replace with your actual Firestore queries)
-      const totalQuery = query(collection(db, "trees"));
-      const totalSnap = await getCountFromServer(totalQuery);
-      setAllTrees(totalSnap.data().count);
+      // ✅ Correct syntax for react-native-firebase
+      const totalSnap = await firestore().collection("trees").get();
+      setAllTrees(totalSnap.size);
 
-      const harvestQuery = query(collection(db, "trees"), where("status", "==", "harvest_ready"));
-      const harvestSnap = await getCountFromServer(harvestQuery);
-      setHarvestReady(harvestSnap.data().count);
+      const harvestSnap = await firestore().collection("trees").where("status", "==", "harvest_ready").get();
+      setHarvestReady(harvestSnap.size);
+
     } catch (error) {
       console.error("Error fetching counts:", error);
     }
@@ -31,7 +31,6 @@ export default function DashboardScreen() {
   useEffect(() => {
     fetchAllCounts();
   }, []);
-
   return (
     <ScrollView
       contentContainerStyle={styles.container}

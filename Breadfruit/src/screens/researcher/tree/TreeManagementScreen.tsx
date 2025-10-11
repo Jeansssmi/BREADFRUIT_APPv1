@@ -1,26 +1,28 @@
 import { useNavigation } from '@react-navigation/native';
-import { collection, getCountFromServer, getFirestore, query, where } from "firebase/firestore";
 import React, { useEffect, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { Card, FAB, Text } from 'react-native-paper';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
+
+// ✅ Correct import for react-native-firebase
+import firestore from '@react-native-firebase/firestore';
 
 export default function TreeManagementScreen() {
   const navigation = useNavigation();
   const [allTrees, setAllTrees] = useState(0);
   const [pendings, setPendings] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
-  const db = getFirestore();
 
   const fetchAllCounts = async () => {
     setRefreshing(true);
     try {
-      const allTreesSnap = await getCountFromServer(collection(db, "trees"));
-      setAllTrees(allTreesSnap.data().count);
+      // ✅ Correct syntax for react-native-firebase (replaces getCountFromServer)
+      const allTreesSnap = await firestore().collection("trees").get();
+      setAllTrees(allTreesSnap.size);
 
-      const pendingQuery = query(collection(db, "trees"), where("status", "==", "pending"));
-      const pendingSnap = await getCountFromServer(pendingQuery);
-      setPendings(pendingSnap.data().count);
+      const pendingSnap = await firestore().collection("trees").where("status", "==", "pending").get();
+      setPendings(pendingSnap.size);
+
     } catch (error) {
       console.error("Error fetching tree counts:", error);
     } finally {

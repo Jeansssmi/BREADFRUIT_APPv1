@@ -1,19 +1,22 @@
 import { LoadingAlert, NotificationAlert } from '@/components/NotificationModal';
 import { useTreeData } from '@/hooks/useTreeData';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import { deleteDoc, doc, getFirestore } from "firebase/firestore";
 import { useState } from 'react';
 import { Alert, Image, ScrollView, StyleSheet, View } from 'react-native';
 import { ActivityIndicator, Button, Card, Text } from 'react-native-paper';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 
-export default function PendingTreeDetailsScreen() { 
+// ✅ Correct import for react-native-firebase
+import firestore from '@react-native-firebase/firestore';
+
+export default function PendingTreeDetailsScreen() {
   const route = useRoute();
   const navigation = useNavigation();
+  // @ts-ignore
   const { treeID } = route.params;
 
-  const { trees, isLoading } = useTreeData({ mode: 'single', treeID: treeID.toString() }); 
+  const { trees, isLoading } = useTreeData({ mode: 'single', treeID: treeID.toString() });
   const tree = trees[0];
 
   const [loading, setLoading] = useState(false);
@@ -30,8 +33,8 @@ export default function PendingTreeDetailsScreen() {
         onPress: async () => {
           setLoading(true);
           try {
-            const db = getFirestore();
-            await deleteDoc(doc(db, 'trees', currentTreeID));
+            // ✅ Correct syntax for react-native-firebase
+            await firestore().collection('trees').doc(currentTreeID).delete();
             setNotificationMessage('Successfully cancelled.');
             setNotificationType('success');
             setNotificationVisible(true);
@@ -50,12 +53,11 @@ export default function PendingTreeDetailsScreen() {
 
   if (isLoading) {
     return <View style={styles.center}><ActivityIndicator size="large" color='#2ecc71' /></View>;
-  } 
+  }
 
   if (!tree) {
     return <View style={styles.center}><Text>Tree not found</Text></View>;
   }
-
   return (
     <ScrollView contentContainerStyle={styles.scrollContainer}>
       <View style={styles.container}>

@@ -1,15 +1,18 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
 import { Button, Text, TextInput } from 'react-native-paper';
-import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import { httpsCallable } from 'firebase/functions';
-import { functions } from '@/firebaseConfig';
+import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
+
+// ✅ Correct import for react-native-firebase
+import functions from '@react-native-firebase/functions';
+
 import { LoadingAlert, NotificationAlert } from '@/components/NotificationModal';
 
 export default function RegisterFormScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute();
+  // @ts-ignore
   const { type } = route.params as { type: string };
 
   const [name, setName] = useState('');
@@ -24,108 +27,81 @@ export default function RegisterFormScreen() {
   const toTitleCase = (str: string) =>
     str.charAt(0).toUpperCase() + str.slice(1);
 
-const handleRegister = async () => {
-  // Validate empty fields
-  if (!name || !email || !password || !confirmPassword) {
-    setNotificationMessage('All fields are required.');
-    setNotificationType('error');
-    setNotificationVisible(true);
-    return;
-  }
+  const handleRegister = async () => {
+    // Validations remain the same
+    if (!name || !email || !password || !confirmPassword) {
+      setNotificationMessage('All fields are required.');
+      setNotificationType('error');
+      setNotificationVisible(true);
+      return;
+    }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      setNotificationMessage('Please enter a valid email address.');
+      setNotificationType('error');
+      setNotificationVisible(true);
+      return;
+    }
+    if (password !== confirmPassword) {
+      setNotificationMessage('Passwords do not match.');
+      setNotificationType('error');
+      setNotificationVisible(true);
+      return;
+    }
 
-  // Validate email format
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  if (!emailRegex.test(email)) {
-    setNotificationMessage('Please enter a valid email address.');
-    setNotificationType('error');
-    setNotificationVisible(true);
-    return;
-  }
+    setLoading(true);
 
-  // Validate password match
-  if (password !== confirmPassword) {
-    setNotificationMessage('Passwords do not match.');
-    setNotificationType('error');
-    setNotificationVisible(true);
-    return;
-  }
+    try {
+      // ✅ Correct and simpler syntax for calling Cloud Functions
+      const createNewUser = functions().httpsCallable('createNewUser');
 
+      const userData = {
+        name,
+        email,
+        password,
+        role: type,
+        status: type === 'viewer' ? 'verified' : 'pending',
+        image: null,
+        joined: new Date().toISOString(),
+      };
 
+      const result = await createNewUser(userData);
 
- setLoading(true);
+      if (result?.data?.success) {
+        setNotificationMessage(
+          type === 'viewer'
+            ? 'Registration successful! You can now log in.'
+            : 'Your registration was successful. Please wait for admin approval.'
+        );
+        setNotificationType('success');
+        setNotificationVisible(true);
+      } else {
+        throw new Error('Registration failed.');
+      }
+    } catch (error: any) {
+      console.error('❌ Registration error:', error);
 
- try {
-   console.log('📤 Sending data:', {
-     name,
-     email,
-     password,
-     role: type,
-     status: type === 'viewer' ? 'verified' : 'pending',
-     image: null,
-   });
+      let errorMessage = 'Registration failed. Please try again later.';
+      let errorType: 'error' | 'info' = 'error';
 
-   const response = await fetch(
-     'https://us-central1-breadfruit-tracker.cloudfunctions.net/createNewUser',
-     {
-       method: 'POST',
-       headers: {
-         'Content-Type': 'application/json',
-       },
-       body: JSON.stringify({
-         data: {
-           name,
-           email,
-           password,
-           role: type,
-           status: type === 'viewer' ? 'verified' : 'pending',
-           image: null,
-           joined: new Date().toISOString(),
-         },
-       }),
-     }
-   );
+      // The react-native-firebase library returns a 'code' property on the error
+      if (error.code === 'functions/already-exists') {
+        errorMessage =
+          'An account with this email already exists. Please use another email or log in.';
+        errorType = 'info';
+      } else if (error.code === 'functions/invalid-argument') {
+        errorMessage = 'Invalid data submitted. Please check your inputs.';
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
 
-   if (!response.ok) {
-     const errorText = await response.text();
-     throw new Error(`HTTP error! Status: ${response.status} | ${errorText}`);
-   }
-
-   const result = await response.json();
-   console.log('✅ Function result:', result);
-
-   if (result?.result?.success || result?.data?.success) {
-     setNotificationMessage(
-       'Your registration was successful. Please wait for admin approval.'
-     );
-     setNotificationType('success');
-     setNotificationVisible(true);
-   } else {
-     throw new Error(result?.error?.message || 'Registration failed.');
-   }
- } catch (error: any) {
-   console.error('❌ Registration error:', error);
-
-   let errorMessage = 'Registration failed. Please try again later.';
-   let errorType: 'error' | 'info' = 'error';
-
-   if (error.message?.includes('already-exists')) {
-     errorMessage =
-       'An account with this email already exists. Please use another email or log in.';
-     errorType = 'info';
-   } else if (error.message?.includes('invalid-email')) {
-     errorMessage = 'Invalid email format. Please enter a valid email address.';
-   } else if (error.message?.includes('weak-password')) {
-     errorMessage = 'Password is too weak. Try a stronger password.';
-   }
-
-   setNotificationMessage(errorMessage);
-   setNotificationType(errorType);
-   setNotificationVisible(true);
- } finally {
-   setLoading(false);
- }
-
-};
+      setNotificationMessage(errorMessage);
+      setNotificationType(errorType);
+      setNotificationVisible(true);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>

@@ -1,20 +1,34 @@
-import { LoadingAlert, NotificationAlert } from '@/components/NotificationModal';
-import { storage } from '@/firebaseConfig';
-import { useUserData } from '@/hooks/useUserData';
-import { useNavigation, useRoute } from '@react-navigation/native';
-import { doc, getFirestore, updateDoc } from "firebase/firestore";
-import { deleteObject, getDownloadURL, ref, uploadBytes } from 'firebase/storage';
-import { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, KeyboardAvoidingView, Platform, Image as ReactImage, SafeAreaView, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
-import { launchImageLibrary } from 'react-native-image-picker';
+import React, { useEffect, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  Image,
+  KeyboardAvoidingView,
+  Platform,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import { Button, Menu, Text, TextInput } from 'react-native-paper';
+import { useNavigation, useRoute } from '@react-navigation/native';
+import { launchImageLibrary } from 'react-native-image-picker';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
+
+// ✅ Correct imports for react-native-firebase
+import firestore from '@react-native-firebase/firestore';
+import storage from '@react-native-firebase/storage';
+
+import { LoadingAlert, NotificationAlert } from '@/components/NotificationModal';
+import { useUserData } from '@/hooks/useUserData';
 
 export default function EditUserScreen() {
   const navigation = useNavigation();
   const route = useRoute();
+  // @ts-ignore
   const { userID } = route.params;
-  
+
   const { users, isLoading } = useUserData({ mode: 'single', uid: userID.toString() });
   const user = users[0];
 
@@ -40,7 +54,7 @@ export default function EditUserScreen() {
     if (result.didCancel || !result.assets) return;
     setImage(result.assets[0].uri || '');
   };
-  
+
   const handleSubmit = (uid: string) => {
     Alert.alert('Confirm Changes', 'Save changes for this user?', [
       { text: 'Cancel', style: 'cancel' },
@@ -48,29 +62,30 @@ export default function EditUserScreen() {
         onPress: async () => {
           setLoading(true);
           try {
-            const db = getFirestore();
-            const docRef = doc(db, 'users', uid);
-            let newImageURL = user.image; 
+            // ✅ Correct syntax for react-native-firebase
+            const docRef = firestore().collection('users').doc(uid);
+            let newImageURL = user.image;
 
             if (image && image.startsWith('file://')) {
               if (user.image) {
                 try {
-                  const prevRef = ref(storage, user.image);
-                  await deleteObject(prevRef);
+                  // ✅ Correct syntax for react-native-firebase
+                  const prevRef = storage().refFromURL(user.image);
+                  await prevRef.delete();
                 } catch (deleteError) {
                   console.warn('Failed to delete previous image:', deleteError);
                 }
               }
-              const fileName = image.split('/').pop() || `image_${Date.now()}.jpeg`;
-              const res = await fetch(image);
-              const blob = await res.blob();
-              const storageRef = ref(storage, `images/user-profile/${fileName}`);
-              await uploadBytes(storageRef, blob, { contentType: 'image/jpeg' });
-              newImageURL = await getDownloadURL(storageRef);
+              const fileName = `images/user-profile/${Date.now()}_${image.split('/').pop()}`;
+              // ✅ Correct (and simpler) syntax for react-native-firebase
+              const reference = storage().ref(fileName);
+              await reference.putFile(image.replace('file://', ''));
+              newImageURL = await reference.getDownloadURL();
             }
 
             const userData = { name, role, image: newImageURL };
-            await updateDoc(docRef, userData);
+            // ✅ Correct syntax for react-native-firebase
+            await docRef.update(userData);
 
             setNotificationMessage('Successfully saved.');
             setNotificationType('success');
