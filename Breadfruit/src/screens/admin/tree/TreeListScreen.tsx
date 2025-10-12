@@ -39,10 +39,7 @@ export default function TreeListScreen() {
 
     return (
         <View style={styles.container}>
-          <Appbar.Header style={styles.appbarHeader}>
-                  <Appbar.BackAction onPress={() => navigation.goBack()} color="#333" />
-                  <Appbar.Content title="Trees Tracked" titleStyle={styles.appbarTitle} />
-                </Appbar.Header>
+
 
             <View style={styles.filterContainer}>
                 {(['All', 'Ripe', 'Unripe', 'None'] as const).map(f => (

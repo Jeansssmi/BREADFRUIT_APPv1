@@ -68,10 +68,7 @@ export default function PendingUsersScreen() {
   return (
     <View style={styles.container}>
       {/* ✅ Header with Back Button */}
-      <Appbar.Header style={styles.appbarHeader}>
-        <Appbar.BackAction onPress={() => navigation.goBack()} color="#333" />
-        <Appbar.Content title="Pending List" titleStyle={styles.appbarTitle} />
-      </Appbar.Header>
+
 
       <RoleFilter selected={selectedRole} onSelect={setSelectedRole} />
 

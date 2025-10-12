@@ -3,7 +3,7 @@ import { useUserData } from '@/hooks/useUserData';
 import { useNavigation, useRoute } from "@react-navigation/native";
 import { useMemo, useState } from 'react';
 import { FlatList, StyleSheet, View } from 'react-native';
-import { ActivityIndicator, Chip, Text } from 'react-native-paper';
+import { Appbar,ActivityIndicator, Chip, Text } from 'react-native-paper';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 
 const RoleFilter = ({ selected, onSelect }: { selected: string; onSelect: (role: string) => void }) => {
@@ -46,6 +46,7 @@ export default function UserListScreen() {
 
   return (
     <View style={styles.container}>
+
       <RoleFilter selected={selectedRole} onSelect={setSelectedRole} />
       <FlatList
         data={filteredUsers}
@@ -72,5 +73,7 @@ const styles = StyleSheet.create({
   filterChip: { borderRadius: 8, borderColor: '#2ecc71' },
   filterTextChip: { color: '#2ecc71', fontSize: 12 }, 
   activeFilterChip: { backgroundColor: '#2ecc71' },
-  activeFilterTextChip: { color: 'white' }, 
+  activeFilterTextChip: { color: 'white' },
+   appbarHeader: { backgroundColor: '#f7f8fa', elevation: 0 },
+   appbarTitle: { color: '#333', fontWeight: 'bold', fontSize: 18 },
 });

@@ -84,7 +84,7 @@ export default function AdminDashboardScreen() {
           {/* Trees Tracked */}
           <Pressable
             style={styles.gridItem}
-            onPress={() => navigation.navigate("Trees", { screen: "TreeList" })}
+            onPress={() => navigation.navigate("TreeList")}
           >
             <Card style={[styles.card, styles.primaryCard]}>
               <Card.Content>
@@ -100,7 +100,7 @@ export default function AdminDashboardScreen() {
           {/* All Users */}
           <Pressable
             style={styles.gridItem}
-            onPress={() => navigation.navigate("Accounts", { screen: "UserList" })}
+            onPress={() => navigation.navigate("UserList")}
           >
             <Card style={styles.card}>
               <Card.Content>
@@ -117,15 +117,11 @@ export default function AdminDashboardScreen() {
             </Card>
           </Pressable>
 
+
           {/* Researchers */}
           <Pressable
             style={styles.gridItem}
-            onPress={() =>
-              navigation.navigate("Accounts", {
-                screen: "UserList",
-                params: { filter: "researcher" },
-              })
-            }
+            onPress={() => navigation.navigate("UserListScreen", { filter: "researcher" })}
           >
             <Card style={styles.card}>
               <Card.Content>
@@ -145,7 +141,7 @@ export default function AdminDashboardScreen() {
           {/* Pending Approvals */}
           <Pressable
             style={styles.gridItem}
-            onPress={() => navigation.navigate("Accounts", { screen: "PendingUsers" })}
+            onPress={() => navigation.navigate("PendingUsers")}
           >
             <Card style={styles.card}>
               <Card.Content>

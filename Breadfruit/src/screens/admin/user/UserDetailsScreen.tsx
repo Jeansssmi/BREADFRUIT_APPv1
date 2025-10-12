@@ -78,10 +78,7 @@ export default function UserDetailsScreen() {
 
   return (
     <View style={styles.container}>
-      <Appbar.Header style={styles.appbarHeader}>
-          <Appbar.BackAction onPress={() => navigation.goBack()} color="#333" />
-          <Appbar.Content title="User Details" titleStyle={styles.appbarTitle} />
-      </Appbar.Header>
+
 
       <ScrollView contentContainerStyle={styles.scrollContainer}>
         <LoadingAlert visible={loading} message="Please wait..." />
