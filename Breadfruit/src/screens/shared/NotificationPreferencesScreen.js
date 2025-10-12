@@ -10,10 +10,7 @@ export default function NotificationPreferencesScreen() {
 
   return (
     <View style={styles.container}>
-      <Appbar.Header style={styles.appbarHeader}>
-        <Appbar.BackAction onPress={() => navigation.goBack()} color="#333" />
-        <Appbar.Content title="Notifications" titleStyle={styles.appbarTitle} />
-      </Appbar.Header>
+
 
       <View style={styles.settingItem}>
         <Text style={styles.settingText}>Tree Ripeness Alerts</Text>

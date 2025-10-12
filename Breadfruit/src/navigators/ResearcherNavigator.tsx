@@ -104,6 +104,7 @@ export default function ResearcherNavigator() {
       <MainStack.Screen name="EditProfile" component={EditProfileScreen} options={{ title: 'Edit Profile' }} />
       <MainStack.Screen name="Camera" component={CameraScreen} options={{ presentation: 'modal', headerShown: false }} />
       <MainStack.Screen name="Search" component={SearchScreen} options={{ headerShown: false }} />
+       <MainStack.Screen name="TreeList" component={TreeListScreen} options={{ title: 'Tree List' }} />
     </MainStack.Navigator>
   );
 }

@@ -212,7 +212,7 @@ const styles = StyleSheet.create({
   button: {
     flex: 1,
     borderRadius: 25,
-    backgroundColor: '#2ecc71',
+    backgroundColor: '#333',
   },
   updateButton: {
     backgroundColor: '#333', // Different color for update action

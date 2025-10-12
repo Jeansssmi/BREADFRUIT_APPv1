@@ -238,7 +238,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#2ecc71',
   },
   rejectButton: {
-    backgroundColor: '#34495e',
+    backgroundColor: '#333',
   },
   buttonText: {
     color: 'white',

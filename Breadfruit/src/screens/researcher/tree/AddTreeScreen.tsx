@@ -9,15 +9,15 @@ import {
   Platform,
   PermissionsAndroid,
   Alert,
+  ActionSheetIOS,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Button, Text, TextInput, Menu } from "react-native-paper";
+import { Button, Text, TextInput, Menu, Appbar} from "react-native-paper";
 import MaterialIcons from "react-native-vector-icons/MaterialIcons";
 import Geolocation from "react-native-geolocation-service";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import { launchCamera, launchImageLibrary } from "react-native-image-picker";
 
-// ✅ Correct imports for react-native-firebase
 import auth from '@react-native-firebase/auth';
 import firestore from '@react-native-firebase/firestore';
 import functions from '@react-native-firebase/functions';
@@ -29,12 +29,13 @@ const FRUIT_STATUS_OPTIONS = ["none", "unripe", "ripe"];
 const CITY_OPTIONS = Object.keys(barangayData);
 
 export default function AddTreeScreen() {
+
+
   const navigation = useNavigation();
   const route = useRoute();
+  const trackedBy = route.params?.trackedBy || null;
 
-  // @ts-ignore
   const [image, setImage] = useState<string | null>(route.params?.imageUri || null);
-  // @ts-ignore
   const [diameterInput, setDiameterInput] = useState(route.params?.diameter?.toString() || "");
   const [latitudeInput, setLatitudeInput] = useState<string>("");
   const [longitudeInput, setLongitudeInput] = useState<string>("");
@@ -53,9 +54,7 @@ export default function AddTreeScreen() {
   const BARANGAY_OPTIONS = barangayData[city] || [];
 
   useEffect(() => {
-    // @ts-ignore
     if (route.params?.diameter) {
-      // @ts-ignore
       setDiameterInput(route.params.diameter.toString());
     }
   }, [route.params?.diameter]);
@@ -123,28 +122,31 @@ export default function AddTreeScreen() {
     }
   };
 
-  const handleRemoveImage = () => setImage(null);
+ const handleRemoveImage = () => setImage(null);
 
-  const uploadImageAndGetURL = async (uri: string): Promise<string | null> => {
-    if (!uri.startsWith('file://')) {
-      return uri;
-    }
-    const fileName = `trees/${Date.now()}.jpg`;
-    // ✅ Correct syntax for react-native-firebase
-    const reference = storage().ref(fileName);
-    // ✅ Correct (and simpler) syntax for uploading local files
-    await reference.putFile(uri.replace('file://', ''));
-    return reference.getDownloadURL();
-  };
+const uploadImageAndGetURL = async (uri: string): Promise<string | null> => {
+  if (!uri.startsWith('file://')) {
+    // If it's already a web URL, no need to re-upload
+    return uri;
+  }
 
+  const fileName = `trees/${Date.now()}.jpg`;
+      // ✅ Correct syntax for react-native-firebase
+      const reference = storage().ref(fileName);
+      // ✅ Correct syntax for react-native-firebase
+      await reference.putFile(uri.replace('file://', ''));
+      return reference.getDownloadURL();
+};
+  // --- THIS IS THE CORRECT AND ONLY 'handleSave' FUNCTION ---
   const handleSave = async () => {
     if (!city || !barangay || !diameterInput || !latitudeInput || !longitudeInput) {
       Alert.alert("Validation Error", "Please fill all required fields before saving.");
       return;
     }
+
     setSaving(true);
+
     try {
-      // ✅ Correct syntax for react-native-firebase
       const currentUser = auth().currentUser;
       if (!currentUser) {
         Alert.alert("Authentication Required", "You must be logged in.");
@@ -157,35 +159,43 @@ export default function AddTreeScreen() {
         imageUrl = await uploadImageAndGetURL(image);
       }
 
+      const assignedTrackedBy = trackedBy || currentUser.uid;
+
       const treeData = {
         city,
         barangay,
         diameter: parseFloat(diameterInput),
         dateTracked: new Date().toISOString(),
         fruitStatus,
-        // ✅ Best practice for storing locations
-        coordinates: new firestore.GeoPoint(
-          parseFloat(latitudeInput),
-          parseFloat(longitudeInput)
-        ),
+        coordinates: new firestore.GeoPoint(parseFloat(latitudeInput), parseFloat(longitudeInput)),
         image: imageUrl,
-        status: "verified",
-        trackedBy: currentUser.uid,
+        status: "active",
+        trackedBy: assignedTrackedBy,
       };
 
-      // ✅ Correct and simpler syntax for calling Cloud Functions
       const addNewTree = functions().httpsCallable("addNewTree");
       const result = await addNewTree(treeData);
 
       if (result?.data?.success) {
-        Alert.alert("Success", "Tree added successfully!");
-        navigation.goBack();
+        Alert.alert("Success", "Tree added successfully!", [
+          {
+            text: "OK",
+            onPress: () => {
+              // ✅ Send a refresh signal back
+              navigation.navigate({
+                name: "TrackedTrees",
+                params: { shouldRefresh: true },
+                merge: true,
+              });
+              navigation.goBack();
+            },
+          },
+        ]);
       } else {
-        // @ts-ignore
         Alert.alert("Error", result?.data?.message || "An unexpected server error occurred.");
       }
     } catch (error: any) {
-      console.error("❌ Error saving tree:", error);
+      console.error("Error saving tree:", error);
       Alert.alert("Error", error.message || "Failed to save tree data.");
     } finally {
       setSaving(false);
@@ -197,7 +207,6 @@ export default function AddTreeScreen() {
       Alert.alert("Image Required", "Please select an image first.");
       return;
     }
-    // @ts-ignore
     navigation.navigate("DiameterScannerScreen", { imageUri: image });
   };
 
@@ -207,8 +216,9 @@ export default function AddTreeScreen() {
       style={{ flex: 1 }}
     >
       <SafeAreaView style={styles.safeArea}>
+
         <ScrollView contentContainerStyle={styles.scrollContainer} keyboardShouldPersistTaps="handled">
-          <Text style={styles.title}>Log New Breadfruit Tree</Text>
+
 
           <TouchableOpacity style={styles.imageContainer} onPress={handleImageSelection}>
             {image ? (
@@ -288,7 +298,7 @@ export default function AddTreeScreen() {
               <TextInput
                 label="Diameter (cm)"
                 value={diameterInput}
-                editable={false}
+                onChangeText={setDiameterInput}
                 placeholder="Scan to get value"
                 style={styles.input}
                 mode="outlined"
@@ -354,24 +364,31 @@ export default function AddTreeScreen() {
             mode="outlined"
           />
 
+           {/* ✅ Display assigned trackedBy */}
+                    {trackedBy && (
+                      <View style={{ marginBottom: 10 }}>
+                        <Text style={{ color: "#2ecc71", fontWeight: "600" }}>
+                          Assigned to: {trackedBy}
+                        </Text>
+                      </View>
+                    )}
+
           <View style={styles.buttonContainer}>
             <Button
               mode="contained"
               onPress={handleNavigateToScanner}
               style={styles.primaryButton}
             >
-              Image Processing
+              Scan Diameter
             </Button>
              <Button
-               mode="contained"
-               onPress={handleSave}
-               style={styles.secondaryButton}
-               loading={saving}
-             >
-               <Text style={{ color: 'white', fontWeight: 'bold' }}>
-                 {saving ? "Saving..." : "Save Tree"}
-               </Text>
-             </Button>
+              mode="contained"
+              onPress={handleSave}
+              style={styles.secondaryButton}
+              loading={saving}
+            >
+              {saving ? "Saving..." : "Save Tree"}
+            </Button>
           </View>
         </ScrollView>
       </SafeAreaView>
@@ -381,6 +398,17 @@ export default function AddTreeScreen() {
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: "#fff" },
+// ✅ 3. Add styles for the Appbar
+  appbarHeader: {
+    backgroundColor: '#fff',
+    elevation: 0, // Remove shadow on Android
+  },
+  appbarTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+
   scrollContainer: { padding: 20, flexGrow: 1 },
   title: { fontSize: 24, fontWeight: "bold", marginBottom: 20, color: "#333", textAlign: 'center' },
   imageContainer: {
@@ -430,9 +458,11 @@ const styles = StyleSheet.create({
   primaryButton: {
     backgroundColor: "#2ecc71",
     paddingVertical: 8,
+    borderRadius:100,
   },
   secondaryButton: {
-    backgroundColor: "#34495e",
+    backgroundColor: "#333",
     paddingVertical: 8,
+    borderRadius:100,
   },
 });

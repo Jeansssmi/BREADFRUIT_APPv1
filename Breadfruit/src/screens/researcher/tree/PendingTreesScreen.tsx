@@ -46,7 +46,7 @@ export default function PendingTreesScreen() {
         <FlatList
           data={filteredTrees}
           keyExtractor={item => item.treeID}
-          renderItem={({ item }) => <TreeCard tree={item} onPress={() => navigation.navigate('TreeDetails', { treeID: item.treeID })} />}
+          renderItem={({ item }) => <TreeCard tree={item} onPress={() => navigation.navigate('PendingDetails', { treeID: item.treeID })} />}
           ListEmptyComponent={
             <View style={styles.emptyState}>
               <MaterialCommunityIcons name="tree" size={40} color="#888" />

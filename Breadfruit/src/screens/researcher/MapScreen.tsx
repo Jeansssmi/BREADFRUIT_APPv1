@@ -1,18 +1,16 @@
-import TreeDetailsModal from '../../components/TreeDetailsModal';
-import { useTreeData } from '@/hooks/useTreeData';
-import { Tree } from '@/types';
-import { useNavigation, useRoute } from '@react-navigation/native';
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Alert, Dimensions, StyleSheet, View } from 'react-native';
-import Geocoder from 'react-native-geocoding';
 import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
-import { Button, Text, TextInput } from 'react-native-paper';
+import { TextInput } from 'react-native-paper';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
+import { useNavigation, useRoute } from '@react-navigation/native';
+import Geocoder from 'react-native-geocoding';
+import { useTreeData } from '@/hooks/useTreeData';
 
 export default function MapScreen() {
   const { trees } = useTreeData();
-  const route = useRoute();
   const navigation = useNavigation();
+  const route = useRoute();
   const { width, height } = Dimensions.get('window');
 
   const [region, setRegion] = useState({
@@ -23,34 +21,73 @@ export default function MapScreen() {
   });
 
   const [searchQuery, setSearchQuery] = useState('');
-  const [droppedPin, setDroppedPin] = useState<{ coordinate: { latitude: number; longitude: number }; title?: string } | null>(null);
-  const [selectedTree, setSelectedTree] = useState<Tree | null>(null);
-  const [modalVisible, setModalVisible] = useState(false);
-
-  // ✅ store last added tree in state
-  const [lastAddedTreeID, setLastAddedTreeID] = useState<string | null>(null);
+  const [filteredTrees, setFilteredTrees] = useState(trees);
 
   useEffect(() => {
-    if (route.params?.treeID && route.params?.lat && route.params?.lng) {
-      const { treeID, lat, lng } = route.params;
+    Geocoder.init('YOUR_API_KEY'); // Replace with your Google Maps API key
+  }, []);
 
-      // zoom into the new tree
+  // Zoom to coordinates passed from another screen
+  useEffect(() => {
+    if (route.params?.lat && route.params?.lng) {
       setRegion({
-        latitude: Number(lat),
-        longitude: Number(lng),
+        latitude: Number(route.params.lat),
+        longitude: Number(route.params.lng),
         latitudeDelta: 0.01,
-        longitudeDelta: 0.01,
+        longitudeDelta: 0.01 * (width / height),
       });
-
-      // keep track of the last added tree
-      setLastAddedTreeID(treeID);
     }
-  }, [route.params]);
+  }, [route.params?.lat, route.params?.lng]);
+
+  // Filter markers as user types
+  useEffect(() => {
+    if (!searchQuery.trim()) {
+      setFilteredTrees(trees);
+    } else {
+      const query = searchQuery.toLowerCase();
+      setFilteredTrees(
+        trees.filter(
+          tree =>
+            tree.name?.toLowerCase().includes(query) &&
+            tree.coordinates?.latitude &&
+            tree.coordinates?.longitude
+        )
+      );
+    }
+  }, [searchQuery, trees]);
 
   const handleSearch = async () => {
     if (!searchQuery.trim()) return;
+
+    const query = searchQuery.trim().toLowerCase();
+
+    // First, try to find a tree with this name
+    const matchedTree = trees.find(
+      tree =>
+        tree.name?.toLowerCase() === query &&
+        tree.coordinates?.latitude &&
+        tree.coordinates?.longitude
+    );
+
+    if (matchedTree) {
+      // Zoom directly to the tree
+      setRegion({
+        latitude: matchedTree.coordinates.latitude,
+        longitude: matchedTree.coordinates.longitude,
+        latitudeDelta: 0.01,
+        longitudeDelta: 0.01 * (width / height),
+      });
+      return; // Stop, don't do Geocoding
+    }
+
+    // If no tree matched, use Geocoder for location search
     try {
-      const json = await Geocoder.from(searchQuery.trim());
+      const json = await Geocoder.from(searchQuery);
+      if (json.results.length === 0) {
+        Alert.alert('Not found', 'Could not locate this place.');
+        return;
+      }
+
       const location = json.results[0].geometry.location;
       setRegion({
         latitude: location.lat,
@@ -58,22 +95,28 @@ export default function MapScreen() {
         latitudeDelta: 0.2,
         longitudeDelta: 0.2,
       });
-    } catch {
+    } catch (error) {
       Alert.alert('Search failed', 'Could not find this location.');
-    } finally {
-      setSearchQuery('');
     }
   };
 
   return (
     <View style={styles.container}>
+      {/* Search Bar */}
       <View style={styles.searchBar}>
         <TextInput
-          placeholder="Search for locations..."
+          placeholder="Search for trees or locations..."
           value={searchQuery}
           onChangeText={setSearchQuery}
           style={styles.searchInput}
-          left={<TextInput.Icon icon={() => <MaterialIcons name="location-on" size={24} color="#D32F2F" />} />}
+          left={
+            <TextInput.Icon
+              icon={() => <MaterialIcons name="location-on" size={24} color="#D32F2F" />}
+            />
+          }
+          right={
+            <TextInput.Icon icon="search" onPress={handleSearch} forceTextInputFocus={false} />
+          }
           onSubmitEditing={handleSearch}
           mode="outlined"
           outlineColor="transparent"
@@ -81,60 +124,24 @@ export default function MapScreen() {
         />
       </View>
 
+      {/* Map */}
       <MapView
         provider={PROVIDER_GOOGLE}
         style={styles.map}
         region={region}
-        onLongPress={(e) => setDroppedPin({ coordinate: e.nativeEvent.coordinate, title: 'New Tree' })}
         onRegionChangeComplete={setRegion}
       >
-        {trees.map((tree) => (
+        {filteredTrees.map(tree => (
           <Marker
             key={tree.treeID}
-            coordinate={tree.coordinates}
-            // ✅ if last added → red, else → green
-            pinColor={tree.treeID === lastAddedTreeID ? "red" : "green"}
-            onPress={() => {
-              setSelectedTree(tree);
-              setRegion({ ...tree.coordinates, latitudeDelta: 0.01, longitudeDelta: 0.01 });
-              setModalVisible(true);
+            coordinate={{
+              latitude: tree.coordinates.latitude,
+              longitude: tree.coordinates.longitude,
             }}
+            onPress={() => navigation.navigate('TreeDetails', { treeID: tree.treeID })}
           />
         ))}
-
-        {droppedPin && (
-          <Marker coordinate={droppedPin.coordinate} title={droppedPin.title} />
-        )}
       </MapView>
-
-      {droppedPin && (
-        <View style={styles.pinConfirmation}>
-          <Text>Add New Tree at this location?</Text>
-          <View style={styles.pinButtons}>
-            <Button
-              mode="contained"
-              style={styles.confirmButton}
-              onPress={() => {
-                navigation.navigate('Trees', {
-                  screen: 'AddTree',
-                  params: {
-                    latitude: droppedPin.coordinate.latitude,
-                    longitude: droppedPin.coordinate.longitude,
-                  },
-                });
-                setDroppedPin(null);
-              }}
-            >
-              Confirm
-            </Button>
-            <Button mode="outlined" style={styles.cancelButton} onPress={() => setDroppedPin(null)}>
-              Cancel
-            </Button>
-          </View>
-        </View>
-      )}
-
-      <TreeDetailsModal visible={modalVisible} tree={selectedTree} onClose={() => setModalVisible(false)} />
     </View>
   );
 }
@@ -158,17 +165,4 @@ const styles = StyleSheet.create({
     borderRadius: 25,
   },
   map: { flex: 1 },
-  pinConfirmation: {
-    position: 'absolute',
-    bottom: 100,
-    left: 20,
-    right: 20,
-    backgroundColor: 'white',
-    padding: 20,
-    borderRadius: 10,
-    elevation: 5,
-  },
-  pinButtons: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 10 },
-  confirmButton: { flex: 1, marginRight: 10, backgroundColor: '#2ecc71' },
-  cancelButton: { flex: 1 },
 });

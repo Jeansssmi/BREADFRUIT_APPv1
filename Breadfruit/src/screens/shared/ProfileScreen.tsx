@@ -1,11 +1,23 @@
 import { useAuth } from '@/context/AuthContext';
 import { useNavigation } from '@react-navigation/native';
-import { Alert, StyleSheet, View, Image, ScrollView } from 'react-native';
-import { Text, Button } from 'react-native-paper';
+import React from 'react';
+import { Alert, StyleSheet, View, Image, ScrollView, TouchableOpacity } from 'react-native';
+import { Text, Button, Appbar } from 'react-native-paper';
+import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 
+
+// Custom component for each setting item in the list
+const SettingsItem = ({ icon, name, onPress, isLogout = false }) => (
+  <TouchableOpacity onPress={onPress} style={styles.settingsItem}>
+    <MaterialIcons name={icon} size={24} color={isLogout ? '#D32F2F' : '#333'} />
+    <Text style={[styles.settingsItemText, isLogout && { color: '#D32F2F' }]}>{name}</Text>
+    {!isLogout && <MaterialIcons name="chevron-right" size={24} color="#ccc" />}
+  </TouchableOpacity>
+);
+
 export default function ProfileScreen() {
-  const navigation = useNavigation();
+  const navigation = useNavigation<any>();
   const { user, logout } = useAuth();
 
   const getInitials = () => {
@@ -18,227 +30,164 @@ export default function ProfileScreen() {
       { text: 'Cancel', style: 'cancel' },
       { text: 'Logout', style: 'destructive', onPress: async () => logout() },
     ]);
-  }
-
-  // Helper component for the statistic tiles
-  const StatTile = ({ count, label }) => (
-    <View style={styles.statTile}>
-      <Text style={styles.statCount}>{count}</Text>
-      <Text style={styles.statLabel}>{label}</Text>
-    </View>
-  );
-
-  const renderProfilePicture = () => {
-    if (user?.photoURL) {
-      return (
-        <Image
-          source={{ uri: user.photoURL }}
-          style={styles.profileImage}
-        />
-      );
-    }
-    // Fallback to text initials
-    return (
-      <View style={[styles.profileImage, styles.initialsContainer]}>
-        <Text style={styles.initialsText}>{getInitials()}</Text>
-      </View>
-    );
-  }
+  };
 
   return (
     <View style={styles.container}>
+      {/* ✅ Header with Title and Notification Bell */}
+      <Appbar.Header style={styles.appbarHeader}>
+        <Appbar.Content title="Profile" titleStyle={styles.appbarTitle} />
+        <Appbar.Action icon="bell-outline" color="black" onPress={() => { /* Navigate to notifications */ }} />
+      </Appbar.Header>
 
-      {/* --- Header Content (Profile Info) --- */}
-      <View style={styles.header}>
-        {renderProfilePicture()}
-        <Text variant="titleLarge" style={styles.name}>{user?.name || 'Guest User'}</Text>
-        <Text variant="bodyMedium" style={styles.email}>{user?.email || 'No email provided'}</Text>
-      </View>
-
-      {/* --- User Stats Container (Only Trees Tracked & Scans Logged) --- */}
-      <View style={styles.statsContainer}>
-        <StatTile count="12" label="Trees Tracked" />
-        <View style={styles.statDivider} />
-        <StatTile count="24" label="Scans Logged" />
-      </View>
-
-      {/* ScrollView for the settings menu */}
       <ScrollView contentContainerStyle={styles.scrollContent}>
-
-        {/* --- Account Section --- */}
-        <View style={styles.section}>
-          <Text variant="titleMedium" style={styles.sectionTitle}>Account</Text>
-
+        {/* ✅ Profile Info Section */}
+        <View style={styles.profileSection}>
+          <View style={styles.avatarCircle}>
+            {user?.image ? (
+              <Image source={{ uri: user.image }} style={styles.profileImage} />
+            ) : (
+              <Text style={styles.initialsText}>{getInitials()}</Text>
+            )}
+          </View>
+          <Text style={styles.name}>{user?.name || 'Guest User'}</Text>
+          <Text style={styles.email}>{user?.email || 'No email provided'}</Text>
           <Button
-            mode="text"
+            mode="contained"
             onPress={() => navigation.navigate('EditProfile')}
-            style={styles.settingButton}
-            contentStyle={styles.settingContent}
-            labelStyle={styles.settingLabel}
-            icon={() => <MaterialIcons name="account-circle" size={24} color="#333" />}
+            style={styles.editButton}
+            labelStyle={styles.editButtonLabel}
+            icon={() => <MaterialIcons name="edit" size={16} color="white" />}
           >
             Edit Profile
           </Button>
+        </View>
 
-          <Button
-            mode="text"
+        {/* ✅ Settings List Section */}
+        <View style={styles.settingsSection}>
+          <Text style={styles.settingsTitle}>Settings</Text>
+          <SettingsItem
+            icon="notifications"
+            name="Notification Preferences"
             onPress={() => navigation.navigate('NotificationPreferences')}
-            style={styles.settingButton}
-            contentStyle={styles.settingContent}
-            labelStyle={styles.settingLabel}
-            icon={() => <MaterialIcons name="notifications" size={24} color="#333" />}
-            textColor="#333"
-          >
-            Notification Preferences
-          </Button>
-
-        </View>
-
-        {/* --- General Settings Section --- */}
-        <View style={styles.section}>
-          <Text variant="titleMedium" style={styles.sectionTitle}>General</Text>
-
-          <Button
-            mode="text"
-            onPress={() => navigation.navigate('AboutHelp')}
-            style={styles.settingButton}
-            contentStyle={styles.settingContent}
-            labelStyle={styles.settingLabel}
-            icon={() => <MaterialIcons name="info" size={24} color="#333" />}
-            textColor="#333"
-          >
-            About & Help
-          </Button>
-
-          <Button
-            mode="text"
-            style={styles.settingButton}
-            contentStyle={styles.settingContent}
-            labelStyle={styles.settingLabel}
-            icon={() => <MaterialIcons name="logout" size={24} color="#D32F2F" />}
-            textColor="#D32F2F" // Use destructive color for logout
+          />
+          <SettingsItem
+            icon="account-circle"
+            name="Account Settings"
+            onPress={() => { /* Navigate to Account Settings */ }}
+          />
+          <SettingsItem
+            icon="palette"
+            name="Appearance"
+            onPress={() => { /* Navigate to Appearance */ }}
+          />
+          <SettingsItem
+            icon="bookmark"
+            name="Tracked Trees"
+            onPress={() => navigation.navigate('TrackedTrees', { trackedBy: user.uid })}
+          />
+          <SettingsItem
+            icon="logout"
+            name="Logout"
             onPress={handleLogout}
-          >
-            Logout
-          </Button>
+            isLogout={true}
+          />
         </View>
-
       </ScrollView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  // Main container fills the whole screen
   container: {
     flex: 1,
-    backgroundColor: '#ffffff',
+    backgroundColor: '#f7f8fa', // Light gray background
   },
-  header: {
-    paddingTop: 20,
-    paddingHorizontal: 20,
+  appbarHeader: {
+    backgroundColor: '#fff',
+    elevation: 0,
+    shadowOpacity: 0,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+  },
+  appbarTitle: {
+    color: '#000',
+    fontWeight: 'bold',
+    fontSize: 20,
+  },
+  scrollContent: {
+    paddingBottom: 40,
+  },
+  profileSection: {
+    paddingVertical: 30,
     alignItems: 'center',
-    backgroundColor: '#f7f7f7', // Light background for the header area
-    // Ensure the header gives room for the stats container below
-    paddingBottom: 70,
-    borderBottomLeftRadius: 30,
-    borderBottomRightRadius: 30,
+    backgroundColor: '#f7f8fa',
   },
-  profileImage: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    marginBottom: 15,
-  },
-  initialsContainer: {
+  avatarCircle: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
     backgroundColor: '#2ecc71',
     justifyContent: 'center',
     alignItems: 'center',
+    marginBottom: 15,
+  },
+  profileImage: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 50,
   },
   initialsText: {
-    fontSize: 32,
+    fontSize: 40,
     fontWeight: 'bold',
     color: '#ffffff',
   },
-  name: { marginBottom: 5, fontWeight: '700', color: '#333' },
-  email: { marginBottom: 20, color: '#666' },
-
-  // --- STATS STYLES FIX ---
-  statsContainer: {
-    flexDirection: 'row',
-    // Align items to center while allowing space between them
-    justifyContent: 'space-around',
-    width: '90%',
-    alignSelf: 'center',
-    backgroundColor: '#ffffff', // White background for the floating card
-    paddingVertical: 15,
-    paddingHorizontal: 5,
-    borderRadius: 12,
-    // Use negative margin to pull the container up and overlap the header
-    marginTop: -50,
-    zIndex: 10,
-    elevation: 3, // Shadow for Android
-    shadowColor: '#000', // Shadow for iOS
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 3,
-  },
-  statTile: {
-    alignItems: 'center',
-    flex: 1,
-    // Add horizontal padding/margin to prevent tiles from touching edge
-    marginHorizontal: 5,
-  },
-  statCount: {
+  name: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#2ecc71',
+    color: '#333',
     marginBottom: 4,
   },
-  statLabel: {
-    fontSize: 12,
-    color: '#666',
-    fontWeight: '500',
-  },
-  statDivider: {
-    width: 1,
-    backgroundColor: '#e0e0e0',
-    marginVertical: 5,
-  },
-
-  // --- SCROLL VIEW FIX ---
-  scrollContent: {
-    flexGrow: 1,
-    width: '100%',
-    paddingHorizontal: 20,
-    // Add extra padding at the top to clear the stats container
-    paddingTop: 30,
-    paddingBottom: 40,
-  },
-
-  // --- SETTINGS STYLES ---
-  section: {
-    width: '100%',
-    alignItems: 'flex-start',
-    borderTopWidth: 1,
-    borderTopColor: '#eee',
-    paddingTop: 10,
-    marginBottom: 20
-  },
-  sectionTitle: { color: '#333', fontWeight: 'bold', marginBottom: 10 },
-  settingButton: {
-    width: '100%',
-    justifyContent: 'flex-start',
-    paddingVertical: 0,
-    height: 50,
-  },
-  settingContent: {
-    justifyContent: 'flex-start',
-  },
-  settingLabel: {
+  email: {
     fontSize: 14,
-    color: '#333',
+    color: '#666',
+    marginBottom: 20,
+  },
+  editButton: {
+    borderRadius: 30,
+    backgroundColor: '#2ecc71',
+    paddingHorizontal: 20,
+  },
+  editButtonLabel: {
+    fontSize: 14,
+    color: 'white',
+    fontWeight: 'bold',
+  },
+  settingsSection: {
+    paddingHorizontal: 20,
+    marginTop: 20,
+  },
+  settingsTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#2ecc71',
+    marginBottom: 10,
     marginLeft: 10,
-    fontWeight: 'normal',
-  }
+  },
+  settingsItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 15,
+    paddingHorizontal: 10,
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    marginBottom: 10,
+    elevation: 1,
+  },
+  settingsItemText: {
+    flex: 1,
+    marginLeft: 15,
+    fontSize: 16,
+    color: '#333',
+  },
 });

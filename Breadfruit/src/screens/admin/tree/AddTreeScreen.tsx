@@ -289,7 +289,7 @@ const uploadImageAndGetURL = async (uri: string): Promise<string | null> => {
               <TextInput
                 label="Diameter (cm)"
                 value={diameterInput}
-                editable={false}
+                onChangeText={setDiameterInput}
                 placeholder="Scan to get value"
                 style={styles.input}
                 mode="outlined"
@@ -361,7 +361,7 @@ const uploadImageAndGetURL = async (uri: string): Promise<string | null> => {
               onPress={handleNavigateToScanner}
               style={styles.primaryButton}
             >
-              Image Processing
+              Scan Diameter
             </Button>
              <Button
               mode="contained"
@@ -440,9 +440,13 @@ const styles = StyleSheet.create({
   primaryButton: {
     backgroundColor: "#2ecc71",
     paddingVertical: 8,
+    borderRadius:100,
+
+
   },
   secondaryButton: {
-    backgroundColor: "#34495e",
+    backgroundColor: "#333",
     paddingVertical: 8,
+    borderRadius:100,
   },
 });

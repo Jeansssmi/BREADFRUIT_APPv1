@@ -81,6 +81,24 @@ export const createNewUser = onCall(async (request) => {
       joined: new Date().toISOString(), // Use the server's timestamp for consistency
     });
 
+ // ✅ **FIX: Generate and trigger the verification email**
+    const link = await admin.auth().generateEmailVerificationLink(data.email);
+    await db.collection("mail").add({
+      to: [data.email],
+      message: {
+        subject: "Verify your email for Breadfruit Tracker",
+        html: `
+          <p>Hello ${data.name},</p>
+          <p>Please verify your email address by clicking the link below:</p>
+          <p><a href="${link}">Verify Email</a></p>
+          <p>Thanks,</p>
+          <p>The Breadfruit Tracker Team</p>
+        `,
+      },
+    });
+
+
+
     logger.info("✅ User created:", userRecord.uid);
     return { success: true, uid: userRecord.uid };
 

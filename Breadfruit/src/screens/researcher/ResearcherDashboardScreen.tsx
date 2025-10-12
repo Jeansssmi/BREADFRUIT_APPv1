@@ -1,149 +1,164 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
-import { Card, Text } from 'react-native-paper';
+import { Appbar, Card, Text } from 'react-native-paper';
 import { useNavigation } from '@react-navigation/native';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
-
-// ✅ Correct import for react-native-firebase
 import firestore from '@react-native-firebase/firestore';
 
 export default function ResearcherDashboardScreen() {
-  const navigation = useNavigation();
+  const navigation = useNavigation<any>();
   const [allTrees, setAllTrees] = useState(0);
   const [harvestReady, setHarvestReady] = useState(0);
-  const [scansLogged, setScansLogged] = useState(0);
-  const [recentActivity, setRecentActivity] = useState<any[]>([]);
+  const [recentActivityCount, setRecentActivityCount] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
 
-  const fetchAllCounts = async () => {
+  const fetchAllCounts = useCallback(async () => {
     setRefreshing(true);
     try {
-      // ✅ Correct syntax for react-native-firebase
-      const allTreesSnap = await firestore().collection('trees').get();
+      const treesCollection = firestore().collection('trees');
+      const allTreesSnap = await treesCollection.where('status', '==', 'verified').get();
       setAllTrees(allTreesSnap.size);
-
-      const harvestSnap = await firestore().collection('trees').where("status", "==", "harvest-ready").get();
+      const harvestSnap = await treesCollection.where("status", "==", "harvest-ready").get();
       setHarvestReady(harvestSnap.size);
-
-      const scansSnap = await firestore().collection('scans').get();
-      setScansLogged(scansSnap.size);
-
+      const oneDayAgo = new Date();
+      oneDayAgo.setDate(oneDayAgo.getDate() - 1);
       const activitySnap = await firestore()
         .collection('activity')
-        .orderBy("timestamp", "desc")
-        .limit(5)
+        .where('actionType', '==', 'create')
+        .where('timestamp', '>=', oneDayAgo)
         .get();
-
-      const activities = activitySnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setRecentActivity(activities);
-
+      setRecentActivityCount(activitySnap.size);
     } catch (error) {
       console.error("Error fetching counts:", error);
     } finally {
       setRefreshing(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    fetchAllCounts();
-  }, []);
-  // ✅ Icon mapping for activity types
-  const getActivityIcon = (type: string) => {
-    switch (type) {
-      case "create":
-        return <MaterialCommunityIcons name="tree" size={20} color="#2ecc71" />;
-      case "update":
-        return <MaterialCommunityIcons name="pencil" size={20} color="#3498db" />;
-      case "delete":
-        return <MaterialCommunityIcons name="delete" size={20} color="#e74c3c" />;
-      default:
-        return <MaterialCommunityIcons name="information" size={20} color="#7f8c8d" />;
-    }
-  };
+    const unsubscribe = navigation.addListener('focus', fetchAllCounts);
+    return unsubscribe;
+  }, [navigation, fetchAllCounts]);
 
   return (
-    <ScrollView
-      contentContainerStyle={styles.container}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={fetchAllCounts} />}
-    >
-      <Text variant="titleLarge" style={styles.title}>
-        <MaterialCommunityIcons name="chart-box" size={24} color="#2ecc71" />{'  '}Breadfruit Analytics
-      </Text>
+    <View style={styles.container}>
+      <Appbar.Header style={styles.appbarHeader}>
+        <Appbar.Content title="Dashboard" titleStyle={styles.appbarTitle} />
+        <Appbar.Action icon="bell-outline" color="black" onPress={() => { /* Navigate to notifications */ }} />
+      </Appbar.Header>
 
-      {/* --- Total Trees Card (Full Width) --- */}
-      <Pressable onPress={() => navigation.navigate('Trees', { screen: 'TreeList' })}>
-        <Card style={[styles.card, styles.primaryCard]}>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={fetchAllCounts} />}
+      >
+        <View style={styles.titleContainer}>
+          <MaterialCommunityIcons name="chart-bar" size={20} color="#2ecc71" />
+          <Text style={styles.mainTitle}>Breadfruit Analytics</Text>
+        </View>
+
+         {/* ✅ FIX: Navigate directly to the 'TrackedTrees' screen by name */}
+                <Pressable onPress={() => navigation.navigate('TreeList')}>
+                  <Card style={[styles.card, styles.primaryCard]}>
+                    <Card.Content style={styles.cardContentRow}>
+                      <MaterialCommunityIcons name="tree" size={18} color="#2ecc71" />
+                      <Text style={styles.cardTitle}>Total Trees Tracked</Text>
+                    </Card.Content>
+                    <Card.Content>
+                      <Text style={styles.largeStat}>{allTrees}</Text>
+                    </Card.Content>
+                  </Card>
+                </Pressable>
+
+
+        <Card style={styles.card}>
+          <Card.Content style={styles.cardContentRow}>
+            <MaterialCommunityIcons name="fruit-cherries" size={18} color="#2ecc71" />
+            <Text style={styles.cardTitle}>Harvest Ready</Text>
+          </Card.Content>
           <Card.Content>
-            <Text variant="titleMedium" style={styles.cardTitle}>Total Trees Tracked</Text>
-            <Text variant="displayMedium" style={styles.primaryStat}>{allTrees}</Text>
+            <Text style={styles.smallStat}>{harvestReady} trees ready</Text>
           </Card.Content>
         </Card>
-      </Pressable>
 
-      {/* --- Stats Grid (Two Columns) --- */}
-      <View style={styles.statsGrid}>
-        <View style={styles.statColumn}>
-          <Card style={styles.card}>
-            <Card.Content>
-              <Text variant="titleMedium" style={styles.cardTitle}>Harvest Ready</Text>
-              <Text variant="bodyLarge" style={styles.statText}>{harvestReady} trees ready</Text>
-            </Card.Content>
-          </Card>
-        </View>
-
-        <View style={styles.statColumn}>
-          <Card style={styles.card}>
-            <Card.Content>
-              <Text variant="titleMedium" style={styles.cardTitle}>Scans Logged</Text>
-              <Text variant="bodyLarge" style={styles.statText}>{scansLogged} scans total</Text>
-            </Card.Content>
-          </Card>
-        </View>
-      </View>
-
-      {/* --- ✅ Recent Activity Section (Box Style) --- */}
-      <Text variant="titleMedium" style={styles.sectionTitle}>Recent Activity</Text>
-      {recentActivity.length === 0 ? (
-        <Text style={styles.noActivity}>No recent activity found.</Text>
-      ) : (
-        recentActivity.map((item) => (
-          <Card key={item.id} style={styles.card}>
-            <Card.Content style={styles.activityRow}>
-              <View style={styles.iconContainer}>{getActivityIcon(item.actionType)}</View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.activityText}>{item.description}</Text>
-                <Text style={styles.activityMeta}>
-                  {item.userRole} • {new Date(item.timestamp).toLocaleString()}
-                </Text>
-              </View>
-            </Card.Content>
-          </Card>
-        ))
-      )}
-    </ScrollView>
+        <Card style={styles.card}>
+          <Card.Content style={styles.cardContentRow}>
+            <MaterialCommunityIcons name="clock-time-three-outline" size={18} color="#2ecc71" />
+            <Text style={styles.cardTitle}>Recent Activity</Text>
+          </Card.Content>
+          <Card.Content>
+            <Text style={styles.smallStat}>{recentActivityCount} new trees today</Text>
+          </Card.Content>
+        </Card>
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flexGrow: 1, padding: 20, backgroundColor: '#ffffff' },
-  title: { marginBottom: 20, fontWeight: 'bold' },
-  card: { marginBottom: 15, borderRadius: 12, elevation: 2, backgroundColor: '#fff' },
-  primaryCard: { borderLeftWidth: 4, borderLeftColor: '#2ecc71' },
-
-  // Stats layout
-  statsGrid: { flexDirection: 'row', justifyContent: 'space-between' },
-  statColumn: { width: '48%' },
-
-  // Text styles
-  cardTitle: { color: '#2ecc71', fontWeight: '600', fontSize: 16 },
-  primaryStat: { color: '#2ecc71', fontWeight: 'bold', fontSize: 36 },
-  statText: { color: '#666', fontSize: 14 },
-
-  // Recent activity
-  sectionTitle: { marginTop: 20, marginBottom: 10, fontWeight: 'bold', fontSize: 18, color: '#333' },
-  noActivity: { color: '#888', fontStyle: 'italic', textAlign: 'center' },
-  activityRow: { flexDirection: 'row', alignItems: 'center' },
-  iconContainer: { marginRight: 10 },
-  activityText: { fontSize: 15, fontWeight: '500', color: '#333' },
-  activityMeta: { fontSize: 12, color: '#777', marginTop: 4 },
+  container: {
+    flex: 1,
+    backgroundColor: '#f7f8fa'
+  },
+  appbarHeader: {
+     backgroundColor: '#fff',
+      elevation: 0,
+      shadowOpacity: 0,
+      borderBottomWidth: 1,
+      borderBottomColor: '#eee',
+  },
+  appbarTitle: {
+    color: '#000',
+     fontWeight: 'bold',
+     fontSize: 20,
+  },
+  scrollContent: {
+    padding: 16
+  },
+  titleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  mainTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#333',
+    marginLeft: 8,
+  },
+  card: {
+    marginBottom: 16,
+    borderRadius: 12,
+    backgroundColor: '#fff',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+  },
+  primaryCard: {
+    borderLeftWidth: 5,
+    borderLeftColor: '#2ecc71',
+  },
+  cardContentRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingTop: 8,
+  },
+  cardTitle: {
+    color: '#2ecc71',
+    fontWeight: 'bold',
+    fontSize: 14,
+    marginLeft: 8,
+  },
+  largeStat: {
+    fontSize: 48,
+    fontWeight: 'bold',
+    color: '#2ecc71',
+    marginTop: 8,
+  },
+  smallStat: {
+    fontSize: 16,
+    color: '#666',
+    marginTop: 8,
+  },
 });
