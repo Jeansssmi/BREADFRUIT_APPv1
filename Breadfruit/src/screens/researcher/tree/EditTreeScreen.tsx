@@ -2,26 +2,25 @@ import { LoadingAlert, NotificationAlert } from '@/components/NotificationModal'
 import barangayData from "@/constants/barangayData";
 import { useTreeData } from '@/hooks/useTreeData';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, KeyboardAvoidingView, Platform, Image as ReactImage, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { ActivityIndicator, Alert, KeyboardAvoidingView, Platform, Image as ReactImage, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Geolocation from 'react-native-geolocation-service';
 import { launchImageLibrary } from 'react-native-image-picker';
-import { Button, Menu, Text, TextInput } from 'react-native-paper';
+import { Button, Menu, TextInput } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 
-// ✅ Correct imports for react-native-firebase
 import firestore from '@react-native-firebase/firestore';
 import storage from '@react-native-firebase/storage';
 
-const FRUIT_STATUS_OPTIONS = ['none', 'unripe', 'ripe'];
+const FRUIT_STATUS_OPTIONS = ['none', 'unripe', 'ripe', 'overripe'];
 
-export default function EditTreeScreen() {
+// This component contains the main form logic and is only rendered when a valid treeID is present.
+function EditTreeForm({ treeID }) {
   const navigation = useNavigation();
   const route = useRoute();
-  // @ts-ignore
-  const { treeID } = route.params;
 
+  // This hook will now only run with a valid treeID
   const { trees, isLoading } = useTreeData({ mode: 'single', treeID: treeID.toString() });
   const tree = trees[0];
 
@@ -33,6 +32,7 @@ export default function EditTreeScreen() {
   const [fruitStatus, setFruitStatus] = useState('');
   const [image, setImage] = useState('');
   const [loading, setLoading] = useState(false);
+  // ... other states
   const [showStatusMenu, setShowStatusMenu] = useState(false);
   const [cityOptionsMenuVisible, setCityOptionsMenuVisible] = useState(false);
   const [barangayOptionsMenuVisible, setBarangayOptionsMenuVisible] = useState(false);
@@ -43,6 +43,7 @@ export default function EditTreeScreen() {
   const CITY_OPTIONS = Object.keys(barangayData);
   const BARANGAY_OPTIONS = barangayData[city] || [];
 
+  // This effect populates the form with the initial tree data
   useEffect(() => {
     if (tree) {
       setCity(tree.city || '');
@@ -55,6 +56,14 @@ export default function EditTreeScreen() {
     }
   }, [tree]);
 
+  // ✅ FIX: This new effect listens for the diameter value from the scanner screen
+  useEffect(() => {
+    if (route.params?.diameter) {
+      setDiameter(route.params.diameter.toString());
+    }
+  }, [route.params?.diameter]);
+
+  // --- All other functions (pickImage, getCurrentLocation, handleSubmit, etc.) remain here without change ---
   const pickImage = async () => {
     const result = await launchImageLibrary({ mediaType: 'photo', quality: 0.8 });
     if (result.didCancel || !result.assets) return;
@@ -88,6 +97,14 @@ export default function EditTreeScreen() {
     setBarangay(selectedBarangay);
     setBarangayOptionsMenuVisible(false);
   };
+
+ const handleNavigateToScanner = () => {
+     if (!image) {
+       Alert.alert("Image Required", "Please select an image first.");
+       return;
+     }
+     navigation.navigate("EditDiameterScanner", { imageUri: image });
+   };
 
   const handleSubmit = (currentTreeID: string) => {
     Alert.alert('Confirm Changes', 'Save changes made for this tree?', [
@@ -144,19 +161,21 @@ export default function EditTreeScreen() {
       },
     ]);
   };
+  // ---
 
   if (isLoading) {
     return <View style={styles.center}><ActivityIndicator size="large" color='#2ecc71' /></View>;
   }
   if (!tree) {
-    return <View style={styles.errorContainer}><Text>Tree not found.</Text></View>;
+    return <View style={styles.errorContainer}><Text>Tree could not be loaded.</Text></View>;
   }
 
   return (
     <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
-      <SafeAreaView style={styles.safeArea}>
-        <ScrollView contentContainerStyle={styles.scrollContainer} keyboardShouldPersistTaps='handled'>
-            <View style={styles.container}>
+       <SafeAreaView style={styles.safeArea}>
+         <ScrollView contentContainerStyle={styles.scrollContainer} keyboardShouldPersistTaps='handled'>
+           {/* All the JSX from your original component goes here, unchanged */}
+           <View style={styles.container}>
               <LoadingAlert visible={loading} message="Please wait..." />
               <NotificationAlert
                 visible={notificationVisible} message={notificationMessage} type={notificationType}
@@ -200,15 +219,13 @@ export default function EditTreeScreen() {
                   {FRUIT_STATUS_OPTIONS.map(option => <Menu.Item key={option} onPress={() => { setFruitStatus(option); setShowStatusMenu(false); }} title={option.charAt(0).toUpperCase() + option.slice(1)} />)}
                 </Menu>
               </View>
-              {/* ✅ FIX: Diameter is non-editable */}
               <TextInput
                 label="Diameter (meters)"
                 value={diameter}
                 style={styles.input}
                 keyboardType="decimal-pad"
-                editable={false}
+                onChangeText={setDiameter}
               />
-
               <View style={styles.coordinateGroup}>
                 <View style={styles.coordinateLegend}><Text style={styles.legendText}>Coordinates</Text></View>
                 <View style={styles.rowLegend}>
@@ -219,15 +236,50 @@ export default function EditTreeScreen() {
               </View>
               <TextInput label="Date Tracked" value={new Date(tree?.dateTracked).toLocaleDateString()} style={styles.input} editable={false} />
               <View style={styles.buttonGroup}>
-                <Button mode="contained" onPress={() => handleSubmit(treeID.toString())} style={styles.primaryButton}>Save Changes</Button>
+                <Button
+                  mode="contained"
+                  onPress={() => handleSubmit(treeID.toString())}
+                  style={styles.primaryButton}
+                >
+                  Save Changes
+                </Button>
+                <Button
+                  mode="contained"
+                  onPress={handleNavigateToScanner}
+                  style={styles.primaryButton}>
+                  Scan Diameter
+                 </Button>
               </View>
             </View>
-        </ScrollView>
-      </SafeAreaView>
+         </ScrollView>
+       </SafeAreaView>
     </KeyboardAvoidingView>
   );
 }
 
+// The main component that is exported. It handles the initial parameter check.
+export default function EditTreeScreen() {
+  const route = useRoute();
+
+  // ✅ FIX: Safely access treeID using optional chaining.
+  // This prevents the app from crashing if 'params' is undefined.
+  const treeID = route.params?.treeID;
+
+  // If treeID is missing, show an error message.
+  if (!treeID) {
+    return (
+      <View style={styles.errorContainer}>
+        <Text style={{ color: '#d32f2f', fontWeight: 'bold' }}>Error: Tree ID is missing.</Text>
+        <Text>Please go back and try again.</Text>
+      </View>
+    );
+  }
+
+  // If treeID exists, render the form component.
+  return <EditTreeForm treeID={treeID} />;
+}
+
+// --- Styles remain unchanged ---
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#fff' },
   scrollContainer: { flexGrow: 1, backgroundColor: '#ffffff' },
@@ -244,10 +296,21 @@ const styles = StyleSheet.create({
   legendText: { color: '#2ecc71', fontSize: 12, fontWeight: 'bold' },
   coordinateInput: { backgroundColor: '#ffffff', borderWidth: 0, borderBottomWidth: 1, borderBottomColor: '#eee' },
   useLocationText: { color: '#2ecc71', fontSize: 14, fontWeight: '600', marginTop: 12 },
-  buttonGroup: { marginTop: 25 },
-  primaryButton: { backgroundColor: '#2ecc71', borderRadius: 25 },
+
   imageContainer: { height: 200, borderRadius: 12, marginBottom: 24, overflow: 'hidden', borderWidth: 2, borderColor: '#eee', backgroundColor: '#f8f8f8' },
   image: { width: '100%', height: '100%' },
   imagePlaceholder: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 12, borderStyle: 'dashed', borderColor: '#2ecc71' },
   imageLabel: { color: '#2ecc71', fontSize: 16, fontWeight: '500' },
+
+  buttonGroup: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 20,
+    gap: 10,
+  },
+  primaryButton: {
+    flex: 1,
+    borderRadius: 25,
+    backgroundColor: '#2ecc71'
+  },
 });

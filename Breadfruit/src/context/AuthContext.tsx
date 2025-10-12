@@ -10,16 +10,36 @@ import { View } from 'react-native';
 import Keychain from 'react-native-keychain';
 import { ActivityIndicator } from 'react-native-paper';
 
-// ✅ FIX: Import directly from react-native-firebase packages
 import auth from '@react-native-firebase/auth';
 import firestore from '@react-native-firebase/firestore';
 
+// Define the shape of your user object for TypeScript
+type User = {
+  uid: string;
+  name: string;
+  email: string;
+  role: string;
+  status: string;
+  image: string | null;
+  joined: any; // Or be more specific, e.g., firestore.Timestamp
+};
 
-const AuthContext = createContext();
+// Define the context type
+type AuthContextType = {
+  user: User | null;
+  login: (email, password) => Promise<User | null>;
+  logout: () => Promise<void>;
+  isAuthenticated: boolean;
+  initialized: boolean;
+  fetchUserData: (firebaseUser: any) => Promise<User | null>;
+  updateLocalUser: (updatedData: Partial<User>) => void;
+};
+
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
 const KEYCHAIN_SERVICE = 'com.breadfruit.usersession';
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(null);
+  const [user, setUser] = useState<User | null>(null);
   const [initialized, setInitialized] = useState(false);
 
   const isAuthenticated = !!user;
@@ -51,19 +71,17 @@ export function AuthProvider({ children }) {
       const firebaseUser = credential.user;
       const userData = await fetchUserData(firebaseUser);
 
-       // ✅ FIX: Check user status after fetching data
-            if (userData && userData.status === 'pending') {
-              // If pending, sign out immediately and throw a specific error
-              await auth().signOut();
-              throw new Error('auth/pending-approval');
-            }
+      if (userData && userData.status === 'pending') {
+        await auth().signOut();
+        // Throw an error with a specific code for the login screen to catch
+        const error = new Error('Your account is pending approval.');
+        (error as any).code = 'auth/pending-approval';
+        throw error;
+      }
+
       if (userData) {
         setUser(userData);
-        await Keychain.setGenericPassword(
-          'user',
-          JSON.stringify(userData),
-          { service: KEYCHAIN_SERVICE }
-        );
+        await Keychain.setGenericPassword('user', JSON.stringify(userData), { service: KEYCHAIN_SERVICE });
         return userData;
       }
       return null;
@@ -83,21 +101,20 @@ export function AuthProvider({ children }) {
     }
   }, []);
 
+  // ✅ FIX 1: Move the updateLocalUser function INSIDE the AuthProvider component.
+  // This gives it access to the `setUser` function.
+  const updateLocalUser = useCallback((updatedData: Partial<User>) => {
+    setUser(prevUser => (prevUser ? { ...prevUser, ...updatedData } : null));
+  }, []);
+
+
   useEffect(() => {
     const unsubscribe = auth().onAuthStateChanged(async (firebaseUser) => {
       if (firebaseUser) {
         const userData = await fetchUserData(firebaseUser);
-        if (userData) {
-          setUser(userData);
-          await Keychain.setGenericPassword(
-            'user',
-            JSON.stringify(userData),
-            { service: KEYCHAIN_SERVICE }
-          );
-        }
+        setUser(userData); // Set user, whether data is full or null
       } else {
         setUser(null);
-        await Keychain.resetGenericPassword({ service: KEYCHAIN_SERVICE });
       }
       setInitialized(true);
     });
@@ -105,13 +122,21 @@ export function AuthProvider({ children }) {
     return unsubscribe;
   }, [fetchUserData]);
 
+  // ✅ FIX 2: Add fetchUserData and updateLocalUser to the context value.
   const value = useMemo(
-    () => ({ user, login, logout, isAuthenticated, initialized }),
-    [user, login, logout, initialized, isAuthenticated]
+    () => ({
+      user,
+      login,
+      logout,
+      isAuthenticated,
+      initialized,
+      fetchUserData,
+      updateLocalUser,
+    }),
+    [user, login, logout, initialized, isAuthenticated, fetchUserData, updateLocalUser]
   );
 
   if (!initialized) {
-
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
         <ActivityIndicator size="large" color="#2ecc71" />
@@ -129,3 +154,4 @@ export const useAuth = () => {
   }
   return context;
 };
+

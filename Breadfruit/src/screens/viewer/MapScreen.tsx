@@ -75,16 +75,11 @@ export default function MapScreen() {
           .filter(tree => tree.coordinates && typeof tree.coordinates.latitude === 'number' && typeof tree.coordinates.longitude === 'number')
           .map((tree) => (
             <Marker
-              key={tree.treeID}
-              coordinate={tree.coordinates}
-              onPress={() => {
-                // @ts-ignore
-                navigation.navigate('Trees', {
-                  screen: 'TreeDetails',
-                  params: { treeID: tree.treeID },
-                });
-              }}
-            />
+               key={tree.treeID}
+               coordinate={tree.coordinates}
+               onPress={() => { navigation.navigate('TreeDetails', { treeID: tree.treeID });
+                }}
+                />
         ))}
       </MapView>
     </View>

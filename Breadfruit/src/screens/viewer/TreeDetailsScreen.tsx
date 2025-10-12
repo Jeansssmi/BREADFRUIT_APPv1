@@ -1,13 +1,13 @@
 import { useTreeData } from '@/hooks/useTreeData';
 import { useNavigation, useRoute } from '@react-navigation/native';
+import React from 'react';
 import { ActivityIndicator, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 
-export default function TreeDetailsScreen() {
+// This is a helper component to contain the main logic
+// It ensures hooks are only called when treeID is valid.
+function TreeDetails({ treeID }) {
   const navigation = useNavigation();
-  const route = useRoute();
-  const { treeID } = route.params;
-
   const { trees, isLoading } = useTreeData({ mode: 'single', treeID: treeID.toString() });
   const tree = trees[0];
 
@@ -23,6 +23,7 @@ export default function TreeDetailsScreen() {
     return <View style={styles.center}><Text>Tree not found.</Text></View>;
   }
 
+  // The UI below is identical to your original code
   return (
     <ScrollView contentContainerStyle={styles.scrollContainer}>
       <View style={styles.container}>
@@ -33,15 +34,12 @@ export default function TreeDetailsScreen() {
             <MaterialIcons name="no-photography" size={40} color="#666" />
           </View>
         )}
-
         <View style={styles.detailsCard}>
           <Text style={styles.title}>Breadfruit Tree #{tree.treeID}</Text>
-
           <View style={styles.detailRow}>
             <MaterialIcons name="location-on" size={20} color="#2ecc71" />
             <Text style={styles.detailText}>{tree.city}</Text>
           </View>
-
           <View style={styles.statsContainer}>
             <View style={styles.statItem}>
               <Text style={styles.statLabel}>Diameter</Text>
@@ -56,7 +54,6 @@ export default function TreeDetailsScreen() {
               <Text style={styles.statValue}>{tree.fruitStatus}</Text>
             </View>
           </View>
-
           <View style={styles.coordinateContainer}>
             <MaterialIcons name="map" size={20} color="#2ecc71" />
             <Text style={styles.coordinateText}>
@@ -64,7 +61,6 @@ export default function TreeDetailsScreen() {
             </Text>
           </View>
         </View>
-
         <View style={styles.buttonGroup}>
           <TouchableOpacity
             style={[styles.button, styles.sendButton]}
@@ -72,7 +68,6 @@ export default function TreeDetailsScreen() {
           >
             <Text style={styles.buttonText}>Send Notification</Text>
           </TouchableOpacity>
-
           <TouchableOpacity
             style={[styles.button, styles.updateButton]}
             onPress={() => navigation.goBack()}
@@ -85,10 +80,33 @@ export default function TreeDetailsScreen() {
   );
 }
 
+
+export default function TreeDetailsScreen() {
+  const route = useRoute();
+
+  // ✅ FIX: Safely access treeID using optional chaining (`?.`).
+  // This prevents the app from crashing if 'params' is undefined.
+  const treeID = route.params?.treeID;
+
+  // If treeID is missing, show an error message instead of crashing.
+  if (!treeID) {
+    return (
+      <View style={styles.center}>
+        <Text style={styles.errorText}>Error: Tree ID is missing.</Text>
+        <Text>Please go back and try again.</Text>
+      </View>
+    );
+  }
+
+  // If treeID exists, render the component that contains the data-fetching logic.
+  return <TreeDetails treeID={treeID} />;
+}
+
 const styles = StyleSheet.create({
   scrollContainer: { flexGrow: 1 },
   container: { flex: 1, padding: 16, backgroundColor: '#ffffff' },
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 },
+  errorText: { fontSize: 18, fontWeight: 'bold', color: '#c0392b', marginBottom: 8 },
   treeImage: { height: 300, borderRadius: 12, marginBottom: 16 },
   imagePlaceholder: { backgroundColor: '#eee', justifyContent: 'center', alignItems: 'center' },
   detailsCard: { borderRadius: 12, marginBottom: 16, elevation: 2, backgroundColor: '#fff', padding: 16 },

@@ -13,7 +13,7 @@ import storage from '@react-native-firebase/storage';
 
 export default function EditProfileScreen() {
   const navigation = useNavigation();
-  const { user, fetchUserData } = useAuth(); // Assuming fetchUserData is exposed by your context to refresh it
+  const { user, fetchUserData , updateLocalUser } = useAuth(); // Assuming fetchUserData is exposed by your context to refresh it
 
   const [name, setName] = React.useState('');
   const [loading, setLoading] = React.useState(false);
@@ -45,68 +45,82 @@ export default function EditProfileScreen() {
     const action = type === 'camera' ? launchCamera : launchImageLibrary;
 
     try {
-      const result = await action(options);
-      if (result.didCancel || !result.assets) return;
-      setProfileImageUri(result.assets[0].uri);
+      const result: ImagePickerResponse = await action({
+              mediaType: 'photo',
+              // ✅ Add image compression for much faster uploads
+              quality: 0.7,
+              maxWidth: 1024,
+              maxHeight: 1024,
+            });
+            if (result.didCancel || !result.assets) return;
+            setProfileImageUri(result.assets[0].uri || null);
     } catch (error) {
-      console.error("An error occurred", error);
-      Alert.alert("Error", "An unexpected error occurred.");
+      console.error("Image selection error", error);
+      Alert.alert("Error", "Could nor select image.");
     }
   };
 
-  const handleSaveChanges = async () => {
-    if (!name.trim() || !user) {
-      Alert.alert('Name cannot be empty.');
-      return;
-    }
+  /**
+     * ✅ NEW: This function runs in the background to sync changes with Firebase.
+     */
+    const syncChangesToFirebase = async (newName: string, localImageUri: string | null) => {
+      if (!user) return;
 
-    setLoading(true);
-    try {
-      let newPhotoURL = user.image;
+      let finalImageURL = user.image; // Start with the original image URL
 
-      // Case 1: Photo was removed
-      if (user.image && profileImageUri === null) {
-        newPhotoURL = null;
-        const oldImageRef = storage().refFromURL(user.image);
-        await oldImageRef.delete();
+      const imageHasBeenLocallyChanged = localImageUri !== user.image;
+
+      if (imageHasBeenLocallyChanged) {
+          // Case 1: Photo was removed
+          if (user.image && !localImageUri) {
+              finalImageURL = null;
+              storage().refFromURL(user.image).delete().catch(e => console.warn(e));
+          }
+          // Case 2: A new photo was selected
+          else if (localImageUri && localImageUri.startsWith('file://')) {
+              if (user.image) {
+                  storage().refFromURL(user.image).delete().catch(e => console.warn(e));
+              }
+              const fileName = `images/user-profile/${user.uid}/${Date.now()}.jpg`;
+              const reference = storage().ref(fileName);
+              await reference.putFile(localImageUri.replace('file://', ''));
+              finalImageURL = await reference.getDownloadURL();
+          }
       }
-      // Case 2: A new photo was selected
-      else if (profileImageUri && profileImageUri.startsWith('file://')) {
-        if (user.image) {
-          const oldImageRef = storage().refFromURL(user.image);
-          await oldImageRef.delete().catch(e => console.log("Old image deletion failed, may not exist.", e));
+
+      // Now update Firestore and Auth with the final data
+      try {
+        await auth().currentUser?.updateProfile({ displayName: newName, photoURL: finalImageURL });
+        await firestore().collection('users').doc(user.uid).update({ name: newName, image: finalImageURL });
+
+        // Refresh the context with the final, permanent data from Firebase
+        if (fetchUserData) {
+          await fetchUserData();
         }
-        const fileName = `images/user-profile/${user.uid}/${Date.now()}.jpg`;
-        const reference = storage().ref(fileName);
-        await reference.putFile(profileImageUri.replace('file://', ''));
-        newPhotoURL = await reference.getDownloadURL();
+        console.log("✅ Profile successfully synced to Firebase.");
+      } catch (error) {
+          console.error("❌ Firebase sync failed:", error);
+          // Optional: Implement logic to notify the user that the background sync failed.
       }
+    };
 
-      // Update Firebase Auth profile
-      await auth().currentUser.updateProfile({
-        displayName: name,
-        photoURL: newPhotoURL,
-      });
+ /**
+   * ✅ EDITED: This function now updates the UI instantly.
+   */
+  const handleSaveChanges = async () => {
+    if (!name.trim() || !user) return;
 
-      // Update Firestore document
-      await firestore().collection('users').doc(user.uid).update({
-        name: name,
-        image: newPhotoURL,
-      });
+    // Step 1: Perform the optimistic update on the device
+    updateLocalUser({
+      name: name,
+      image: profileImageUri,
+    });
 
-      // Optional: Refresh user data in your AuthContext if you have a function for it
-      if (fetchUserData) {
-        await fetchUserData(auth().currentUser);
-      }
+    // Step 2: Navigate back immediately. The ProfileScreen will show the local image.
+    navigation.goBack();
 
-      Alert.alert('Success', 'Profile updated successfully!');
-      navigation.goBack();
-    } catch (error) {
-      Alert.alert('Error', 'Failed to update profile. Please try again.');
-      console.error(error);
-    } finally {
-      setLoading(false);
-    }
+    // Step 3: Start the real upload in the background. We don't `await` it.
+    syncChangesToFirebase(name, profileImageUri);
   };
 
   const getJoinDate = () => {
@@ -117,10 +131,7 @@ export default function EditProfileScreen() {
   };
   return (
     <View style={styles.container}>
-      <Appbar.Header style={styles.appbarHeader}>
-        <Appbar.BackAction onPress={() => navigation.goBack()} color="#333" />
-        <Appbar.Content title="Edit User" titleStyle={styles.appbarTitle} />
-      </Appbar.Header>
+
       <ScrollView contentContainerStyle={styles.formContainer}>
         <TouchableOpacity style={styles.imagePicker} onPress={handleImagePick}>
             {/* --- Display image or placeholder --- */}
@@ -164,6 +175,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#e0e0e0',
     overflow: 'hidden',
+
   },
   profileImage: {
     width: '100%',

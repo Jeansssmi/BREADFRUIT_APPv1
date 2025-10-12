@@ -18,6 +18,7 @@ import barangayData from "../constants/barangayData";
 // Import nested tree screens
 import AddTreeScreen from '../screens/researcher/tree/AddTreeScreen';
 import DiameterScannerScreen from '../screens/researcher/tree/DiameterScannerScreen';
+import EditDiameterScannerScreen from '../screens/researcher/tree/EditDiameterScannerScreen';
 import EditTreeScreen from '../screens/researcher/tree/EditTreeScreen';
 import PendingDetailsScreen from '../screens/researcher/tree/PendingDetailsScreen';
 import PendingTreesScreen from '../screens/researcher/tree/PendingTreesScreen';
@@ -105,6 +106,10 @@ export default function ResearcherNavigator() {
       <MainStack.Screen name="Camera" component={CameraScreen} options={{ presentation: 'modal', headerShown: false }} />
       <MainStack.Screen name="Search" component={SearchScreen} options={{ headerShown: false }} />
        <MainStack.Screen name="TreeList" component={TreeListScreen} options={{ title: 'Tree List' }} />
+      <MainStack.Screen name="AddTree" component={AddTreeScreen} options={{ headerTitle: 'Add Tree' }} />
+      <MainStack.Screen name="TreeDetails" component={TreeDetailsScreen} options={{ headerTitle: 'Tree Details' }} />
+      <MainStack.Screen name="EditTree" component={EditTreeScreen} options={{ headerTitle: 'Edit Tree' }} />
+      <MainStack.Screen name="EditDiameterScanner" component={EditDiameterScannerScreen}  options={{ headerTitle: 'Scan Diameter' }} />
     </MainStack.Navigator>
   );
 }

@@ -134,7 +134,7 @@ export default function LoginScreen() {
             left={<TextInput.Icon icon="lock-outline" color="#333" />} // Darker icons
             right={
               <TextInput.Icon
-                icon={passwordVisible ? "eye-off-outline" : "eye-outline"}
+                icon={passwordVisible ? "eye-outline" : "eye-off-outline"}
                 onPress={() => setPasswordVisible(!passwordVisible)}
                 color="#666"
               />
