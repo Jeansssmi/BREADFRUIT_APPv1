@@ -76,7 +76,11 @@ function Tabs() {
       })}
     >
       <Tab.Screen name="Dashboard" component={ResearcherDashboardScreen} />
-      <Tab.Screen name="Map" component={MapScreen} />
+      <Tab.Screen
+              name="Map"
+              component={MapScreen}
+              options={{ unmountOnBlur: true }} // Keep map state
+            />
       <Tab.Screen name="Trees" component={TreeStack} />
       <Tab.Screen name="Profile" component={ProfileStack} />
     </Tab.Navigator>

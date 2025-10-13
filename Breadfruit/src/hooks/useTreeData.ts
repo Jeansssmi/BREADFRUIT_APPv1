@@ -1,7 +1,5 @@
 import { Tree } from '@/types';
-import { useEffect, useState } from 'react';
-
-// ✅ Correct import for react-native-firebase
+import { useEffect, useState , cachedTrees} from 'react';
 import firestore, { FirebaseFirestoreTypes } from '@react-native-firebase/firestore';
 
 type FetchType =
@@ -10,58 +8,70 @@ type FetchType =
   | { mode: 'single'; treeID: string };
 
 export const useTreeData = (fetchConfig: FetchType = { mode: 'all' }) => {
-  const [trees, setTrees] = useState<Tree[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [trees, setTrees] = useState<Tree[]>(cachedTrees || []);
+  const [isLoading, setIsLoading] = useState(!cachedTrees);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // ✅ Correct syntax for react-native-firebase
     const treesRef = firestore().collection('trees');
     setIsLoading(true);
 
-    const getTrees = async () => {
-      try {
-        let treeData: Tree[] = [];
-        let query: FirebaseFirestoreTypes.Query = treesRef; // Start with the base reference
-
-        if (fetchConfig.mode === 'all') {
-          query = query.where('status', '==', 'verified');
-        } else if (fetchConfig.mode === 'criteria') {
-          // Add status filter unless querying by status
-          if (fetchConfig.field !== 'status') {
-            query = query.where('status', '==', 'verified');
-          }
-          // Add the specified criteria filter
-          query = query.where(fetchConfig.field, fetchConfig.operator, fetchConfig.value);
-        } else if (fetchConfig.mode === 'single') {
-          const docSnap = await treesRef.doc(fetchConfig.treeID).get();
-          if (docSnap.exists) {
-            treeData = [{ treeID: docSnap.id, ...docSnap.data() } as Tree];
-          } else {
-            throw new Error("Tree not found");
-          }
-          // Set state and exit early for single doc fetch
-          setTrees(treeData);
-          setIsLoading(false);
+      // ✅ Handle single fetch separately (no live listener needed)
+        if (fetchConfig.mode === 'single') {
+          const fetchSingle = async () => {
+            try {
+              const docSnap = await treesRef.doc(fetchConfig.treeID).get();
+              if (docSnap.exists) {
+                const tree = { treeID: docSnap.id, ...docSnap.data() } as Tree;
+                setTrees([tree]);
+                cachedTrees = [tree];
+              } else {
+                throw new Error('Tree not found');
+              }
+              setError(null);
+            } catch (err: any) {
+              console.error('Error fetching tree:', err);
+              setError(err.message);
+            } finally {
+              setIsLoading(false);
+            }
+          };
+          fetchSingle();
           return;
         }
 
-        // Execute the built query
-        const snapshot = await query.get();
-        treeData = snapshot.docs.map(doc => ({ treeID: doc.id, ...doc.data() } as Tree));
+    let query: FirebaseFirestoreTypes.Query = treesRef;
 
-        setTrees(treeData);
+    if (fetchConfig.mode === 'all') {
+      query = query.where('status', '==', 'verified');
+    } else if (fetchConfig.mode === 'criteria') {
+      if (fetchConfig.field !== 'status') {
+        query = query.where('status', '==', 'verified');
+      }
+      query = query.where(fetchConfig.field, fetchConfig.operator, fetchConfig.value);
+    }
+
+  // onSnapshot returns an unsubscribe function.
+    const unsubscribe = query.onSnapshot(
+      (snapshot) => {
+        const liveTrees = snapshot.docs.map(
+          (doc) => ({ treeID: doc.id, ...doc.data() } as Tree)
+        );
+        setTrees(liveTrees);
         setError(null);
-      } catch (err: any)      {
-        console.error('Error fetching trees:', err);
+        setIsLoading(false);
+      },
+      (err) => {
+        console.error('Realtime tree listener error:', err);
         setError(err.message);
-      } finally {
         setIsLoading(false);
       }
-    };
+    );
 
-    getTrees();
-  }, [JSON.stringify(fetchConfig)]);
+    // ✅ Cleanup listener on unmount
+    return () => unsubscribe();
+
+  }, [JSON.stringify(fetchConfig)]); // Dependency array ensures the listener is reset if the query changes
 
   return { trees, isLoading, error };
 };

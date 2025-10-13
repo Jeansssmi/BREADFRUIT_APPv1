@@ -1,11 +1,12 @@
 import { useTreeData } from '@/hooks/useTreeData';
-import { useNavigation, useRoute } from '@react-navigation/native';
-import { useEffect, useState } from 'react';
+import { useNavigation, useRoute , useFocusEffect} from '@react-navigation/native';
+import { useEffect, useState , useCallback} from 'react';
 import { Alert, Dimensions, StyleSheet, TextInput, View } from 'react-native';
 import Geocoder from 'react-native-geocoding';
 import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 
+let lastRegion: any = null;
 export default function MapScreen() {
   const { trees } = useTreeData();
   const route = useRoute();
@@ -13,12 +14,24 @@ export default function MapScreen() {
   const { width, height } = Dimensions.get('window');
 
   const [region, setRegion] = useState({
-    latitude: 10.3157,
-    longitude: 123.8854,
-    latitudeDelta: 1.5,
-    longitudeDelta: 1.5 * (width / height),
+     latitude: 9.8833, // 📍 Argao, Cebu center
+         longitude: 123.6000,
+         latitudeDelta: 0.03, // smaller number = closer zoom
+         longitudeDelta: 0.03 * (width / height),
   });
   const [searchQuery, setSearchQuery] = useState('');
+
+   // ✅ Remember last map region when user leaves
+    useEffect(() => {
+      lastRegion = region;
+    }, [region]);
+
+    // ✅ When the screen refocuses, restore last region
+    useFocusEffect(
+      useCallback(() => {
+        if (lastRegion) setRegion(lastRegion);
+      }, [])
+    );
 
   useEffect(() => {
     if (route.params?.lat && route.params?.lng) {
@@ -91,7 +104,6 @@ export default function MapScreen() {
               }
             />
         ))}
-
 
       </MapView>
     </View>

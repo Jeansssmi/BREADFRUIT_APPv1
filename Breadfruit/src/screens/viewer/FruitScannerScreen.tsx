@@ -158,7 +158,7 @@ const handleUpdateStatus = async () => {
       return (
         <View style={styles.centered}>
           <ActivityIndicator size="large" color="#2ecc71" />
-          <Text style={styles.loadingText}>Analyzing Fruit...</Text>
+          <Text style={styles.loadingText}>Analyzing Fruit...</Text>0
         </View>
       );
     }
