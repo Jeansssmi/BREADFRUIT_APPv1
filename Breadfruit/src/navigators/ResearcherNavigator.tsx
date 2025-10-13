@@ -2,18 +2,16 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 
-// Import all screens for the Researcher role
+// Import all screens
 import CameraScreen from '../screens/researcher/CameraScreen';
 import MapScreen from '../screens/researcher/MapScreen';
 import ResearcherDashboardScreen from '../screens/researcher/ResearcherDashboardScreen';
 import SearchScreen from '../screens/researcher/SearchScreen';
-import TreeManagementScreen from '../screens/researcher/tree/TreeManagementScreen'; // Root screen for the tab
+import TreeManagementScreen from '../screens/researcher/tree/TreeManagementScreen';
 import ProfileScreen from '../screens/shared/ProfileScreen';
 import EditProfileScreen from '../screens/shared/EditProfileScreen';
 import NotificationPreferencesScreen from '../screens/shared/NotificationPreferencesScreen';
 import AboutHelpScreen from '../screens/shared/AboutHelpScreen';
-import barangayData from "../constants/barangayData";
-
 
 // Import nested tree screens
 import AddTreeScreen from '../screens/researcher/tree/AddTreeScreen';
@@ -34,50 +32,39 @@ const MainStack = createNativeStackNavigator();
 const TreeStackNav = createNativeStackNavigator();
 const ProfileStackNav = createNativeStackNavigator();
 
-// This stack contains all screens reachable from the "Trees" tab
+/**
+ * ✅ This stack is now simplified. It only contains screens that are exclusive
+ * to the "Trees" tab's initial flow. Navigating to details or edit screens
+ * will now call screens from the MainStack.
+ */
 function TreeStack() {
   return (
-    // ✅ FIX: Set TreeManagementScreen as the initial route again
     <TreeStackNav.Navigator initialRouteName="TreeManagement">
-
-      {/* 🟢 Root Screen (Header hidden in Tabs) */}
       <TreeStackNav.Screen name="TreeManagement" component={TreeManagementScreen} options={{ headerShown: false }} />
-
-      {/* Subsequent List Screen (Header shown for navigation) */}
       <TreeStackNav.Screen name="TreeList" component={TreeListScreen} options={{ headerTitle: 'Tree List' }} />
-
-      {/* Other screens in the stack */}
-      <TreeStackNav.Screen name="AddTree" component={AddTreeScreen} options={{ headerTitle: 'Add Tree' }} />
-      <TreeStackNav.Screen name="DiameterScannerScreen" component={DiameterScannerScreen} options={{ headerTitle: 'Diameter Scan' }} />
       <TreeStackNav.Screen name="PendingTrees" component={PendingTreesScreen} options={{ headerTitle: 'Pending Trees' }} />
-      <TreeStackNav.Screen name="TreeDetails" component={TreeDetailsScreen} options={{ headerTitle: 'Tree Details' }} />
-      <TreeStackNav.Screen name="EditTree" component={EditTreeScreen} options={{ headerTitle: 'Edit Tree' }} />
-      <TreeStackNav.Screen name="PendingDetails" component={PendingDetailsScreen} options={{ headerTitle: 'Pending Details' }} />
-      <TreeStackNav.Screen name="ProcessFruit" component={ProcessFruitScreen} options={{ headerTitle: 'Process Fruit' }} />
-      <TreeStackNav.Screen name="TrackedTrees" component={TrackedTreesScreen} options={{ headerTitle: 'Tracked Trees' }} />
-
     </TreeStackNav.Navigator>
   );
 }
 
-// This stack is for the Profile tab to allow navigation to edit screens
+// This stack is for the Profile tab (no changes needed)
 function ProfileStack() {
     return (
         <ProfileStackNav.Navigator>
-               <ProfileStackNav.Screen name="ProfileScreen" component={ProfileScreen} options={{ headerShown: false }} />
-               <ProfileStackNav.Screen name="EditUser" component={EditUserScreen} options={{ headerTitle: 'Edit User' }} />
-               <ProfileStackNav.Screen name="NotificationPreferences" component={NotificationPreferencesScreen} options={{ headerTitle: 'Notifications' }} />
-               <ProfileStackNav.Screen name="AboutHelp" component={AboutHelpScreen} options={{ headerTitle: 'About & Help' }} />
+           <ProfileStackNav.Screen name="ProfileScreen" component={ProfileScreen} options={{ headerShown: false }} />
+           <ProfileStackNav.Screen name="EditUser" component={EditUserScreen} options={{ headerTitle: 'Edit User' }} />
+           <ProfileStackNav.Screen name="NotificationPreferences" component={NotificationPreferencesScreen} options={{ headerTitle: 'Notifications' }} />
+           <ProfileStackNav.Screen name="AboutHelp" component={AboutHelpScreen} options={{ headerTitle: 'About & Help' }} />
         </ProfileStackNav.Navigator>
     )
 }
 
-// This component defines the bottom tab bar
+// This component defines the bottom tab bar (no changes needed)
 function Tabs() {
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
-        headerShown: false, // Ensures the entire tab view has no header
+        headerShown: false,
         tabBarActiveTintColor: '#2ecc71',
         tabBarIcon: ({ color, size }) => {
           let iconName = 'dashboard';
@@ -96,20 +83,34 @@ function Tabs() {
   );
 }
 
-// The main export is a stack that includes the Tabs and any full-screen modals
+/**
+ * ✅ This is the main navigator and the source of the fix.
+ * It contains the Tab navigator as one screen, and all other screens
+ * are defined here as siblings. This allows any tab to navigate to them,
+ * and they will correctly appear on top of the tab bar.
+ */
 export default function ResearcherNavigator() {
   return (
     <MainStack.Navigator>
+      {/* The Tab navigator is the base screen */}
       <MainStack.Screen name="MainTabs" component={Tabs} options={{ headerShown: false }} />
-      {/* These screens are outside the tab flow and will get the default header */}
+
+      {/* All screens that should appear OVER the tabs are now defined here ONLY */}
+      <MainStack.Screen name="TreeDetails" component={TreeDetailsScreen} options={{ headerTitle: 'Tree Details' }} />
+      <MainStack.Screen name="EditTree" component={EditTreeScreen} options={{ headerTitle: 'Edit Tree' }} />
+      <MainStack.Screen name="AddTree" component={AddTreeScreen} options={{ headerTitle: 'Add Tree' }} />
+      <MainStack.Screen name="PendingDetails" component={PendingDetailsScreen} options={{ headerTitle: 'Pending Details' }} />
+      <MainStack.Screen name="ProcessFruit" component={ProcessFruitScreen} options={{ headerTitle: 'Process Fruit' }} />
+      <MainStack.Screen name="TrackedTrees" component={TrackedTreesScreen} options={{ headerTitle: 'Tracked Trees' }} />
+
+      {/* Scanner Screens */}
+      <MainStack.Screen name="DiameterScanner" component={DiameterScannerScreen} options={{ headerTitle: 'Scan Diameter' }} />
+      <MainStack.Screen name="EditDiameterScanner" component={EditDiameterScannerScreen} options={{ headerTitle: 'Rescan Diameter' }} />
+
+      {/* Other Screens */}
       <MainStack.Screen name="EditProfile" component={EditProfileScreen} options={{ title: 'Edit Profile' }} />
       <MainStack.Screen name="Camera" component={CameraScreen} options={{ presentation: 'modal', headerShown: false }} />
       <MainStack.Screen name="Search" component={SearchScreen} options={{ headerShown: false }} />
-       <MainStack.Screen name="TreeList" component={TreeListScreen} options={{ title: 'Tree List' }} />
-      <MainStack.Screen name="AddTree" component={AddTreeScreen} options={{ headerTitle: 'Add Tree' }} />
-      <MainStack.Screen name="TreeDetails" component={TreeDetailsScreen} options={{ headerTitle: 'Tree Details' }} />
-      <MainStack.Screen name="EditTree" component={EditTreeScreen} options={{ headerTitle: 'Edit Tree' }} />
-      <MainStack.Screen name="EditDiameterScanner" component={EditDiameterScannerScreen}  options={{ headerTitle: 'Scan Diameter' }} />
     </MainStack.Navigator>
   );
 }

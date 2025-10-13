@@ -14,6 +14,7 @@ import {
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { launchCamera, launchImageLibrary } from 'react-native-image-picker';
 import Tflite from 'tflite-react-native';
+import RNFS from 'react-native-fs'; // ✅ Added
 
 // Use two separate Tflite instances
 const classifier = new Tflite();
@@ -47,7 +48,22 @@ export default function DiameterScannerScreen() {
     const backHandler = BackHandler.addEventListener('hardwareBackPress', handleBackPress);
     return () => backHandler.remove();
   }, [navigation]);
-
+   // ✅ Ensure local file path
+   const getLocalImagePath = async (uri: string): Promise<string> => {
+     try {
+       if (uri.startsWith('file://')) return uri;
+       const localPath = `${RNFS.CachesDirectoryPath}/temp_breadfruit.jpg`;
+       await RNFS.downloadFile({ fromUrl: uri, toFile: localPath }).promise;
+       return `file://${localPath}`;
+     } catch (e) {
+       console.error('Image download failed:', e);
+       Alert.alert(
+         'Image Load Failed',
+         'Unable to download image for analysis. Please check your internet connection and try again.'
+       );
+       throw new Error('Failed to download image locally.');
+     }
+   };
   const runAnalysis = async (uri: string) => {
     setLoading(true);
     setResult(null);
@@ -55,6 +71,9 @@ export default function DiameterScannerScreen() {
     setImageUri(uri);
 
     try {
+
+    // ✅ Convert to local path if Firebase URL
+      const localPath = await getLocalImagePath(uri);
       // Step 1: Load the classifier
       await new Promise<void>((resolve, reject) => {
         classifier.loadModel({ model: 'classifier_model.tflite', labels: 'treelabels.txt' }, (err) => {
@@ -137,12 +156,19 @@ export default function DiameterScannerScreen() {
 
   const handleDone = () => {
     if (result?.diameter) {
-      // @ts-ignore
-      navigation.navigate('EditTree', { diameter: result.diameter });
+      navigation.navigate({
+        name: 'EditTree',
+        params: {
+          treeID: route.params?.treeID,  // keep original treeID
+          diameter: result.diameter       // send new diameter
+        },
+        merge: true, // ✅ merge with existing params
+      });
     } else {
       navigation.goBack();
     }
   };
+
 
   const renderResult = () => {
     if (loading) return <ActivityIndicator size="large" color="#2ecc71" />;
@@ -176,9 +202,12 @@ export default function DiameterScannerScreen() {
         {!loading && (
           <View style={styles.buttonContainer}>
 
-            <TouchableOpacity style={[styles.button, styles.primaryButton]} onPress={handleDone}>
-              <Text style={styles.buttonText}>Done</Text>
-            </TouchableOpacity>
+             <TouchableOpacity
+             style={[styles.button,styles.primaryButton,!result?.diameter && styles.disabledButton,]}
+             onPress={handleDone}
+             disabled={!result?.diameter} >
+            <Text style={styles.buttonText}>{result?.diameter ? 'Done' : 'Scan First'}</Text>
+          </TouchableOpacity>
           </View>
         )}
       </ScrollView>
@@ -221,7 +250,7 @@ const styles = StyleSheet.create({
   resultTitle: { fontSize: 16, color: '#6c757d', marginTop: 10 },
   resultValue: { fontSize: 22, fontWeight: 'bold', color: '#007bff', marginBottom: 5 },
   resultText: { fontSize: 16, textAlign: 'center', color: '#333' },
-  buttonContainer: { width: '100%', marginTop: 'auto', paddingTop: 20 },
+  buttonContainer: { width: '100%', marginTop: 'auto', paddingTop: 20,  },
   button: {
     backgroundColor: '#6c757d',
     paddingVertical: 15,
@@ -230,8 +259,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 10,
   },
-  primaryButton: { backgroundColor: '#2ecc71' },
-  buttonText: { color: 'white', fontSize: 16, fontWeight: 'bold' },
+  primaryButton: { backgroundColor: '#2ecc71' , borderRadius: 50,},
+  disabledButton: { backgroundColor: '#bdbdbd' },
+  buttonText: { color: 'white', fontSize: 16, fontWeight: 'bold'},
   modalContainer: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' },
   modalContent: { backgroundColor: 'white', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20 },
   modalTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 15, textAlign: 'center' },

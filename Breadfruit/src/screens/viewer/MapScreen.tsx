@@ -72,15 +72,26 @@ export default function MapScreen() {
         onRegionChangeComplete={setRegion}
       >
         {trees
-          .filter(tree => tree.coordinates && typeof tree.coordinates.latitude === 'number' && typeof tree.coordinates.longitude === 'number')
+          .filter(tree =>
+            tree.coordinates &&
+            typeof tree.coordinates.latitude === 'number' &&
+            typeof tree.coordinates.longitude === 'number' &&
+            !isNaN(tree.coordinates.latitude) &&
+            !isNaN(tree.coordinates.longitude)
+          )
           .map((tree) => (
             <Marker
-               key={tree.treeID}
-               coordinate={tree.coordinates}
-               onPress={() => { navigation.navigate('TreeDetails', { treeID: tree.treeID });
-                }}
-                />
+              key={tree.treeID}
+              coordinate={{
+                latitude: tree.coordinates.latitude,
+                longitude: tree.coordinates.longitude,
+              }}
+              onPress={() =>
+                navigation.navigate('TreeDetails', { treeID: tree.treeID })
+              }
+            />
         ))}
+
       </MapView>
     </View>
   );

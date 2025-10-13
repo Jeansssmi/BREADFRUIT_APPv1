@@ -230,7 +230,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 10,
   },
-  primaryButton: { backgroundColor: '#2ecc71' },
+  primaryButton: { backgroundColor: '#2ecc71', borderRadius: 50, },
   buttonText: { color: 'white', fontSize: 16, fontWeight: 'bold' },
   modalContainer: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' },
   modalContent: { backgroundColor: 'white', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20 },
