@@ -7,6 +7,7 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import { launchCamera, launchImageLibrary } from 'react-native-image-picker';
 import Tflite from 'tflite-react-native';
 import { Button } from 'react-native-paper';
+import { PermissionsAndroid, Platform } from 'react-native';
 
 // ✅ Correct import for react-native-firebase
 import firestore from '@react-native-firebase/firestore';
@@ -87,8 +88,26 @@ export default function FruitScannerScreen() {
     }
   };
 
-  const handleMediaPick = (useCamera: boolean) => {
+  const handleMediaPick = async (useCamera: boolean) => {
     setModalVisible(false);
+
+    // 🔒 Ask for permission before using the camera
+    if (useCamera && Platform.OS === 'android') {
+      const granted = await PermissionsAndroid.request(
+        PermissionsAndroid.PERMISSIONS.CAMERA,
+        {
+          title: 'Camera Permission',
+          message: 'Breadfruit App needs access to your camera to scan fruit images.',
+          buttonPositive: 'OK',
+          buttonNegative: 'Cancel',
+        }
+      );
+      if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
+        Alert.alert('Permission Denied', 'Camera access is required to scan fruit.');
+        return;
+      }
+    }
+
     const picker = useCamera ? launchCamera : launchImageLibrary;
     picker({ mediaType: 'photo', quality: 1 }, (response) => {
       if (response.didCancel) return;
@@ -101,27 +120,38 @@ export default function FruitScannerScreen() {
     });
   };
 
-  const handleUpdateStatus = async () => {
-    if (!result?.label) {
-      Alert.alert('No Result', 'Cannot update status without a prediction.');
-      return;
-    }
-    setIsUpdating(true);
-    try {
-      // ✅ Correct syntax for react-native-firebase
-            const docRef = firestore().collection('trees').doc(treeID);
-            await docRef.update({ fruitStatus: result.label });
 
-            Alert.alert('Success', `Fruit status updated to: ${result.label}`, [
-              { text: 'OK', onPress: () => navigation.goBack() },
-            ]);
-    } catch (error) {
-      console.error('Update failed:', error);
-      Alert.alert('Error', 'Failed to update fruit status.');
-    } finally {
-      setIsUpdating(false);
-    }
-  };
+const handleUpdateStatus = async () => {
+  if (!result?.label) {
+    Alert.alert('No Result', 'Cannot update status without a prediction.');
+    return;
+  }
+
+  // 🚫 Block updating if it's not a breadfruit
+  if (result.label === 'Not_breadfruit') {
+    Alert.alert(
+      'Invalid Result',
+      'This image is not a breadfruit. Please capture a valid breadfruit image.'
+    );
+    return;
+  }
+
+  setIsUpdating(true);
+  try {
+    const docRef = firestore().collection('trees').doc(treeID);
+    await docRef.update({ fruitStatus: result.label });
+
+    Alert.alert('Success', `Fruit status updated to: ${result.label}`, [
+      { text: 'OK', onPress: () => navigation.goBack() },
+    ]);
+  } catch (error) {
+    console.error('Update failed:', error);
+    Alert.alert('Error', 'Failed to update fruit status.');
+  } finally {
+    setIsUpdating(false);
+  }
+};
+
 
   const renderResult = () => {
     if (loading) {
@@ -182,11 +212,17 @@ export default function FruitScannerScreen() {
                 mode="contained"
                 onPress={handleUpdateStatus}
                 style={styles.primaryButton}
-                disabled={isUpdating}
+                disabled={
+                  isUpdating ||
+                  !result ||
+                  result.label === 'Not_breadfruit'
+                }
                 loading={isUpdating}
               >
                 Update Tree Status
               </Button>
+
+
             )}
 
             <Button

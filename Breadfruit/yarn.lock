@@ -6561,7 +6561,7 @@ react-native-geocoding@^0.5.0:
 
 react-native-geolocation-service@^5.3.1:
   version "5.3.1"
-  resolved "https://registry.npmjs.org/react-native-geolocation-service/-/react-native-geolocation-service-5.3.1.tgz"
+  resolved "https://registry.yarnpkg.com/react-native-geolocation-service/-/react-native-geolocation-service-5.3.1.tgz#4ce1017789da6fdfcf7576eb6f59435622af4289"
   integrity sha512-LTXPtPNmrdhx+yeWG47sAaCgQc3nG1z+HLLHlhK/5YfOgfLcAb9HAkhREPjQKPZOUx8pKZMIpdGFUGfJYtimXQ==
 
 react-native-gesture-handler@^2.28.0:
@@ -6598,10 +6598,10 @@ react-native-linear-gradient@^2.8.3:
   resolved "https://registry.yarnpkg.com/react-native-linear-gradient/-/react-native-linear-gradient-2.8.3.tgz#9a116649f86d74747304ee13db325e20b21e564f"
   integrity sha512-KflAXZcEg54PXkLyflaSZQ3PJp4uC4whM7nT/Uot9m0e/qxFV3p6uor1983D1YOBJbJN7rrWdqIjq0T42jOJyA==
 
-react-native-maps@^1.26.9:
-  version "1.26.10"
-  resolved "https://registry.npmjs.org/react-native-maps/-/react-native-maps-1.26.10.tgz"
-  integrity sha512-4x+CX5tU7xbwtYvTM2sKXdtLesIeE8cFyJHT9P6I3Y1kqiwtRVdKsTUBIb7wxPJmo7Lg7kwyLz6fJLJlH1dGXA==
+react-native-maps@^1.26.14:
+  version "1.26.14"
+  resolved "https://registry.yarnpkg.com/react-native-maps/-/react-native-maps-1.26.14.tgz#ac4076f250815db13cf48ec1015c1904ea81bb48"
+  integrity sha512-ao4FMa3Iuie8fZuj7SG9LN8D9MEdu3gPm+9UfEEK2L1z+FXtGZTzTdByOsj4KRMGU5SGguFlHpV8aL1Sq5FKnA==
   dependencies:
     "@types/geojson" "^7946.0.13"
 

@@ -7,8 +7,8 @@ import MapScreen from '../screens/viewer/MapScreen';
 import FruitScannerScreen from '../screens/viewer/FruitScannerScreen';
 import TreeDetailsScreen from '../screens/viewer/TreeDetailsScreen';
 import TreeListScreen from '../screens/viewer/TreeListScreen';
-import ProfileScreen from '../screens/shared/ProfileScreen';
-import EditProfileScreen from '../screens/shared/EditProfileScreen';
+import ProfileScreen from '../screens/viewer/ProfileScreen';
+import EditProfileScreen from '../screens/viewer/EditProfileScreen';
 import NotificationPreferencesScreen from '../screens/shared/NotificationPreferencesScreen';
 import AboutHelpScreen from '../screens/shared/AboutHelpScreen';
 

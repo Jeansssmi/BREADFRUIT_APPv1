@@ -13,7 +13,6 @@ import { ActivityIndicator } from 'react-native-paper';
 import auth from '@react-native-firebase/auth';
 import firestore from '@react-native-firebase/firestore';
 
-// Define the shape of your user object for TypeScript
 type User = {
   uid: string;
   name: string;
@@ -21,13 +20,12 @@ type User = {
   role: string;
   status: string;
   image: string | null;
-  joined: any; // Or be more specific, e.g., firestore.Timestamp
+  joined: any;
 };
 
-// Define the context type
 type AuthContextType = {
   user: User | null;
-  login: (email, password) => Promise<User | null>;
+  login: (email: string, password: string) => Promise<User | null>;
   logout: () => Promise<void>;
   isAuthenticated: boolean;
   initialized: boolean;
@@ -44,25 +42,34 @@ export function AuthProvider({ children }) {
 
   const isAuthenticated = !!user;
 
+  // ✅ FIXED: Added guard for undefined user
   const fetchUserData = useCallback(async (firebaseUser) => {
+    if (!firebaseUser || !firebaseUser.uid) {
+      console.warn('⚠️ fetchUserData called without a valid Firebase user.');
+      return null;
+    }
+
     try {
       const docSnap = await firestore().collection('users').doc(firebaseUser.uid).get();
       if (docSnap.exists) {
         const data = docSnap.data();
         return {
           uid: firebaseUser.uid,
-          name: data.name,
-          email: data.email,
-          role: data.role,
-          status: data.status,
-          image: data.image,
-          joined: data.joined,
+          name: data?.name || '',
+          email: data?.email || '',
+          role: data?.role || '',
+          status: data?.status || '',
+          image: data?.image || null,
+          joined: data?.joined || null,
         };
+      } else {
+        console.warn('⚠️ User document not found in Firestore.');
+        return null;
       }
     } catch (error) {
-      console.error('Failed to fetch user data:', error);
+      console.error('❌ Failed to fetch user data:', error);
+      return null;
     }
-    return null;
   }, []);
 
   const login = useCallback(async (email, password) => {
@@ -73,7 +80,6 @@ export function AuthProvider({ children }) {
 
       if (userData && userData.status === 'pending') {
         await auth().signOut();
-        // Throw an error with a specific code for the login screen to catch
         const error = new Error('Your account is pending approval.');
         (error as any).code = 'auth/pending-approval';
         throw error;
@@ -101,28 +107,27 @@ export function AuthProvider({ children }) {
     }
   }, []);
 
-  // ✅ FIX 1: Move the updateLocalUser function INSIDE the AuthProvider component.
-  // This gives it access to the `setUser` function.
   const updateLocalUser = useCallback((updatedData: Partial<User>) => {
     setUser(prevUser => (prevUser ? { ...prevUser, ...updatedData } : null));
   }, []);
 
-
+  // ✅ FIXED: Added guard for undefined firebaseUser on initial load
   useEffect(() => {
     const unsubscribe = auth().onAuthStateChanged(async (firebaseUser) => {
-      if (firebaseUser) {
-        const userData = await fetchUserData(firebaseUser);
-        setUser(userData); // Set user, whether data is full or null
-      } else {
+      if (!firebaseUser) {
         setUser(null);
+        setInitialized(true);
+        return;
       }
+
+      const userData = await fetchUserData(firebaseUser);
+      setUser(userData);
       setInitialized(true);
     });
 
     return unsubscribe;
   }, [fetchUserData]);
 
-  // ✅ FIX 2: Add fetchUserData and updateLocalUser to the context value.
   const value = useMemo(
     () => ({
       user,
@@ -154,4 +159,3 @@ export const useAuth = () => {
   }
   return context;
 };
-
