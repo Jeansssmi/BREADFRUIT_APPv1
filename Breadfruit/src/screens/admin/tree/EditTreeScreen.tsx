@@ -1,39 +1,23 @@
-import React, { useEffect, useState } from 'react';
-import {
-  ActivityIndicator,
-  Alert,
-  Image,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  TouchableOpacity,
-  View,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Button, Menu, Text, TextInput } from 'react-native-paper';
+import { LoadingAlert, NotificationAlert } from '@/components/NotificationModal';
+import barangayData from "@/constants/barangayData";
+import { useTreeData } from '@/hooks/useTreeData';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import { launchImageLibrary } from 'react-native-image-picker';
+import React, { useEffect, useState } from 'react';
+import { ActivityIndicator, Alert, KeyboardAvoidingView, Platform, Image as ReactImage, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Geolocation from 'react-native-geolocation-service';
+import { launchImageLibrary } from 'react-native-image-picker';
+import { Button, Menu, TextInput } from 'react-native-paper';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
-
-// ✅ Correct imports for react-native-firebase
 import firestore from '@react-native-firebase/firestore';
 import storage from '@react-native-firebase/storage';
+import { PermissionsAndroid } from 'react-native';
 
-import { LoadingAlert, NotificationAlert } from '@/components/NotificationModal';
-import { useTreeData } from '@/hooks/useTreeData';
-import barangayData from "@/constants/barangayData";
+const FRUIT_STATUS_OPTIONS = ['none', 'unripe', 'ripe', 'overripe'];
 
-const FRUIT_STATUS_OPTIONS = ['none', 'unripe', 'ripe'];
-const CITY_OPTIONS = Object.keys(barangayData);
-
-export default function EditTreeScreen() {
+function EditTreeForm({ treeID }) {
   const navigation = useNavigation();
-  // @ts-ignore
   const route = useRoute();
-  // @ts-ignore
-  const { treeID } = route.params;
 
   const { trees, isLoading } = useTreeData({ mode: 'single', treeID: treeID.toString() });
   const tree = trees[0];
@@ -61,7 +45,6 @@ export default function EditTreeScreen() {
       setCity(tree.city || '');
       setBarangay(tree.barangay || '');
       setFruitStatus(tree.fruitStatus || '');
-      // Safely initialize data
       setDiameter(tree.diameter?.toString() || '');
       setLatitudeInput(tree.coordinates?.latitude?.toString() || '');
       setLongitudeInput(tree.coordinates?.longitude?.toString() || '');
@@ -69,32 +52,80 @@ export default function EditTreeScreen() {
     }
   }, [tree]);
 
+  useEffect(() => {
+    if (route.params?.diameter) {
+      setDiameter(route.params.diameter.toString());
+    }
+  }, [route.params?.diameter]);
+
   const pickImage = async () => {
     const result = await launchImageLibrary({ mediaType: 'photo', quality: 0.8 });
     if (result.didCancel || !result.assets) return;
     setImage(result.assets[0].uri || '');
   };
 
-  const getCurrentLocation = () => {
-    Geolocation.getCurrentPosition(
-      (position) => {
-        const { latitude, longitude } = position.coords;
-        setLatitudeInput(latitude.toString());
-        setLongitudeInput(longitude.toString());
-      },
-      (error) => {
-        setNotificationMessage('Failed to get location. Please enable location services.');
-        setNotificationType('error');
-        setNotificationVisible(true);
-        console.error('Location Error:', error);
-      },
-      { enableHighAccuracy: true, timeout: 15000, maximumAge: 10000 }
-    );
-  };
+ const requestLocationPermission = async () => {
+   try {
+     if (Platform.OS === 'android') {
+       const granted = await PermissionsAndroid.request(
+         PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+         {
+           title: 'Location Permission',
+           message: 'This app needs access to your location to update coordinates.',
+           buttonPositive: 'OK',
+           buttonNegative: 'Cancel',
+         }
+       );
+       return granted === PermissionsAndroid.RESULTS.GRANTED;
+     } else {
+       // iOS permissions are handled automatically once added in Info.plist
+       return true;
+     }
+   } catch (err) {
+     console.warn('Permission error:', err);
+     return false;
+   }
+ };
+
+ const getLocation = async () => {
+   const hasPermission = await requestLocationPermission();
+   if (!hasPermission) {
+     Alert.alert('Permission Denied', 'Please enable location access to continue.');
+     return;
+   }
+
+   setLoading(true);
+
+   Geolocation.getCurrentPosition(
+     (position) => {
+       setLatitudeInput(position.coords.latitude.toString());
+       setLongitudeInput(position.coords.longitude.toString());
+       setLoading(false);
+       Alert.alert('Location Set', 'Current coordinates have been updated successfully.');
+     },
+     (error) => {
+       console.error('Location error:', error);
+       let errorMessage = 'Failed to get location. Please make sure GPS is turned on.';
+
+       if (error.code === 1) errorMessage = 'Permission denied. Please enable location in settings.';
+       if (error.code === 2) errorMessage = 'Location unavailable. Please check your GPS signal.';
+       if (error.code === 3) errorMessage = 'Request timed out. Try again.';
+
+       Alert.alert('Location Error', errorMessage);
+       setLoading(false);
+     },
+     {
+       enableHighAccuracy: true,
+       timeout: 15000,
+       maximumAge: 10000,
+     }
+   );
+ };
+
 
   const handleCitySelect = (selectedCity: string) => {
     setCity(selectedCity);
-    setBarangay(''); // Reset barangay when city changes
+    setBarangay('');
     setCityOptionsMenuVisible(false);
   };
 
@@ -103,149 +134,200 @@ export default function EditTreeScreen() {
     setBarangayOptionsMenuVisible(false);
   };
 
-  const handleSubmit = (currentTreeID: string) => {
-    Alert.alert('Confirm Changes', 'Save changes made for this tree?', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Save', style: 'destructive',
-        onPress: async () => {
-          setLoading(true);
-          try {
-            const docRef = firestore().collection('trees').doc(currentTreeID);
-            let newImageURL = tree.image;
-
-            if (image && image.startsWith('file://')) {
-              // Delete old image logic
-              if (tree.image) {
-                try {
-                   // ✅ Correct syntax for react-native-firebase
-                  const prevRef = storage().refFromURL(tree.image);
-                  await prevRef.delete();
-                } catch (deleteError) {
-                  console.warn('Failed to delete previous image:', deleteError);
-                }
-              }
-
-              // Upload new image
-              const fileName = `images/${Date.now()}_${image.split('/').pop()}`;
-             // ✅ Correct (and simpler) syntax for react-native-firebase
-              const reference = storage().ref(fileName);
-              await reference.putFile(image.replace('file://', ''));
-              newImageURL = await reference.getDownloadURL();
-            }
-
-            // Prepare data for Firestore update
-            const treeData = {
-              city, barangay, fruitStatus,
-              diameter: parseFloat(diameter) || 0,
-              // ✅ Best practice for storing locations
-              coordinates: new firestore.GeoPoint(
-              parseFloat(latitudeInput) || 0,
-              parseFloat(longitudeInput) || 0,
-               ),
-
-              image: newImageURL,
-            };
-
-            // Update Firestore document
-            await docRef.update(treeData);
-
-            setNotificationMessage('Successfully saved.');
-            setNotificationType('success');
-            setNotificationVisible(true);
-          } catch(error) {
-            setNotificationMessage('Failed to save changes. Check your network and permissions.');
-            setNotificationType('error');
-            setNotificationVisible(true);
-            console.error(error);
-          } finally {
-            setLoading(false);
-          }
-        },
-      },
-    ]);
+  // ✅ FIXED: Require image before navigating + pass treeID
+  const handleNavigateToScanner = () => {
+    if (!image) {
+      Alert.alert(
+        "No Image Selected",
+        "Please select or upload an image before scanning the diameter.",
+        [{ text: "OK", style: "default" }]
+      );
+      return;
+    }
+    navigation.navigate("EditDiameterScanner", { imageUri: image, treeID: treeID });
   };
+
+ const handleSubmit = (currentTreeID: string) => {
+   Alert.alert('Confirm Changes', 'Save changes made for this tree?', [
+     { text: 'Cancel', style: 'cancel' },
+     {
+       text: 'Save',
+       style: 'destructive',
+       onPress: async () => {
+         setLoading(true);
+         try {
+           const docRef = firestore().collection('trees').doc(currentTreeID);
+           let newImageURL = tree.image;
+
+           if (image && image.startsWith('file://')) {
+             if (tree.image) {
+               try {
+                 const prevRef = storage().refFromURL(tree.image);
+                 await prevRef.delete();
+               } catch (deleteError) {
+                 console.warn('Failed to delete previous image:', deleteError);
+               }
+             }
+
+             const fileName = `images/${Date.now()}_${image.split('/').pop()}`;
+             const reference = storage().ref(fileName);
+             await reference.putFile(image.replace('file://', ''));
+             newImageURL = await reference.getDownloadURL();
+           }
+
+           // ✅ SAFER latitude/longitude handling
+           const lat = parseFloat(latitudeInput);
+           const lon = parseFloat(longitudeInput);
+
+           const treeData = {
+             city,
+             barangay,
+             fruitStatus,
+             diameter: parseFloat(diameter) || 0,
+             coordinates: new firestore.GeoPoint(
+               isNaN(lat) ? 0 : lat,
+               isNaN(lon) ? 0 : lon
+             ),
+             image: newImageURL,
+           };
+
+           await docRef.update(treeData);
+
+           setNotificationMessage('Successfully saved.');
+           setNotificationType('success');
+           setNotificationVisible(true);
+         } catch (error) {
+           setNotificationMessage('Failed to save changes. Check your network and permissions.');
+           setNotificationType('error');
+           setNotificationVisible(true);
+           console.error(error);
+         } finally {
+           setLoading(false);
+         }
+       },
+     },
+   ]);
+ };
+
 
   if (isLoading) {
     return <View style={styles.center}><ActivityIndicator size="large" color='#2ecc71' /></View>;
   }
   if (!tree) {
-    return <View style={styles.errorContainer}><Text>Tree not found.</Text></View>;
+    return <View style={styles.errorContainer}><Text>Tree could not be loaded.</Text></View>;
   }
 
   return (
     <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
       <SafeAreaView style={styles.safeArea}>
         <ScrollView contentContainerStyle={styles.scrollContainer} keyboardShouldPersistTaps='handled'>
-            <View style={styles.container}>
-              <LoadingAlert visible={loading} message="Please wait..." />
-              <NotificationAlert
-                visible={notificationVisible} message={notificationMessage} type={notificationType}
-                onClose={() => {
-                  setNotificationVisible(false);
-                  if (notificationType === 'success') {
-                    navigation.goBack();
-                  }
-                }}
-              />
-              <TouchableOpacity onPress={pickImage} style={styles.imageContainer}>
-                {image ? <ReactImage source={{ uri: image }} style={styles.image} /> : (
-                  <View style={styles.imagePlaceholder}>
-                    <MaterialIcons name="add-a-photo" size={40} color="#2ecc71" />
-                    <Text style={styles.imageLabel}>Update Tree Picture</Text>
-                  </View>
-                )}
-              </TouchableOpacity>
-              <TextInput label="Breadfruit ID" value={tree?.treeID} style={styles.input} editable={false} />
-              <View style={styles.menuContainer}>
-                <Menu
-                  visible={cityOptionsMenuVisible} onDismiss={() => setCityOptionsMenuVisible(false)}
-                  anchor={<TouchableOpacity onPress={() => setCityOptionsMenuVisible(true)}><TextInput label="City/Municipality" value={city} editable={false} right={<TextInput.Icon icon="menu-down" />} style={styles.menuInput} /></TouchableOpacity>}
-                >
-                  {CITY_OPTIONS.map(option => <Menu.Item key={option} onPress={() => handleCitySelect(option)} title={option.charAt(0).toUpperCase() + option.slice(1)} />)}
-                </Menu>
-              </View>
-              <View style={styles.menuContainer}>
-                <Menu
-                  visible={barangayOptionsMenuVisible} onDismiss={() => setBarangayOptionsMenuVisible(false)}
-                  anchor={<TouchableOpacity onPress={() => setBarangayOptionsMenuVisible(true)} disabled={!city}><TextInput label="Barangay" value={barangay} editable={false} right={<TextInput.Icon icon="menu-down" />} style={styles.menuInput} disabled={!city} /></TouchableOpacity>}
-                >
-                  {BARANGAY_OPTIONS.map(option => <Menu.Item key={option} onPress={() => handleBarangaySelect(option)} title={option.charAt(0).toUpperCase() + option.slice(1)} />)}
-                </Menu>
-              </View>
-              <View style={styles.menuContainer}>
-                <Menu
-                  visible={showStatusMenu} onDismiss={() => setShowStatusMenu(false)}
-                  anchor={<TouchableOpacity onPress={() => setShowStatusMenu(true)}><TextInput label="Fruit Status" value={fruitStatus} editable={false} right={<TextInput.Icon icon="menu-down" />} style={styles.menuInput} /></TouchableOpacity>}
-                >
-                  {FRUIT_STATUS_OPTIONS.map(option => <Menu.Item key={option} onPress={() => { setFruitStatus(option); setShowStatusMenu(false); }} title={option.charAt(0).toUpperCase() + option.slice(1)} />)}
-                </Menu>
-              </View>
-              {/* ✅ FIX: Diameter is non-editable */}
-              <TextInput
-                label="Diameter (meters)"
-                value={diameter}
-                style={styles.input}
-                keyboardType="decimal-pad"
-                editable={false}
-              />
-
-              <View style={styles.coordinateGroup}>
-                <View style={styles.coordinateLegend}><Text style={styles.legendText}>Coordinates</Text></View>
-                <View style={styles.rowLegend}>
-                  <TextInput label="Latitude" value={latitudeInput} onChangeText={setLatitudeInput} style={[styles.input, styles.halfWidth, styles.coordinateInput]} keyboardType="decimal-pad" />
-                  <TextInput label="Longitude" value={longitudeInput} onChangeText={setLongitudeInput} style={[styles.input, styles.halfWidth, styles.coordinateInput]} keyboardType="decimal-pad" />
+          <View style={styles.container}>
+            <LoadingAlert visible={loading} message="Please wait..." />
+            <NotificationAlert
+              visible={notificationVisible} message={notificationMessage} type={notificationType}
+              onClose={() => {
+                setNotificationVisible(false);
+                if (notificationType === 'success') {
+                  navigation.goBack();
+                }
+              }}
+            />
+            <View style={styles.imageContainer}>
+              {image ? (
+                <View>
+                  <ReactImage source={{ uri: image }} style={styles.imagePreview} resizeMode="cover" />
+                  <TouchableOpacity style={styles.changeButton} onPress={pickImage}>
+                    <Text style={styles.changeButtonText}>Change</Text>
+                  </TouchableOpacity>
                 </View>
-                <TouchableOpacity onPress={getCurrentLocation}><Text style={styles.useLocationText}>Use Location</Text></TouchableOpacity>
-              </View>
-              <TextInput label="Date Tracked" value={new Date(tree?.dateTracked).toLocaleDateString()} style={styles.input} editable={false} />
-              <View style={styles.buttonGroup}>
-                <Button mode="contained" onPress={() => handleSubmit(treeID.toString())} style={styles.primaryButton}>Save Changes</Button>
-              </View>
+              ) : (
+                <TouchableOpacity style={styles.addImageButton} onPress={pickImage}>
+                  <MaterialIcons name="add-a-photo" size={40} color="#2ecc71" />
+                  <Text style={styles.addImageText}>Add Tree Picture</Text>
+                </TouchableOpacity>
+              )}
             </View>
+
+            <TextInput label="Breadfruit ID" value={tree?.treeID} style={styles.input} editable={false} />
+            <View style={styles.menuContainer}>
+              <Menu
+                visible={cityOptionsMenuVisible} onDismiss={() => setCityOptionsMenuVisible(false)}
+                anchor={<TouchableOpacity onPress={() => setCityOptionsMenuVisible(true)}><TextInput label="City/Municipality" value={city} editable={false} right={<TextInput.Icon icon="menu-down" />} style={styles.menuInput} /></TouchableOpacity>}
+              >
+                {CITY_OPTIONS.map(option => <Menu.Item key={option} onPress={() => handleCitySelect(option)} title={option.charAt(0).toUpperCase() + option.slice(1)} />)}
+              </Menu>
+            </View>
+            <View style={styles.menuContainer}>
+              <Menu
+                visible={barangayOptionsMenuVisible} onDismiss={() => setBarangayOptionsMenuVisible(false)}
+                anchor={<TouchableOpacity onPress={() => setBarangayOptionsMenuVisible(true)} disabled={!city}><TextInput label="Barangay" value={barangay} editable={false} right={<TextInput.Icon icon="menu-down" />} style={styles.menuInput} disabled={!city} /></TouchableOpacity>}
+              >
+                {BARANGAY_OPTIONS.map(option => <Menu.Item key={option} onPress={() => handleBarangaySelect(option)} title={option.charAt(0).toUpperCase() + option.slice(1)} />)}
+              </Menu>
+            </View>
+            <View style={styles.menuContainer}>
+              <Menu
+                visible={showStatusMenu} onDismiss={() => setShowStatusMenu(false)}
+                anchor={<TouchableOpacity onPress={() => setShowStatusMenu(true)}><TextInput label="Fruit Status" value={fruitStatus} editable={false} right={<TextInput.Icon icon="menu-down" />} style={styles.menuInput} /></TouchableOpacity>}
+              >
+                {FRUIT_STATUS_OPTIONS.map(option => <Menu.Item key={option} onPress={() => { setFruitStatus(option); setShowStatusMenu(false); }} title={option.charAt(0).toUpperCase() + option.slice(1)} />)}
+              </Menu>
+            </View>
+            <TextInput
+              label="Diameter (meters)"
+              value={diameter}
+              style={styles.input}
+              keyboardType="decimal-pad"
+              onChangeText={setDiameter}
+            />
+            <View style={styles.coordinateGroup}>
+              <View style={styles.coordinateLegend}><Text style={styles.legendText}>Coordinates</Text></View>
+              <View style={styles.rowLegend}>
+                <TextInput label="Latitude" value={latitudeInput} onChangeText={setLatitudeInput} style={[styles.input, styles.halfWidth, styles.coordinateInput]} keyboardType="decimal-pad" />
+                <TextInput label="Longitude" value={longitudeInput} onChangeText={setLongitudeInput} style={[styles.input, styles.halfWidth, styles.coordinateInput]} keyboardType="decimal-pad" />
+              </View>
+              <TouchableOpacity onPress={getLocation} style={{ flexDirection: 'row', alignItems: 'center', marginTop: 10 }}>
+                <MaterialIcons name="my-location" size={20} color="#2ecc71" />
+                <Text style={[styles.useLocationText, { marginLeft: 6 }]}>Use Current Location</Text>
+              </TouchableOpacity>
+
+            </View>
+            <TextInput label="Date Tracked" value={new Date(tree?.dateTracked).toLocaleDateString()} style={styles.input} editable={false} />
+            <View style={styles.buttonGroup}>
+              <Button mode="contained" onPress={() => handleSubmit(treeID.toString())} style={styles.primaryButton}>Save Changes</Button>
+              <Button
+                mode="contained"
+                onPress={handleNavigateToScanner}
+                style={[
+                  styles.primaryButton,
+                  !image && { backgroundColor: '#ccc' }, // gray when disabled
+                ]}
+                disabled={!image} // 🔒 disables button if no image
+              >
+                Scan Diameter
+              </Button>
+            </View>
+          </View>
         </ScrollView>
       </SafeAreaView>
     </KeyboardAvoidingView>
   );
+}
+
+export default function EditTreeScreen() {
+  const route = useRoute();
+  const treeID = route.params?.treeID;
+
+  if (!treeID) {
+    return (
+      <View style={styles.errorContainer}>
+        <Text style={{ color: '#d32f2f', fontWeight: 'bold' }}>Error: Tree ID is missing.</Text>
+        <Text>Please go back and try again.</Text>
+      </View>
+    );
+  }
+
+  return <EditTreeForm treeID={treeID} />;
 }
 
 const styles = StyleSheet.create({
@@ -264,10 +346,51 @@ const styles = StyleSheet.create({
   legendText: { color: '#2ecc71', fontSize: 12, fontWeight: 'bold' },
   coordinateInput: { backgroundColor: '#ffffff', borderWidth: 0, borderBottomWidth: 1, borderBottomColor: '#eee' },
   useLocationText: { color: '#2ecc71', fontSize: 14, fontWeight: '600', marginTop: 12 },
-  buttonGroup: { marginTop: 25 },
-  primaryButton: { backgroundColor: '#2ecc71', borderRadius: 25 },
   imageContainer: { height: 200, borderRadius: 12, marginBottom: 24, overflow: 'hidden', borderWidth: 2, borderColor: '#eee', backgroundColor: '#f8f8f8' },
   image: { width: '100%', height: '100%' },
   imagePlaceholder: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 12, borderStyle: 'dashed', borderColor: '#2ecc71' },
   imageLabel: { color: '#2ecc71', fontSize: 16, fontWeight: '500' },
+  buttonGroup: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 20, gap: 10 },
+  primaryButton: { flex: 1, borderRadius: 25, backgroundColor: '#2ecc71' },
+  imagePreview: {
+    width: '100%',
+    height: 200,
+    borderRadius: 12,
+    backgroundColor: '#f0f0f0',
+  },
+
+  changeButton: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    paddingVertical: 5,
+    paddingHorizontal: 12,
+    borderRadius: 20,
+  },
+
+  changeButtonText: {
+    color: '#fff',
+    fontWeight: '600',
+    fontSize: 13,
+  },
+
+  addImageButton: {
+    width: '100%',
+    height: 200,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: '#ccc',
+    backgroundColor: '#fafafa',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  addImageText: {
+    fontSize: 15,
+    color: '#2ecc71',
+    fontWeight: '500',
+    marginTop: 8,
+  },
+
 });

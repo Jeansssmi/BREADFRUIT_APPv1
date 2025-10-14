@@ -27,6 +27,20 @@ export default function RegisterFormScreen() {
   const toTitleCase = (str: string) =>
     str.charAt(0).toUpperCase() + str.slice(1);
 
+    // ✅ Realtime email validation
+    const handleEmailChange = (text: string) => {
+      setEmail(text);
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (text.length === 0) {
+        setEmailError(null);
+      } else if (!emailRegex.test(text)) {
+        setEmailError('Invalid email format.');
+      } else {
+        setEmailError(null);
+      }
+    };
+
+
   const handleRegister = async () => {
     // Validations remain the same
     if (!name || !email || !password || !confirmPassword) {

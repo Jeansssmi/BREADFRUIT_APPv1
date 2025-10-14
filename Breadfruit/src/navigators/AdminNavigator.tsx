@@ -12,15 +12,19 @@ import EditProfileScreen from "../screens/shared/EditProfileScreen";
 import NotificationPreferencesScreen from "../screens/shared/NotificationPreferencesScreen";
 import AboutHelpScreen from "../screens/shared/AboutHelpScreen";
 import AddTreeScreen from "../screens/admin/tree/AddTreeScreen";
+import SearchScreen from "../screens/admin/tree/SearchScreen";
 import EditTreeScreen from "../screens/admin/tree/EditTreeScreen";
 import PendingTreesScreen from "../screens/admin/tree/PendingTreesScreen";
 import TreeDetailsScreen from "../screens/admin/tree/TreeDetailsScreen";
 import TreeListScreen from "../screens/admin/tree/TreeListScreen";
+import TrackedTreesScreen from "../screens/admin/tree/TrackedTreesScreen";
 import AddUserScreen from "../screens/admin/user/AddUserScreen";
 import EditUserScreen from "../screens/admin/user/EditUserScreen";
 import PendingUsersScreen from "../screens/admin/user/PendingUsersScreen";
 import UserDetailsScreen from "../screens/admin/user/UserDetailsScreen";
 import UserListScreen from "../screens/admin/user/UserListScreen";
+import MapScreen from "../screens/researcher/MapScreen"; // or correct path
+
 
 // --- Create navigators ---
 const Tab = createBottomTabNavigator();
@@ -36,10 +40,7 @@ function TreeStack() {
   return (
     <TreeStackNav.Navigator screenOptions={{ headerShown: false }}>
       <TreeStackNav.Screen name="TreeManagement" component={TreeManagementScreen} />
-      <TreeStackNav.Screen name="AddTree" component={AddTreeScreen} />
-      <TreeStackNav.Screen name="EditTree" component={EditTreeScreen} />
-      <TreeStackNav.Screen name="PendingTrees" component={PendingTreesScreen} />
-      <TreeStackNav.Screen name="TreeDetails" component={TreeDetailsScreen} />
+
       <TreeStackNav.Screen name="TreeList" component={TreeListScreen} />
     </TreeStackNav.Navigator>
   );
@@ -140,18 +141,14 @@ function AdminTabs() {
 
 
 // --- MAIN WRAPPER STACK ---
-// Lets you open UserList, PendingUsers, or Researchers directly without switching tabs
 export default function AdminNavigator() {
   return (
     <MainStack.Navigator>
-      {/* Tabs (Main Interface) */}
       <MainStack.Screen
         name="AdminTabs"
         component={AdminTabs}
         options={{ headerShown: false }}
       />
-
-      {/* Direct-access Screens */}
       <MainStack.Screen
         name="UserListScreen"
         component={UserListScreen}
@@ -166,13 +163,25 @@ export default function AdminNavigator() {
       <MainStack.Screen name="TreeList" component={TreeListScreen} options={{ headerTitle: "Trees Tracked" }} />
       <MainStack.Screen name="PendingUsers" component={PendingUsersScreen} options={{ headerTitle: "Pending List" }} />
       <MainStack.Screen name="UserDetails" component={UserDetailsScreen} options={{ headerTitle: "User Details" }} />
+      <MainStack.Screen name="TrackedTreesScreen" component={TrackedTreesScreen} options={{ headerTitle: "Tracked Trees" }} />
+      <MainStack.Screen name="EditTree" component={EditTreeScreen} options={{ headerTitle: "Edit Tree" }} />
+       <MainStack.Screen name="TreeDetails" component={TreeDetailsScreen} options={{ headerTitle: " Tree Details" }} />
+       <MainStack.Screen name="AddTree" component={AddTreeScreen} options={{ headerTitle: "Add Tree" }} />
+      <MainStack.Screen name="Search" component={SearchScreen} options={{ headerShown: false }} />
+     <MainStack.Screen name="PendingTrees" component={PendingTreesScreen} options={{ headerTitle: "Pending Trees" }} />
       <MainStack.Screen
         name="ResearchersScreen"
         component={UserListScreen}
         options={{ headerTitle: "Researchers" }}
-        initialParams={{ filter: "researcher" }} // optional filter prop
+        initialParams={{ filter: "researcher" }}
+      />
+
+      {/* ✅ Add this new screen */}
+      <MainStack.Screen
+        name="Map"
+        component={MapScreen}
+        options={{ headerTitle: "Tree Location" }}
       />
     </MainStack.Navigator>
-
   );
 }

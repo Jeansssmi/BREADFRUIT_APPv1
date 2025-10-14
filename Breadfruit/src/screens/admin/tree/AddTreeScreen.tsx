@@ -203,13 +203,9 @@ const uploadImageAndGetURL = async (uri: string): Promise<string | null> => {
       style={{ flex: 1 }}
     >
       <SafeAreaView style={styles.safeArea}>
-      {/* ✅ 2. Add the Appbar here */}
-        <Appbar.Header style={styles.appbarHeader}>
-         <Appbar.BackAction onPress={() => navigation.goBack()} color="#333" />
-          <Appbar.Content title="Add Tree" titleStyle={styles.appbarTitle} />
-            </Appbar.Header>
+
         <ScrollView contentContainerStyle={styles.scrollContainer} keyboardShouldPersistTaps="handled">
-          <Text style={styles.title}>Log New Breadfruit Tree</Text>
+
 
           <TouchableOpacity style={styles.imageContainer} onPress={handleImageSelection}>
             {image ? (

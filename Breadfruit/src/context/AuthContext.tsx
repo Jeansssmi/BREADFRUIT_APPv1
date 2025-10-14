@@ -36,6 +36,8 @@ type AuthContextType = {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 const KEYCHAIN_SERVICE = 'com.breadfruit.usersession';
 
+
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState<User | null>(null);
   const [initialized, setInitialized] = useState(false);
@@ -72,30 +74,41 @@ export function AuthProvider({ children }) {
     }
   }, []);
 
-  const login = useCallback(async (email, password) => {
-    try {
-      const credential = await auth().signInWithEmailAndPassword(email, password);
-      const firebaseUser = credential.user;
-      const userData = await fetchUserData(firebaseUser);
+  const login = useCallback(
+      async (email, password) => {
+        try {
+          const credential = await auth().signInWithEmailAndPassword(email, password);
+          const firebaseUser = credential.user;
+          const userData = await fetchUserData(firebaseUser);
 
-      if (userData && userData.status === 'pending') {
-        await auth().signOut();
-        const error = new Error('Your account is pending approval.');
-        (error as any).code = 'auth/pending-approval';
-        throw error;
-      }
 
-      if (userData) {
-        setUser(userData);
-        await Keychain.setGenericPassword('user', JSON.stringify(userData), { service: KEYCHAIN_SERVICE });
-        return userData;
-      }
-      return null;
-    } catch (err) {
-      console.error('Login error:', err);
-      throw err;
-    }
-  }, [fetchUserData]);
+          if (userData) {
+            // 🚫 Researchers and Admins require approval
+            if (
+              (userData.role === 'researcher' || userData.role === 'admin') &&
+              userData.status === 'approved'
+            ) {
+              await auth().signOut();
+              const error = new Error('Your account is pending approval.');
+              (error as any).code = 'auth/pending-approval';
+              throw error;
+            }
+
+            // ✅ Viewers can always log in
+            setUser(userData);
+            await Keychain.setGenericPassword('user', JSON.stringify(userData), {
+              service: KEYCHAIN_SERVICE,
+            });
+            return userData;
+          }
+          return null;
+        } catch (err) {
+          console.error('Login error:', err);
+          throw err;
+        }
+      },
+      [fetchUserData]
+    );
 
   const logout = useCallback(async () => {
     try {
@@ -121,6 +134,17 @@ export function AuthProvider({ children }) {
       }
 
       const userData = await fetchUserData(firebaseUser);
+    // 🚫 Researchers & Admins must be approved
+         if (
+           userData &&
+           (userData.role === 'researcher' || userData.role === 'admin') &&
+           userData.status === 'approved'
+         ) {
+           await auth().signOut();
+           setUser(null);
+           setInitialized(true);
+           return;
+         }
       setUser(userData);
       setInitialized(true);
     });

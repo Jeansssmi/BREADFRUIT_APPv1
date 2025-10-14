@@ -112,10 +112,18 @@ export default function UserDetailsScreen() {
               <MaterialCommunityIcons name="account-cog-outline" size={24} color="#2ecc71" />
               <Text style={styles.detailText}>{user?.role}</Text>
             </View>
-            <View style={styles.detailItem}>
-              <MaterialCommunityIcons name="tag-outline" size={24} color="#2ecc71" />
-              <Text style={styles.detailText}>Tracked Trees</Text>
-            </View>
+
+            {/* ✅ Make "Tracked Trees" tappable */}
+              <TouchableOpacity
+                style={styles.detailItem}
+                onPress={() => navigation.navigate("TrackedTreesScreen", { userID: user.uid })}
+                       >
+                <MaterialCommunityIcons name="tree-outline" size={24} color="#2ecc71" />
+                <Text style={[styles.detailText, { color: "#2ecc71", fontWeight: "bold" }]}>
+                           View Tracked Trees
+                 </Text>
+                 </TouchableOpacity>
+
             <View style={styles.detailItem}>
               <MaterialCommunityIcons name="calendar-blank-outline" size={24} color="#2ecc71" />
               <Text style={styles.detailText}>
@@ -172,11 +180,13 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: '#2ecc71',
     marginBottom: 16,
+    marginTop: 20,
   },
   avatarImage: {
     width: '100%',
     height: '100%',
     borderRadius: 60,
+
   },
   userName: {
     fontSize: 22,

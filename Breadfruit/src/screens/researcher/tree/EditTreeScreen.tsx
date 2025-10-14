@@ -11,6 +11,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import firestore from '@react-native-firebase/firestore';
 import storage from '@react-native-firebase/storage';
+import { PermissionsAndroid } from 'react-native';
 
 const FRUIT_STATUS_OPTIONS = ['none', 'unripe', 'ripe', 'overripe'];
 
@@ -63,22 +64,64 @@ function EditTreeForm({ treeID }) {
     setImage(result.assets[0].uri || '');
   };
 
-  const getCurrentLocation = () => {
-    Geolocation.getCurrentPosition(
-      (position) => {
-        const { latitude, longitude } = position.coords;
-        setLatitudeInput(latitude.toString());
-        setLongitudeInput(longitude.toString());
-      },
-      (error) => {
-        setNotificationMessage('Failed to get location. Please enable location services.');
-        setNotificationType('error');
-        setNotificationVisible(true);
-        console.error('Location Error:', error);
-      },
-      { enableHighAccuracy: true, timeout: 15000, maximumAge: 10000 }
-    );
-  };
+ const requestLocationPermission = async () => {
+   try {
+     if (Platform.OS === 'android') {
+       const granted = await PermissionsAndroid.request(
+         PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+         {
+           title: 'Location Permission',
+           message: 'This app needs access to your location to update coordinates.',
+           buttonPositive: 'OK',
+           buttonNegative: 'Cancel',
+         }
+       );
+       return granted === PermissionsAndroid.RESULTS.GRANTED;
+     } else {
+       // iOS permissions are handled automatically once added in Info.plist
+       return true;
+     }
+   } catch (err) {
+     console.warn('Permission error:', err);
+     return false;
+   }
+ };
+
+ const getLocation = async () => {
+   const hasPermission = await requestLocationPermission();
+   if (!hasPermission) {
+     Alert.alert('Permission Denied', 'Please enable location access to continue.');
+     return;
+   }
+
+   setLoading(true);
+
+   Geolocation.getCurrentPosition(
+     (position) => {
+       setLatitudeInput(position.coords.latitude.toString());
+       setLongitudeInput(position.coords.longitude.toString());
+       setLoading(false);
+       Alert.alert('Location Set', 'Current coordinates have been updated successfully.');
+     },
+     (error) => {
+       console.error('Location error:', error);
+       let errorMessage = 'Failed to get location. Please make sure GPS is turned on.';
+
+       if (error.code === 1) errorMessage = 'Permission denied. Please enable location in settings.';
+       if (error.code === 2) errorMessage = 'Location unavailable. Please check your GPS signal.';
+       if (error.code === 3) errorMessage = 'Request timed out. Try again.';
+
+       Alert.alert('Location Error', errorMessage);
+       setLoading(false);
+     },
+     {
+       enableHighAccuracy: true,
+       timeout: 15000,
+       maximumAge: 10000,
+     }
+   );
+ };
+
 
   const handleCitySelect = (selectedCity: string) => {
     setCity(selectedCity);
@@ -243,7 +286,11 @@ function EditTreeForm({ treeID }) {
                 <TextInput label="Latitude" value={latitudeInput} onChangeText={setLatitudeInput} style={[styles.input, styles.halfWidth, styles.coordinateInput]} keyboardType="decimal-pad" />
                 <TextInput label="Longitude" value={longitudeInput} onChangeText={setLongitudeInput} style={[styles.input, styles.halfWidth, styles.coordinateInput]} keyboardType="decimal-pad" />
               </View>
-              <TouchableOpacity onPress={getCurrentLocation}><Text style={styles.useLocationText}>Use Location</Text></TouchableOpacity>
+              <TouchableOpacity onPress={getLocation} style={{ flexDirection: 'row', alignItems: 'center', marginTop: 10 }}>
+                <MaterialIcons name="my-location" size={20} color="#2ecc71" />
+                <Text style={[styles.useLocationText, { marginLeft: 6 }]}>Use Current Location</Text>
+              </TouchableOpacity>
+
             </View>
             <TextInput label="Date Tracked" value={new Date(tree?.dateTracked).toLocaleDateString()} style={styles.input} editable={false} />
             <View style={styles.buttonGroup}>

@@ -1,5 +1,5 @@
 import { Tree } from '@/types';
-import { useEffect, useState , cachedTrees} from 'react';
+import { useEffect, useState } from 'react';
 import firestore, { FirebaseFirestoreTypes } from '@react-native-firebase/firestore';
 
 type FetchType =
@@ -8,40 +8,38 @@ type FetchType =
   | { mode: 'single'; treeID: string };
 
 export const useTreeData = (fetchConfig: FetchType = { mode: 'all' }) => {
-  const [trees, setTrees] = useState<Tree[]>(cachedTrees || []);
-  const [isLoading, setIsLoading] = useState(!cachedTrees);
+  // ✅ FIX: State is initialized as an empty array. The reference to 'cachedTrees' is removed.
+  const [trees, setTrees] = useState<Tree[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const treesRef = firestore().collection('trees');
     setIsLoading(true);
 
-      // ✅ Handle single fetch separately (no live listener needed)
-        if (fetchConfig.mode === 'single') {
-          const fetchSingle = async () => {
-            try {
-              const docSnap = await treesRef.doc(fetchConfig.treeID).get();
-              if (docSnap.exists) {
-                const tree = { treeID: docSnap.id, ...docSnap.data() } as Tree;
-                setTrees([tree]);
-                cachedTrees = [tree];
-              } else {
-                throw new Error('Tree not found');
-              }
-              setError(null);
-            } catch (err: any) {
-              console.error('Error fetching tree:', err);
-              setError(err.message);
-            } finally {
-              setIsLoading(false);
-            }
-          };
-          fetchSingle();
-          return;
+    // This handles fetching a single document
+    if (fetchConfig.mode === 'single') {
+      const fetchSingle = async () => {
+        try {
+          const docSnap = await treesRef.doc(fetchConfig.treeID).get();
+          if (docSnap.exists) {
+            setTrees([{ treeID: docSnap.id, ...docSnap.data() } as Tree]);
+          } else {
+            throw new Error('Tree not found');
+          }
+          setError(null);
+        } catch (err: any) {
+          setError(err.message);
+        } finally {
+          setIsLoading(false);
         }
+      };
+      fetchSingle();
+      return; // End the effect here for single fetches
+    }
 
+    // This section handles real-time listeners for lists of trees
     let query: FirebaseFirestoreTypes.Query = treesRef;
-
     if (fetchConfig.mode === 'all') {
       query = query.where('status', '==', 'verified');
     } else if (fetchConfig.mode === 'criteria') {
@@ -51,7 +49,6 @@ export const useTreeData = (fetchConfig: FetchType = { mode: 'all' }) => {
       query = query.where(fetchConfig.field, fetchConfig.operator, fetchConfig.value);
     }
 
-  // onSnapshot returns an unsubscribe function.
     const unsubscribe = query.onSnapshot(
       (snapshot) => {
         const liveTrees = snapshot.docs.map(
@@ -68,10 +65,10 @@ export const useTreeData = (fetchConfig: FetchType = { mode: 'all' }) => {
       }
     );
 
-    // ✅ Cleanup listener on unmount
+    // Cleanup function to unsubscribe from the listener when the component unmounts
     return () => unsubscribe();
 
-  }, [JSON.stringify(fetchConfig)]); // Dependency array ensures the listener is reset if the query changes
+  }, [JSON.stringify(fetchConfig)]); // Re-run the effect if the query changes
 
   return { trees, isLoading, error };
 };

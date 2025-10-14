@@ -1,6 +1,6 @@
 import { useTreeData } from '@/hooks/useTreeData';
 import { useNavigation, useRoute , useFocusEffect} from '@react-navigation/native';
-import { useEffect, useState , useCallback} from 'react';
+import { useEffect, useState , useCallback,useRef} from 'react';
 import { Alert, Dimensions, StyleSheet, TextInput, View } from 'react-native';
 import Geocoder from 'react-native-geocoding';
 import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
@@ -12,6 +12,8 @@ export default function MapScreen() {
   const route = useRoute();
   const navigation = useNavigation();
   const { width, height } = Dimensions.get('window');
+  const mapRef = useRef<MapView>(null);
+
 
   const [region, setRegion] = useState({
      latitude: 9.8833, // 📍 Argao, Cebu center
@@ -44,17 +46,24 @@ export default function MapScreen() {
     }
   }, [route.params?.lat, route.params?.lng]);
 
+
+  // ✅ Handle search (Geocode + smooth zoom)
   const handleSearch = async () => {
     if (!searchQuery.trim()) return;
     try {
       const json = await Geocoder.from(searchQuery.trim());
       const location = json.results[0].geometry.location;
-      setRegion({
+
+      const newRegion = {
         latitude: location.lat,
         longitude: location.lng,
-        latitudeDelta: 0.2,
-        longitudeDelta: 0.2,
-      });
+        latitudeDelta: 0.015, // 🔍 Closer zoom
+        longitudeDelta: 0.015 * (width / height),
+      };
+
+      // Animate instead of snap
+      mapRef.current?.animateToRegion(newRegion, 1500);
+      setRegion(newRegion);
     } catch (error) {
       console.error(error);
       Alert.alert('Search failed', 'Could not find this location.');
@@ -62,7 +71,6 @@ export default function MapScreen() {
       setSearchQuery('');
     }
   };
-
   return (
     <View style={styles.container}>
       <View style={styles.searchBar}>
@@ -79,6 +87,7 @@ export default function MapScreen() {
       </View>
 
       <MapView
+      ref={mapRef}
         provider={PROVIDER_GOOGLE}
         style={styles.map}
         region={region}

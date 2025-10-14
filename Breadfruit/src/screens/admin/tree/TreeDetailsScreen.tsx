@@ -90,7 +90,7 @@ export default function TreeDetailsScreen() {
           onClose={() => setNotificationVisible(false)}
         />
         {tree.image ? (
-          <Image 
+          <Image
             source={{ uri: tree.image }}
             style={styles.treeImage}
             resizeMode="cover"
@@ -132,7 +132,7 @@ export default function TreeDetailsScreen() {
             <View style={styles.coordinateContainer}>
               <MaterialIcons name="map" size={20} color="#2ecc71" />
               <Text style={styles.coordinateText}>
-                {tree.coordinates.latitude.toFixed(6)}, 
+                {tree.coordinates.latitude.toFixed(6)},
                 {tree.coordinates.longitude.toFixed(6)}
               </Text>
             </View>
@@ -147,8 +147,8 @@ export default function TreeDetailsScreen() {
           </View>
         ) : (
           <View style={styles.buttonGroup}>
-            <Button 
-              mode="contained" 
+            <Button
+              mode="contained"
               style={styles.button}
               onPress={() => navigation.navigate('EditTree', { treeID: tree.treeID })}
             >
