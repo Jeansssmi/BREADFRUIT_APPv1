@@ -167,7 +167,6 @@ export default function DiameterScannerScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.scroll}>
-        <Text style={styles.title}>Image Processing</Text>
 
         {imageUri && <Image source={{ uri: imageUri }} style={styles.image} resizeMode="contain" />}
 

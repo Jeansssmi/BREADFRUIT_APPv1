@@ -9,7 +9,6 @@ import {
   Platform,
   PermissionsAndroid,
   Alert,
-  ActionSheetIOS,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Button, Text, TextInput, Menu, Appbar} from "react-native-paper";
@@ -17,14 +16,10 @@ import MaterialIcons from "react-native-vector-icons/MaterialIcons";
 import Geolocation from "react-native-geolocation-service";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import { launchCamera, launchImageLibrary } from "react-native-image-picker";
-
 import auth from '@react-native-firebase/auth';
 import firestore from '@react-native-firebase/firestore';
-import functions from '@react-native-firebase/functions';
 import storage from '@react-native-firebase/storage';
-
 import barangayData from "@/constants/barangayData";
-
 const FRUIT_STATUS_OPTIONS = ["none", "unripe", "ripe"];
 const CITY_OPTIONS = Object.keys(barangayData);
 
@@ -49,13 +44,22 @@ export default function AddTreeScreen() {
   const [barangayOptionsMenuVisible, setBarangayOptionsMenuVisible] = useState(false);
 
   const BARANGAY_OPTIONS = barangayData[city] || [];
+  const [heightInput, setHeightInput] = useState("");
 
   useEffect(() => {
     if (route.params?.diameter) {
       setDiameterInput(route.params.diameter.toString());
     }
   }, [route.params?.diameter]);
+ const handleNavigateToScanner = () => {
+   if (!image) {
+     Alert.alert("Image Required", "Please select an image first.");
+     return;
+   }
+     navigation.navigate("DiameterScannerScreen", { imageUri: image });
+ };
 
+// ✅ Location Permission and Get Location
   const requestLocationPermission = async () => {
     try {
       if (Platform.OS === "android") {
@@ -76,8 +80,7 @@ export default function AddTreeScreen() {
       return false;
     }
   };
-
-  const getLocation = async () => {
+const getLocation = async () => {
     const hasPermission = await requestLocationPermission();
     if (!hasPermission) {
       Alert.alert("Permission Denied", "Location permission is required.");
@@ -99,14 +102,16 @@ export default function AddTreeScreen() {
     );
   };
 
+  // ✅ Image Selection
   const handleImageSelection = () => {
-    const options = { mediaType: 'photo' as const, quality: 0.8 };
+    const options = { mediaType: "photo" as const, quality: 0.8 };
     Alert.alert("Select Image", "Choose an option", [
       { text: "Take Photo", onPress: () => launchCamera(options, handleImageResponse) },
       { text: "Choose from Gallery", onPress: () => launchImageLibrary(options, handleImageResponse) },
       { text: "Cancel", style: "cancel" },
     ]);
   };
+
 
   const handleImageResponse = (response: any) => {
     if (response.didCancel) return;
@@ -118,84 +123,71 @@ export default function AddTreeScreen() {
       setImage(response.assets[0].uri || null);
     }
   };
+const handleRemoveImage = () => setImage(null);
 
- const handleRemoveImage = () => setImage(null);
+const handleSaveTree = async () => {
+  try {
+    setLoading(true);
+    const currentUser = auth().currentUser;
 
-const uploadImageAndGetURL = async (uri: string): Promise<string | null> => {
-  if (!uri.startsWith('file://')) {
-    // If it's already a web URL, no need to re-upload
-    return uri;
-  }
+    if (!currentUser) {
+      Alert.alert("Authentication Error", "You must be logged in to add a tree.");
+      setLoading(false);
+      return;
+    }
 
-  const fileName = `trees/${Date.now()}.jpg`;
-      // ✅ Correct syntax for react-native-firebase
+    let imageUrl = "";
+
+    // ✅ Upload image if selected
+    if (image) {
+      const fileName = `images/trees/${currentUser.uid}_${Date.now()}.jpg`;
       const reference = storage().ref(fileName);
-      // ✅ Correct syntax for react-native-firebase
-      await reference.putFile(uri.replace('file://', ''));
-      return reference.getDownloadURL();
+
+      console.log("Uploading to:", fileName);
+
+      // Remove 'file://' prefix if exists
+      const filePath = image.startsWith('file://') ? image.replace('file://', '') : image;
+
+      await reference.putFile(filePath);
+      imageUrl = await reference.getDownloadURL();
+    }
+
+    // ✅ Prepare and save tree data
+    const newTree = {
+      treeID: `BFT-${new Date().getFullYear()}-${Math.floor(Math.random() * 100000)
+        .toString()
+        .padStart(6, "0")}`,
+      city,
+      barangay,
+      coordinates: {
+        latitude: parseFloat(latitudeInput) || 0,
+        longitude: parseFloat(longitudeInput) || 0,
+      },
+      diameter: parseFloat(diameterInput) || 0,
+      height: parseFloat(heightInput) || 0,
+      fruitStatus,
+      image: imageUrl,
+      trackedBy: currentUser.displayName || currentUser.email,
+      dateTracked: firestore.FieldValue.serverTimestamp(),
+      status: "pending",
+    };
+
+    const docRef = await firestore().collection("trees").add(newTree);
+
+    Alert.alert("Success", "Tree added successfully!");
+    navigation.navigate("Map", {
+      lat: parseFloat(latitudeInput),
+      lng: parseFloat(longitudeInput),
+      treeID: docRef.id, // Pass Firestore ID to map
+    });
+
+  } catch (error: any) {
+    console.error("Error saving tree:", error);
+    Alert.alert("Error", `[${error.code}] ${error.message}`);
+  } finally {
+    setSaving(false);
+  }
 };
-  // --- THIS IS THE CORRECT AND ONLY 'handleSave' FUNCTION ---
-  const handleSave = async () => {
-    if (!city || !barangay || !diameterInput || !latitudeInput || !longitudeInput) {
-      Alert.alert("Validation Error", "Please fill all required fields before saving.");
-      return;
-    }
-
-    setSaving(true);
-
-    try {
-
-            const currentUser = auth().currentUser;
-            if (!currentUser) {
-              Alert.alert("Authentication Required", "You must be logged in.");
-              setSaving(false);
-              return;
-            }
-
-      // 1. Upload the image to Storage first (if an image was selected)
-      let imageUrl: string | null = null;
-      if (image) {
-        imageUrl = await uploadImageAndGetURL(image);
-      }
-
-      // 2. Prepare the data with the NEW imageUrl
-      const treeData = {
-        city,
-        barangay,
-        diameter: parseFloat(diameterInput),
-        dateTracked: new Date().toISOString(),
-        fruitStatus,
-        coordinates: new firestore.GeoPoint(parseFloat(latitudeInput), parseFloat(longitudeInput)),
-        image: imageUrl, // Use the public download URL
-        status: "active",
-        trackedBy: currentUser.uid,
-      };
-
-      // 3. Call the Cloud Function
-      const addNewTree = functions().httpsCallable("addNewTree");
-      const result = await addNewTree(treeData);
-
-      if (result?.data?.success) {
-        Alert.alert("Success", "Tree added successfully!");
-        navigation.goBack();
-      } else {
-        // @ts-ignore
-        Alert.alert("Error", result?.data?.message || "An unexpected server error occurred.");
-      }
-    } catch (error: any) {
-      console.error("Error saving tree:", error);
-      Alert.alert("Error", error.message || "Failed to save tree data.");
-    } finally {
-      setSaving(false);
-    }
-  };
-  const handleNavigateToScanner = () => {
-    if (!image) {
-      Alert.alert("Image Required", "Please select an image first.");
-      return;
-    }
-    navigation.navigate("DiameterScannerScreen", { imageUri: image });
-  };
 
   return (
     <KeyboardAvoidingView
@@ -283,7 +275,7 @@ const uploadImageAndGetURL = async (uri: string): Promise<string | null> => {
           <View style={styles.row}>
             <View style={styles.halfWidth}>
               <TextInput
-                label="Diameter (cm)"
+                label="Diameter (m)"
                 value={diameterInput}
                 onChangeText={setDiameterInput}
                 placeholder="Scan to get value"
@@ -361,7 +353,7 @@ const uploadImageAndGetURL = async (uri: string): Promise<string | null> => {
             </Button>
              <Button
               mode="contained"
-              onPress={handleSave}
+              onPress={handleSaveTree}
               style={styles.secondaryButton}
               loading={saving}
             >

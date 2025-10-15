@@ -4,6 +4,8 @@ import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import MaterialIcons from "react-native-vector-icons/MaterialIcons";
 
 // --- Import all screens ---
+import EditDiameterScannerScreen from "../screens/researcher/tree/EditDiameterScannerScreen";
+import DiameterScannerScreen from "../screens/researcher/tree/DiameterScannerScreen";
 import AccountManagementScreen from "../screens/admin/AccountManagementScreen";
 import AdminDashboardScreen from "../screens/admin/AdminDashboardScreen";
 import TreeManagementScreen from "../screens/admin/TreeManagementScreen";
@@ -168,6 +170,9 @@ export default function AdminNavigator() {
        <MainStack.Screen name="TreeDetails" component={TreeDetailsScreen} options={{ headerTitle: " Tree Details" }} />
        <MainStack.Screen name="AddTree" component={AddTreeScreen} options={{ headerTitle: "Add Tree" }} />
       <MainStack.Screen name="Search" component={SearchScreen} options={{ headerShown: false }} />
+     <MainStack.Screen name="EditUser" component={EditUserScreen} options={{ headerTitle: "Edit User" }} />
+      <MainStack.Screen name="DiameterScannerScreen" component={DiameterScannerScreen} options={{ headerTitle: "Scan Diameter" }} />
+     <MainStack.Screen name="EditDiameterScannerScreen" component={EditDiameterScannerScreen} options={{ headerTitle: "Re-Scan Diameter" }} />
      <MainStack.Screen name="PendingTrees" component={PendingTreesScreen} options={{ headerTitle: "Pending Trees" }} />
       <MainStack.Screen
         name="ResearchersScreen"

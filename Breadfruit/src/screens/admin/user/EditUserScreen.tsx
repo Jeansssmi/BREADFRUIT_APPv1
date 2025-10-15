@@ -120,7 +120,7 @@ export default function EditUserScreen() {
               }}
             />
             <TouchableOpacity onPress={pickImage} style={styles.imageContainer}>
-              {image ? <ReactImage source={{ uri: image }} style={styles.image} /> : (
+              {image ? <Image source={{ uri: image }} style={styles.image} /> : (
                 <View style={styles.imagePlaceholder}>
                   <MaterialIcons name="add-a-photo" size={40} color="#2ecc71" />
                   <Text style={styles.imageLabel}>Update Profile Picture</Text>

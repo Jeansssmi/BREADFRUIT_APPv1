@@ -52,7 +52,7 @@ function ProfileStack() {
     return (
         <ProfileStackNav.Navigator>
            <ProfileStackNav.Screen name="ProfileScreen" component={ProfileScreen} options={{ headerShown: false }} />
-           <ProfileStackNav.Screen name="EditUser" component={EditUserScreen} options={{ headerTitle: 'Edit User' }} />
+
            <ProfileStackNav.Screen name="NotificationPreferences" component={NotificationPreferencesScreen} options={{ headerTitle: 'Notifications' }} />
            <ProfileStackNav.Screen name="AboutHelp" component={AboutHelpScreen} options={{ headerTitle: 'About & Help' }} />
         </ProfileStackNav.Navigator>
@@ -114,6 +114,7 @@ export default function ResearcherNavigator() {
       {/* Other Screens */}
       <MainStack.Screen name="EditProfile" component={EditProfileScreen} options={{ title: 'Edit Profile' }} />
       <MainStack.Screen name="Camera" component={CameraScreen} options={{ presentation: 'modal', headerShown: false }} />
+      <MainStackStack.Screen name="EditUser" component={EditUserScreen} options={{ headerTitle: 'Edit User' }} />
       <MainStack.Screen name="Search" component={SearchScreen} options={{ headerShown: false }} />
     </MainStack.Navigator>
   );

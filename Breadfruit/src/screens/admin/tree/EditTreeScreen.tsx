@@ -144,7 +144,7 @@ function EditTreeForm({ treeID }) {
       );
       return;
     }
-    navigation.navigate("EditDiameterScanner", { imageUri: image, treeID: treeID });
+    navigation.navigate("EditDiameterScannerScreen", { imageUri: image, treeID: treeID });
   };
 
  const handleSubmit = (currentTreeID: string) => {

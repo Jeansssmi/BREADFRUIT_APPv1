@@ -41,65 +41,70 @@ export default function AddUserScreen() {
     if (result.didCancel || !result.assets || result.assets.length === 0) return;
     setImage(result.assets[0].uri || null);
   };
+const handleSubmit = async () => {
+  if (!name || !email || !password || !confirmPassword || !role) {
+    setNotificationMessage('All fields are required.');
+    setNotificationType('error');
+    setNotificationVisible(true);
+    return;
+  }
 
-  const handleSubmit = async () => {
-    if (!name || !email || !password || !confirmPassword || !role) {
-      setNotificationMessage('All fields are required.');
-      setNotificationType('error');
-      setNotificationVisible(true);
-      return;
+  if (password !== confirmPassword) {
+    setNotificationMessage('Passwords do not match.');
+    setNotificationType('error');
+    setNotificationVisible(true);
+    return;
+  }
+
+  setLoading(true);
+
+  try {
+    // Save current admin credentials
+    const admin = auth().currentUser;
+    const adminEmail = admin?.email;
+
+    // ✅ You must know or store the admin password securely
+    const adminPassword = 'yourAdminPassword'; // Replace this with the actual admin password (can be stored securely using react-native-keychain)
+
+    // Create new user
+    const newUser = await auth().createUserWithEmailAndPassword(email, password);
+
+    let downloadURL = '';
+    if (image) {
+      const fileName = `images/user-profile/${Date.now()}_${image.split('/').pop()}`;
+      const reference = storage().ref(fileName);
+      await reference.putFile(image.replace('file://', ''));
+      downloadURL = await reference.getDownloadURL();
     }
-    if (password !== confirmPassword) {
-      setNotificationMessage('Passwords do not match.');
-      setNotificationType('error');
-      setNotificationVisible(true);
-      return;
-    }
 
-    setLoading(true);
+    // Store user details in Firestore
+    await firestore().collection('users').doc(newUser.user.uid).set({
+      uid: newUser.user.uid,
+      name,
+      email,
+      role,
+      image: downloadURL,
+      status: 'verified',
+      joined: firestore.FieldValue.serverTimestamp(),
+    });
 
-    try {
-      // ✅ Correct syntax for react-native-firebase
-      const userCredential = await auth().createUserWithEmailAndPassword(email, password);
-      const user = userCredential.user;
+    // ✅ Log out new user and restore admin session
+    await auth().signOut();
+    await auth().signInWithEmailAndPassword(adminEmail, adminPassword);
 
-      let downloadURL = '';
-      if (image) {
-        const fileName = `images/user-profile/${Date.now()}_${image.split('/').pop()}`;
-        // ✅ Correct syntax for react-native-firebase
-        const reference = storage().ref(fileName);
-        await reference.putFile(image.replace('file://', ''));
-        downloadURL = await reference.getDownloadURL();
-      }
+    setNotificationMessage('User created successfully.');
+    setNotificationType('success');
+    setNotificationVisible(true);
+  } catch (error) {
+    console.error(error);
+    setNotificationMessage('Registration failed: ' + error.message);
+    setNotificationType('error');
+    setNotificationVisible(true);
+  } finally {
+    setLoading(false);
+  }
+};
 
-      // ✅ Correct syntax for react-native-firebase
-      await user.updateProfile({
-        displayName: name,
-        photoURL: downloadURL || null,
-      });
-
-      // ✅ Correct syntax for react-native-firebase (using .set with UID)
-      await firestore().collection('users').doc(user.uid).set({
-        uid: user.uid,
-        name,
-        email,
-        role,
-        image: downloadURL,
-        status: 'verified',
-        joined: firestore.FieldValue.serverTimestamp(),
-      });
-
-      setNotificationMessage('User created successfully.');
-      setNotificationType('success');
-      setNotificationVisible(true);
-    } catch (error: any) {
-      setNotificationMessage('Registration failed: ' + error.message);
-      setNotificationType('error');
-      setNotificationVisible(true);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   return (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
