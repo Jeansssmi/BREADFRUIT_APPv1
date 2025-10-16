@@ -35,7 +35,7 @@ export default function PendingTreesScreen() {
               tree={item}
               // ✅ FIX: Navigate to the consolidated details screen for any pending tree.
               // The details screen itself will decide which buttons to show.
-              onPress={() => navigation.navigate('PendingDetails', { treeID: item.id })}
+              onPress={() => navigation.navigate('PendingApprovalScreen', { treeID: item.id })}
             />
           )}
           // ... (rest of FlatList)

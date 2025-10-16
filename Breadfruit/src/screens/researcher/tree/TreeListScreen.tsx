@@ -15,7 +15,10 @@ const TreeListItem = ({ tree, onPress }: { tree: any, onPress: () => void }) => 
                     <Text style={styles.treeIdText}>{tree.treeID}</Text>
                     <View style={styles.locationContainer}>
                         <MaterialCommunityIcons name="map-marker" size={14} color="#666" />
-                        <Text style={styles.locationText}>{tree.city}</Text>
+                        <Text style={styles.locationText}>
+                          {tree.barangay ? `${tree.barangay}, ${tree.city}` : tree.city}
+                        </Text>
+
                     </View>
                 </View>
             </Card.Content>

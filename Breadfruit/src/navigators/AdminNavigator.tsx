@@ -13,10 +13,11 @@ import ProfileScreen from "../screens/shared/ProfileScreen";
 import EditProfileScreen from "../screens/shared/EditProfileScreen";
 import NotificationPreferencesScreen from "../screens/shared/NotificationPreferencesScreen";
 import AboutHelpScreen from "../screens/shared/AboutHelpScreen";
-import AddTreeScreen from "../screens/admin/tree/AddTreeScreen";
+import AdminAddTreeScreen from "../screens/admin/tree/AdminAddTreeScreen";
 import SearchScreen from "../screens/admin/tree/SearchScreen";
 import EditTreeScreen from "../screens/admin/tree/EditTreeScreen";
-import PendingTreesScreen from "../screens/admin/tree/PendingTreesScreen";
+import AdminPendingTreesScreen from "../screens/admin/tree/AdminPendingTreesScreen";
+import PendingApprovalScreen from "../screens/admin/tree/PendingApprovalScreen";
 import TreeDetailsScreen from "../screens/admin/tree/TreeDetailsScreen";
 import TreeListScreen from "../screens/admin/tree/TreeListScreen";
 import TrackedTreesScreen from "../screens/admin/tree/TrackedTreesScreen";
@@ -43,7 +44,7 @@ function TreeStack() {
     <TreeStackNav.Navigator screenOptions={{ headerShown: false }}>
       <TreeStackNav.Screen name="TreeManagement" component={TreeManagementScreen} />
 
-      <TreeStackNav.Screen name="TreeList" component={TreeListScreen} />
+
     </TreeStackNav.Navigator>
   );
 }
@@ -168,12 +169,13 @@ export default function AdminNavigator() {
       <MainStack.Screen name="TrackedTreesScreen" component={TrackedTreesScreen} options={{ headerTitle: "Tracked Trees" }} />
       <MainStack.Screen name="EditTree" component={EditTreeScreen} options={{ headerTitle: "Edit Tree" }} />
        <MainStack.Screen name="TreeDetails" component={TreeDetailsScreen} options={{ headerTitle: " Tree Details" }} />
-       <MainStack.Screen name="AddTree" component={AddTreeScreen} options={{ headerTitle: "Add Tree" }} />
+       <MainStack.Screen name="AddTree" component={AdminAddTreeScreen} options={{ headerTitle: "Add Tree" }} />
       <MainStack.Screen name="Search" component={SearchScreen} options={{ headerShown: false }} />
      <MainStack.Screen name="EditUser" component={EditUserScreen} options={{ headerTitle: "Edit User" }} />
       <MainStack.Screen name="DiameterScannerScreen" component={DiameterScannerScreen} options={{ headerTitle: "Scan Diameter" }} />
      <MainStack.Screen name="EditDiameterScannerScreen" component={EditDiameterScannerScreen} options={{ headerTitle: "Re-Scan Diameter" }} />
-     <MainStack.Screen name="PendingTrees" component={PendingTreesScreen} options={{ headerTitle: "Pending Trees" }} />
+     <MainStack.Screen name="PendingApprovalScreen" component={PendingApprovalScreen} options={{ headerTitle: "Pending Approval Trees" }} />
+     <MainStack.Screen name="PendingTrees" component={AdminPendingTreesScreen} options={{ headerTitle: "Pending Trees" }} />
       <MainStack.Screen
         name="ResearchersScreen"
         component={UserListScreen}

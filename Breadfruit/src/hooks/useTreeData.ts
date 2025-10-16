@@ -8,7 +8,6 @@ type FetchType =
   | { mode: 'single'; treeID: string };
 
 export const useTreeData = (fetchConfig: FetchType = { mode: 'all' }) => {
-  // ✅ FIX: State is initialized as an empty array. The reference to 'cachedTrees' is removed.
   const [trees, setTrees] = useState<Tree[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -17,7 +16,6 @@ export const useTreeData = (fetchConfig: FetchType = { mode: 'all' }) => {
     const treesRef = firestore().collection('trees');
     setIsLoading(true);
 
-    // This handles fetching a single document
     if (fetchConfig.mode === 'single') {
       const fetchSingle = async () => {
         try {
@@ -35,40 +33,38 @@ export const useTreeData = (fetchConfig: FetchType = { mode: 'all' }) => {
         }
       };
       fetchSingle();
-      return; // End the effect here for single fetches
+      return;
     }
 
-    // This section handles real-time listeners for lists of trees
+    // ✅ FIXED QUERY LOGIC
     let query: FirebaseFirestoreTypes.Query = treesRef;
+
     if (fetchConfig.mode === 'all') {
       query = query.where('status', '==', 'verified');
     } else if (fetchConfig.mode === 'criteria') {
-      if (fetchConfig.field !== 'status') {
-        query = query.where('status', '==', 'verified');
-      }
       query = query.where(fetchConfig.field, fetchConfig.operator, fetchConfig.value);
     }
 
-    const unsubscribe = query.onSnapshot(
-      (snapshot) => {
-        const liveTrees = snapshot.docs.map(
-          (doc) => ({ treeID: doc.id, ...doc.data() } as Tree)
+     const unsubscribe = query.onSnapshot(
+          (snapshot) => {
+            const liveTrees = snapshot.docs.map(
+              (doc) => ({
+                // ✅ FIX: Use 'id' for the document ID and keep 'treeID' for the BFT field.
+                id: doc.id,
+                ...doc.data(),
+              } as Tree)
+            );
+            setTrees(liveTrees);
+            setError(null);
+            setIsLoading(false);
+          },
+          (err) => {
+            // ... (error handling)
+          }
         );
-        setTrees(liveTrees);
-        setError(null);
-        setIsLoading(false);
-      },
-      (err) => {
-        console.error('Realtime tree listener error:', err);
-        setError(err.message);
-        setIsLoading(false);
-      }
-    );
 
-    // Cleanup function to unsubscribe from the listener when the component unmounts
     return () => unsubscribe();
-
-  }, [JSON.stringify(fetchConfig)]); // Re-run the effect if the query changes
+  }, [JSON.stringify(fetchConfig)]);
 
   return { trees, isLoading, error };
 };

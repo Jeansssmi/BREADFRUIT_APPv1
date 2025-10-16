@@ -5,16 +5,14 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 
-// ✅ Correct import for react-native-firebase
 import firestore from '@react-native-firebase/firestore';
 
 import { LoadingAlert, NotificationAlert } from '@/components/NotificationModal';
 import { useTreeData } from '@/hooks/useTreeData';
 
 export default function TreeDetailsScreen() {
-  const route = useRoute();
-  const navigation = useNavigation();
-  // @ts-ignore
+  const route = useRoute<any>();
+  const navigation = useNavigation<any>();
   const { treeID } = route.params;
   const { trees, isLoading } = useTreeData({ mode: 'single', treeID: treeID.toString() });
   const tree = trees[0];
@@ -24,29 +22,62 @@ export default function TreeDetailsScreen() {
   const [notificationMessage, setNotificationMessage] = useState('');
   const [notificationType, setNotificationType] = useState<'success' | 'error' | 'info'>('info');
 
-  const handleDelete = async (currentTreeID: string) => {
-    Alert.alert('Confirm Deletion', 'Are you sure you want to delete this tree?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: async () => {
-          setLoading(true);
-          try {
-            // ✅ Correct syntax for react-native-firebase
-            await firestore().collection('trees').doc(currentTreeID).delete();
+  // This helper function safely formats numbers or returns 'N/A'
+  const safeToFixed = (value: any, digits = 2) =>
+    typeof value === 'number' ? value.toFixed(digits) : 'N/A';
+
+const handleDelete = async (currentTreeID: string) => {
+  Alert.alert('Confirm Deletion', 'Are you sure you want to delete this tree?', [
+    { text: 'Cancel', style: 'cancel' },
+    {
+      text: 'Delete',
+      style: 'destructive',
+      onPress: async () => {
+        setLoading(true);
+        try {
+          const treeRef = firestore().collection('trees').doc(currentTreeID);
+          const treeDoc = await treeRef.get();
+
+          if (!treeDoc.exists) {
+            setNotificationMessage('Tree not found.');
+            setNotificationType('error');
             setNotificationVisible(true);
-            setNotificationMessage('Successfully deleted.');
-            setNotificationType('success');
-          } catch (error) {
-            console.error(error);
-          } finally {
-            setLoading(false);
-          };
+            return;
+          }
+
+          const treeData = treeDoc.data();
+
+          // 🧹 Delete the image in Firebase Storage (if it exists)
+          if (treeData?.image) {
+            try {
+              const imageRef = storage().refFromURL(treeData.image);
+              await imageRef.delete();
+              console.log('Deleted image from storage.');
+            } catch (err) {
+              console.log('No image to delete or already deleted.');
+            }
+          }
+
+          // 🧹 Delete the Firestore document
+          await treeRef.delete();
+
+          // ✅ Notify and auto-navigate back
+          setNotificationMessage('Tree deleted successfully.');
+          setNotificationType('success');
+          setNotificationVisible(true);
+        } catch (error) {
+          console.error(error);
+          setNotificationMessage('Failed to delete tree.');
+          setNotificationType('error');
+          setNotificationVisible(true);
+        } finally {
+          setLoading(false);
         }
       },
-    ])
-  }
+    },
+  ]);
+};
+
 
   const handleApprove = (currentTreeID: string) => {
     Alert.alert('Confirm Approve', 'Are you sure you want to approve this tree?', [
@@ -57,11 +88,10 @@ export default function TreeDetailsScreen() {
         onPress: async () => {
           setLoading(true);
           try {
-            // ✅ Correct syntax for react-native-firebase
             await firestore().collection('trees').doc(currentTreeID).update({ status: 'verified' });
-            setNotificationVisible(true);
             setNotificationMessage('Successfully approved!');
             setNotificationType('success');
+            setNotificationVisible(true);
           } catch(error) {
             console.error(error);
           } finally {
@@ -72,13 +102,13 @@ export default function TreeDetailsScreen() {
     ])
   }
 
-  // ... Your JSX and styles remain the same
   if (isLoading) {
-    return <View style={styles.center}><ActivityIndicator size="large" color='#2ecc71' /></View>;
+    return <View style={styles.center}><ActivityIndicator size="large" color="#2ecc71" /></View>;
   }
   if (!tree) {
     return <View style={styles.errorContainer}><Text>Tree not found</Text></View>;
   }
+
   return (
     <ScrollView contentContainerStyle={styles.scrollContainer}>
       <View style={styles.container}>
@@ -87,14 +117,16 @@ export default function TreeDetailsScreen() {
           visible={notificationVisible}
           message={notificationMessage}
           type={notificationType}
-          onClose={() => setNotificationVisible(false)}
+          onClose={() => {
+            setNotificationVisible(false);
+            // After success, navigate back
+            if (notificationType === 'success') {
+              navigation.goBack();
+            }
+          }}
         />
         {tree.image ? (
-          <Image
-            source={{ uri: tree.image }}
-            style={styles.treeImage}
-            resizeMode="cover"
-          />
+          <Image source={{ uri: tree.image }} style={styles.treeImage} resizeMode="cover" />
         ) : (
           <View style={[styles.treeImage, styles.imagePlaceholder]}>
             <MaterialIcons name="no-photography" size={40} color="#666" />
@@ -102,9 +134,7 @@ export default function TreeDetailsScreen() {
         )}
         <Card style={styles.detailsCard}>
           <Card.Content>
-            <Text variant="titleLarge" style={styles.title}>
-              {tree.treeID}
-            </Text>
+            <Text variant="titleLarge" style={styles.title}>{tree.treeID}</Text>
             <View style={styles.detailRow}>
               <MaterialIcons name="location-on" size={20} color="#2ecc71" />
               <Text style={styles.detailText}>{tree.city}, {tree.barangay}</Text>
@@ -116,12 +146,13 @@ export default function TreeDetailsScreen() {
             <View style={styles.statsContainer}>
               <View style={styles.statItem}>
                   <Text style={styles.statLabel}>Diameter</Text>
-                  <Text style={styles.statValue}>{tree.diameter.toFixed(2)}m</Text>
+                  {/* ✅ FIX: Used the safeToFixed helper to prevent crash */}
+                  <Text style={styles.statValue}>{safeToFixed(tree.diameter)}m</Text>
               </View>
               <View style={styles.statItem}>
                 <Text style={styles.statLabel}>Tracked Date</Text>
                 <Text style={styles.statValue}>
-                  {new Date(tree.dateTracked).toLocaleDateString()}
+                  {tree.dateTracked?.toDate ? tree.dateTracked.toDate().toLocaleDateString() : 'N/A'}
                 </Text>
               </View>
               <View style={styles.statItem}>
@@ -131,9 +162,9 @@ export default function TreeDetailsScreen() {
             </View>
             <View style={styles.coordinateContainer}>
               <MaterialIcons name="map" size={20} color="#2ecc71" />
+              {/* ✅ FIX: Also applied safeToFixed to coordinates for robustness */}
               <Text style={styles.coordinateText}>
-                {tree.coordinates.latitude.toFixed(6)},
-                {tree.coordinates.longitude.toFixed(6)}
+                {safeToFixed(tree.coordinates?.latitude, 6)}, {safeToFixed(tree.coordinates?.longitude, 6)}
               </Text>
             </View>
           </Card.Content>
@@ -163,9 +194,11 @@ export default function TreeDetailsScreen() {
     </ScrollView>
   );
 }
+
 const styles = StyleSheet.create({
   scrollContainer: { flexGrow: 1 },
   container: { flex: 1, padding: 16, backgroundColor: '#ffffff' },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   errorContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 },
   treeImage: { height: 300, borderRadius: 12, marginBottom: 16 },
   imagePlaceholder: { backgroundColor: '#eee', justifyContent: 'center', alignItems: 'center' },

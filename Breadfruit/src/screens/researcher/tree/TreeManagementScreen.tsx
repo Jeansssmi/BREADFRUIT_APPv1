@@ -1,8 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 // ✅ 1. Import Appbar
 import { Card, FAB, Text, Appbar } from 'react-native-paper';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation , useFocusEffect  } from '@react-navigation/native';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import firestore from '@react-native-firebase/firestore';
 
@@ -16,9 +16,11 @@ export default function TreeManagementScreen() {
   const fetchAllCounts = async () => {
     setRefreshing(true);
     try {
-      const allTreesSnap = await firestore().collection('trees').get();
-      setAllTrees(allTreesSnap.size);
+      // ✅ Only count VERIFIED trees (those displayed on the map)
+      const verifiedSnap = await firestore().collection('trees').where("status", "==", "verified").get();
+      setAllTrees(verifiedSnap.size);
 
+      // ✅ Count PENDING trees (waiting for approval)
       const pendingSnap = await firestore().collection('trees').where("status", "==", "pending").get();
       setPendings(pendingSnap.size);
 
@@ -29,11 +31,36 @@ export default function TreeManagementScreen() {
     }
   };
 
+ // ✅ Real-time updates for verified + pending trees only
   useEffect(() => {
-    // Refresh data when the screen comes into focus
-    const unsubscribe = navigation.addListener('focus', fetchAllCounts);
-    return unsubscribe;
-  }, [navigation]);
+    const unsubscribeVerified = firestore()
+      .collection('trees')
+      .where('status', '==', 'verified')
+      .onSnapshot(snap => setAllTrees(snap.size));
+
+    const unsubscribePending = firestore()
+      .collection('trees')
+      .where('status', '==', 'pending')
+      .onSnapshot(snap => setPendings(snap.size));
+
+    return () => {
+      unsubscribeVerified();
+      unsubscribePending();
+    };
+  }, []);
+
+    // ✅ Run once on mount
+    useEffect(() => {
+      fetchAllCounts();
+    }, []);
+
+    // ✅ Auto-refresh when returning to this screen
+    useFocusEffect(
+      useCallback(() => {
+        fetchAllCounts();
+      }, [])
+    );
+
 
   return (
     <View style={styles.container}>
@@ -59,32 +86,33 @@ export default function TreeManagementScreen() {
             </View>
 
             <View style={styles.gridContainer}>
-                <Pressable style={styles.gridItem} onPress={() => navigation.navigate('TreeList')}>
-                    <Card style={[styles.card, styles.primaryCard]}>
-                        <Card.Content>
-                            <View style={styles.cardHeader}>
-                                <MaterialCommunityIcons name="forest" size={20} color="#2ecc71" />
-                                <Text style={styles.cardTitle}>Trees Tracked</Text>
-                            </View>
-                            <Text style={styles.cardValue}>{allTrees}</Text>
-                        </Card.Content>
-                    </Card>
-                </Pressable>
+                 {/* ✅ Only VERIFIED trees counted here */}
+                          <Pressable style={styles.gridItem} onPress={() => navigation.navigate('TreeList')}>
+                            <Card style={[styles.card, styles.primaryCard]}>
+                              <Card.Content>
+                                <View style={styles.cardHeader}>
+                                  <MaterialCommunityIcons name="forest" size={20} color="#2ecc71" />
+                                  <Text style={styles.cardTitle}>Trees Tracked</Text>
+                                </View>
+                                <Text style={styles.cardValue}>{allTrees}</Text>
+                              </Card.Content>
+                            </Card>
+                          </Pressable>
 
-                <Pressable style={styles.gridItem} onPress={() => navigation.navigate('PendingTrees')}>
-                    <Card style={styles.card}>
-                        <Card.Content>
-                            <View style={styles.cardHeader}>
-                                <MaterialCommunityIcons name="clock-time-three-outline" size={20} color="#2ecc71" />
-                                <Text style={styles.cardTitle}>Pending Approvals</Text>
-                            </View>
-                            <Text style={styles.cardValue}>{pendings}</Text>
-                        </Card.Content>
-                    </Card>
-                </Pressable>
-            </View>
-        </ScrollView>
-
+                  {/* ✅ Only PENDING trees counted here */}
+                         <Pressable style={styles.gridItem} onPress={() => navigation.navigate('PendingTrees')}>
+                           <Card style={styles.card}>
+                             <Card.Content>
+                               <View style={styles.cardHeader}>
+                                 <MaterialCommunityIcons name="clock-time-three-outline" size={20} color="#2ecc71" />
+                                 <Text style={styles.cardTitle}>Pending Approvals</Text>
+                               </View>
+                               <Text style={styles.cardValue}>{pendings}</Text>
+                             </Card.Content>
+                           </Card>
+                         </Pressable>
+                       </View>
+                     </ScrollView>
         <FAB
             icon="plus" style={styles.fab} color="white"
             onPress={() => navigation.navigate('AddTree')}

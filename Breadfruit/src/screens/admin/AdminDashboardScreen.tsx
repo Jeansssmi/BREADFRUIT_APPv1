@@ -7,7 +7,7 @@ import {
   View,
 } from "react-native";
 import { Card, Text, Appbar } from "react-native-paper";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation , useFocusEffect} from "@react-navigation/native";
 import MaterialCommunityIcons from "react-native-vector-icons/MaterialCommunityIcons";
 import firestore from "@react-native-firebase/firestore";
 
@@ -20,37 +20,51 @@ export default function AdminDashboardScreen() {
   const [pendingUsers, setPendingUsers] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
 
-  // ✅ Fetch dashboard statistics
-  const fetchAllCounts = useCallback(async () => {
-    setRefreshing(true);
-    try {
-      const treesSnap = await firestore().collection("trees").get();
-      setAllTrees(treesSnap.size);
+   // ✅ Fetch dashboard statistics
+    const fetchAllCounts = useCallback(async () => {
+      setRefreshing(true);
+      try {
+        // ✅ Only trees that are approved/verified (those displayed on the map)
+        const treesSnap = await firestore()
+          .collection("trees")
+          .where("status", "==", "verified")
+          .get();
+        setAllTrees(treesSnap.size);
 
-      const usersSnap = await firestore().collection("users").get();
-      setAllUsers(usersSnap.size);
+        // ✅ All users
+        const usersSnap = await firestore().collection("users").get();
+        setAllUsers(usersSnap.size);
 
-      const researcherSnap = await firestore()
-        .collection("users")
-        .where("role", "==", "researcher")
-        .get();
-      setResearchers(researcherSnap.size);
+        // ✅ Researchers
+        const researcherSnap = await firestore()
+          .collection("users")
+          .where("role", "==", "researcher")
+          .get();
+        setResearchers(researcherSnap.size);
 
-      const pendingSnap = await firestore()
-        .collection("users")
-        .where("status", "==", "pending")
-        .get();
-      setPendingUsers(pendingSnap.size);
-    } catch (error) {
-      console.error("Error fetching counts: ", error);
-    } finally {
-      setRefreshing(false);
-    }
-  }, []);
+        // ✅ Pending Users
+        const pendingSnap = await firestore()
+          .collection("users")
+          .where("status", "==", "pending")
+          .get();
+        setPendingUsers(pendingSnap.size);
+      } catch (error) {
+        console.error("Error fetching counts: ", error);
+      } finally {
+        setRefreshing(false);
+      }
+    }, []);
 
   useEffect(() => {
     fetchAllCounts();
   }, [fetchAllCounts]);
+
+   // ✅ Auto-refresh when returning to this screen
+   useFocusEffect(
+     useCallback(() => {
+       fetchAllCounts();
+     }, [])
+   );
 
   return (
     <View style={styles.container}>

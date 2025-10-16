@@ -11,11 +11,15 @@ export default function SearchScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const navigation = useNavigation();
 
+  // ✅ Filter by city, barangay, or treeID
   const filteredTrees = useMemo(() => {
-    if (!searchQuery) return [];
-    return trees.filter(tree => 
-      tree.city.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      tree.treeID.toString().includes(searchQuery.toLowerCase())
+    if (!searchQuery.trim()) return trees;
+    const query = searchQuery.toLowerCase();
+    return trees.filter(
+      tree =>
+        tree.city?.toLowerCase().includes(query) ||
+        tree.barangay?.toLowerCase().includes(query) ||
+        tree.treeID?.toLowerCase().includes(query)
     );
   }, [searchQuery, trees]);
 

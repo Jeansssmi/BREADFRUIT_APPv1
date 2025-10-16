@@ -9,49 +9,40 @@ import {
   Platform,
   PermissionsAndroid,
   Alert,
-  ActionSheetIOS,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Button, Text, TextInput, Menu, Appbar} from "react-native-paper";
+import { Button, Text, TextInput, Menu } from "react-native-paper";
 import MaterialIcons from "react-native-vector-icons/MaterialIcons";
 import Geolocation from "react-native-geolocation-service";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import { launchCamera, launchImageLibrary } from "react-native-image-picker";
-
-import auth from '@react-native-firebase/auth';
-import firestore from '@react-native-firebase/firestore';
-import functions from '@react-native-firebase/functions';
-import storage from '@react-native-firebase/storage';
-
+import auth from "@react-native-firebase/auth";
+import firestore from "@react-native-firebase/firestore";
+import storage from "@react-native-firebase/storage";
 import barangayData from "@/constants/barangayData";
-
+import { useAuth } from "@/context/AuthContext";
 const FRUIT_STATUS_OPTIONS = ["none", "unripe", "ripe"];
 const CITY_OPTIONS = Object.keys(barangayData);
 
 export default function AddTreeScreen() {
-
-
   const navigation = useNavigation();
   const route = useRoute();
-  const trackedBy = route.params?.trackedBy || null;
-
+  const { user: currentUser } = useAuth();
   const [image, setImage] = useState<string | null>(route.params?.imageUri || null);
   const [diameterInput, setDiameterInput] = useState(route.params?.diameter?.toString() || "");
   const [latitudeInput, setLatitudeInput] = useState<string>("");
   const [longitudeInput, setLongitudeInput] = useState<string>("");
-
   const [city, setCity] = useState("");
   const [barangay, setBarangay] = useState("");
   const [fruitStatus, setFruitStatus] = useState("none");
-
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
 
   const [showStatusMenu, setShowStatusMenu] = useState(false);
   const [cityOptionsMenuVisible, setCityOptionsMenuVisible] = useState(false);
   const [barangayOptionsMenuVisible, setBarangayOptionsMenuVisible] = useState(false);
-
   const BARANGAY_OPTIONS = barangayData[city] || [];
+  const [heightInput, setHeightInput] = useState("");
 
   useEffect(() => {
     if (route.params?.diameter) {
@@ -59,6 +50,15 @@ export default function AddTreeScreen() {
     }
   }, [route.params?.diameter]);
 
+  const handleNavigateToScanner = () => {
+    if (!image) {
+      Alert.alert("Image Required", "Please select an image first.");
+      return;
+    }
+    navigation.navigate("DiameterScannerScreen", { imageUri: image });
+  };
+
+  // ✅ Request and Get Location
   const requestLocationPermission = async () => {
     try {
       if (Platform.OS === "android") {
@@ -86,6 +86,7 @@ export default function AddTreeScreen() {
       Alert.alert("Permission Denied", "Location permission is required.");
       return;
     }
+
     setLoading(true);
     Geolocation.getCurrentPosition(
       (position) => {
@@ -102,8 +103,9 @@ export default function AddTreeScreen() {
     );
   };
 
+  // ✅ Image selection
   const handleImageSelection = () => {
-    const options = { mediaType: 'photo' as const, quality: 0.8 };
+    const options = { mediaType: "photo" as const, quality: 0.8 };
     Alert.alert("Select Image", "Choose an option", [
       { text: "Take Photo", onPress: () => launchCamera(options, handleImageResponse) },
       { text: "Choose from Gallery", onPress: () => launchImageLibrary(options, handleImageResponse) },
@@ -122,109 +124,84 @@ export default function AddTreeScreen() {
     }
   };
 
- const handleRemoveImage = () => setImage(null);
+  const handleRemoveImage = () => setImage(null);
 
-const uploadImageAndGetURL = async (uri: string): Promise<string | null> => {
-  if (!uri.startsWith('file://')) {
-    // If it's already a web URL, no need to re-upload
-    return uri;
-  }
 
-  const fileName = `trees/${Date.now()}.jpg`;
-      // ✅ Correct syntax for react-native-firebase
-      const reference = storage().ref(fileName);
-      // ✅ Correct syntax for react-native-firebase
-      await reference.putFile(uri.replace('file://', ''));
-      return reference.getDownloadURL();
-};
-  // --- THIS IS THE CORRECT AND ONLY 'handleSave' FUNCTION ---
-  const handleSave = async () => {
-    if (!city || !barangay || !diameterInput || !latitudeInput || !longitudeInput) {
-      Alert.alert("Validation Error", "Please fill all required fields before saving.");
-      return;
-    }
-
+  const handleSaveTree = async () => {
     setSaving(true);
-
     try {
-      const currentUser = auth().currentUser;
       if (!currentUser) {
-        Alert.alert("Authentication Required", "You must be logged in.");
+        Alert.alert("Authentication Error", "You must be logged in.");
         setSaving(false);
         return;
       }
 
-      let imageUrl: string | null = null;
+      // ✅ FIX: Determine tree status based on user's role
+      const userRole = currentUser.role;
+      const treeStatus = userRole === 'researcher' ? 'pending' : 'verified';
+
+      let imageUrl = "";
       if (image) {
-        imageUrl = await uploadImageAndGetURL(image);
+        const fileName = `images/trees/${currentUser.uid}_${Date.now()}.jpg`;
+        const reference = storage().ref(fileName);
+        const filePath = image.startsWith('file://') ? image.replace('file://', '') : image;
+        await reference.putFile(filePath);
+        imageUrl = await reference.getDownloadURL();
       }
 
-      const assignedTrackedBy = trackedBy || currentUser.uid;
-
-      const treeData = {
+      const newTree = {
+        treeID: `BFT-${new Date().getFullYear()}-${Math.floor(Math.random() * 100000).toString().padStart(6, "0")}`,
         city,
         barangay,
-        diameter: parseFloat(diameterInput),
-        dateTracked: new Date().toISOString(),
+        coordinates: new firestore.GeoPoint(parseFloat(latitudeInput) || 0, parseFloat(longitudeInput) || 0),
+        diameter: parseFloat(diameterInput) || 0,
+        height: parseFloat(heightInput) || 0,
         fruitStatus,
-        coordinates: new firestore.GeoPoint(parseFloat(latitudeInput), parseFloat(longitudeInput)),
         image: imageUrl,
-        status: "active",
-        trackedBy: assignedTrackedBy,
+        trackedBy: currentUser.uid, // Use UID for tracking
+        dateTracked: firestore.FieldValue.serverTimestamp(),
+        status: treeStatus, // Use the determined status
       };
 
-      const addNewTree = functions().httpsCallable("addNewTree");
-      const result = await addNewTree(treeData);
+      const docRef = await firestore().collection("trees").add(newTree);
 
-      if (result?.data?.success) {
-        Alert.alert("Success", "Tree added successfully!", [
-          {
-            text: "OK",
-            onPress: () => {
-              // ✅ Send a refresh signal back
-              navigation.navigate({
-                name: "TrackedTrees",
-                params: { shouldRefresh: true },
-                merge: true,
-              });
-              navigation.goBack();
-            },
-          },
-        ]);
-      } else {
-        Alert.alert("Error", result?.data?.message || "An unexpected server error occurred.");
+      // ✅ FIX: Navigate based on user role
+      if (userRole === 'researcher') {
+        Alert.alert("Success", "Tree submitted for approval!");
+        navigation.navigate("PendingTrees");
+      } else { // Admin
+        Alert.alert("Success", "Tree added successfully!");
+        navigation.navigate("Map", {
+          lat: parseFloat(latitudeInput),
+          lng: parseFloat(longitudeInput),
+          treeID: docRef.id,
+        });
       }
+
     } catch (error: any) {
       console.error("Error saving tree:", error);
-      Alert.alert("Error", error.message || "Failed to save tree data.");
+      Alert.alert("Error", `[${error.code}] ${error.message}`);
     } finally {
       setSaving(false);
     }
   };
 
-  const handleNavigateToScanner = () => {
-    if (!image) {
-      Alert.alert("Image Required", "Please select an image first.");
-      return;
-    }
-    navigation.navigate("DiameterScannerScreen", { imageUri: image });
-  };
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-      style={{ flex: 1 }}
-    >
+    <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
       <SafeAreaView style={styles.safeArea}>
-
         <ScrollView contentContainerStyle={styles.scrollContainer} keyboardShouldPersistTaps="handled">
-
-
+          {/* Image Upload Section */}
           <TouchableOpacity style={styles.imageContainer} onPress={handleImageSelection}>
             {image ? (
               <>
                 <Image source={{ uri: image }} style={styles.image} />
-                <Button mode="contained" onPress={handleRemoveImage} style={styles.removeButton} labelStyle={{fontSize: 12}}>
+                <Button
+                  mode="contained"
+                  onPress={handleRemoveImage}
+                  style={styles.removeButton}
+                  labelStyle={{ fontSize: 12 }}
+                >
                   Change
                 </Button>
               </>
@@ -237,6 +214,7 @@ const uploadImageAndGetURL = async (uri: string): Promise<string | null> => {
             )}
           </TouchableOpacity>
 
+          {/* City & Barangay */}
           <View style={styles.row}>
             <View style={styles.halfWidth}>
               <Menu
@@ -258,12 +236,17 @@ const uploadImageAndGetURL = async (uri: string): Promise<string | null> => {
                 {CITY_OPTIONS.map((option) => (
                   <Menu.Item
                     key={option}
-                    onPress={() => { setCity(option); setBarangay(""); setCityOptionsMenuVisible(false); }}
+                    onPress={() => {
+                      setCity(option);
+                      setBarangay("");
+                      setCityOptionsMenuVisible(false);
+                    }}
                     title={option}
                   />
                 ))}
               </Menu>
             </View>
+
             <View style={styles.halfWidth}>
               <Menu
                 visible={barangayOptionsMenuVisible}
@@ -285,7 +268,10 @@ const uploadImageAndGetURL = async (uri: string): Promise<string | null> => {
                 {BARANGAY_OPTIONS.map((option) => (
                   <Menu.Item
                     key={option}
-                    onPress={() => { setBarangay(option); setBarangayOptionsMenuVisible(false); }}
+                    onPress={() => {
+                      setBarangay(option);
+                      setBarangayOptionsMenuVisible(false);
+                    }}
                     title={option}
                   />
                 ))}
@@ -293,10 +279,11 @@ const uploadImageAndGetURL = async (uri: string): Promise<string | null> => {
             </View>
           </View>
 
+          {/* Diameter, Fruit Status */}
           <View style={styles.row}>
             <View style={styles.halfWidth}>
               <TextInput
-                label="Diameter (cm)"
+                label="Diameter (m)"
                 value={diameterInput}
                 onChangeText={setDiameterInput}
                 placeholder="Scan to get value"
@@ -304,6 +291,7 @@ const uploadImageAndGetURL = async (uri: string): Promise<string | null> => {
                 mode="outlined"
               />
             </View>
+
             <View style={styles.halfWidth}>
               <Menu
                 visible={showStatusMenu}
@@ -324,7 +312,10 @@ const uploadImageAndGetURL = async (uri: string): Promise<string | null> => {
                 {FRUIT_STATUS_OPTIONS.map((option) => (
                   <Menu.Item
                     key={option}
-                    onPress={() => { setFruitStatus(option); setShowStatusMenu(false); }}
+                    onPress={() => {
+                      setFruitStatus(option);
+                      setShowStatusMenu(false);
+                    }}
                     title={option.charAt(0).toUpperCase() + option.slice(1)}
                   />
                 ))}
@@ -332,6 +323,7 @@ const uploadImageAndGetURL = async (uri: string): Promise<string | null> => {
             </View>
           </View>
 
+          {/* Location */}
           <View style={styles.coordinateGroup}>
             <View style={styles.row}>
               <TextInput
@@ -356,6 +348,7 @@ const uploadImageAndGetURL = async (uri: string): Promise<string | null> => {
             </TouchableOpacity>
           </View>
 
+          {/* Date */}
           <TextInput
             label="Date Tracked"
             value={new Date().toLocaleDateString()}
@@ -364,26 +357,14 @@ const uploadImageAndGetURL = async (uri: string): Promise<string | null> => {
             mode="outlined"
           />
 
-           {/* ✅ Display assigned trackedBy */}
-                    {trackedBy && (
-                      <View style={{ marginBottom: 10 }}>
-                        <Text style={{ color: "#2ecc71", fontWeight: "600" }}>
-                          Assigned to: {trackedBy}
-                        </Text>
-                      </View>
-                    )}
-
+          {/* Buttons */}
           <View style={styles.buttonContainer}>
-            <Button
-              mode="contained"
-              onPress={handleNavigateToScanner}
-              style={styles.primaryButton}
-            >
+            <Button mode="contained" onPress={handleNavigateToScanner} style={styles.primaryButton}>
               Scan Diameter
             </Button>
-             <Button
+            <Button
               mode="contained"
-              onPress={handleSave}
+              onPress={handleSaveTree}
               style={styles.secondaryButton}
               loading={saving}
             >
@@ -398,19 +379,7 @@ const uploadImageAndGetURL = async (uri: string): Promise<string | null> => {
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: "#fff" },
-// ✅ 3. Add styles for the Appbar
-  appbarHeader: {
-    backgroundColor: '#fff',
-    elevation: 0, // Remove shadow on Android
-  },
-  appbarTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
-  },
-
   scrollContainer: { padding: 20, flexGrow: 1 },
-  title: { fontSize: 24, fontWeight: "bold", marginBottom: 20, color: "#333", textAlign: 'center' },
   imageContainer: {
     height: 200,
     borderRadius: 12,
@@ -423,12 +392,7 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   image: { width: "100%", height: "100%" },
-  removeButton: {
-    position: "absolute",
-    top: 10,
-    right: 10,
-    backgroundColor: "rgba(0,0,0,0.5)",
-  },
+  removeButton: { position: "absolute", top: 10, right: 10, backgroundColor: "rgba(0,0,0,0.5)" },
   imagePlaceholder: { justifyContent: "center", alignItems: "center", gap: 8 },
   imageLabel: { color: "#2ecc71", fontSize: 16, fontWeight: "600" },
   imageHint: { fontSize: 12, color: "#666" },
@@ -437,11 +401,11 @@ const styles = StyleSheet.create({
   input: { backgroundColor: "#fff" },
   menuInput: { backgroundColor: "#fff" },
   coordinateGroup: {
-    backgroundColor: '#f9f9f9',
+    backgroundColor: "#f9f9f9",
     padding: 15,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#e0e0e0',
+    borderColor: "#e0e0e0",
     marginVertical: 10,
   },
   useLocationText: {
@@ -451,18 +415,7 @@ const styles = StyleSheet.create({
     marginTop: 10,
     textAlign: "right",
   },
-  buttonContainer: {
-    marginTop: 20,
-    gap: 12,
-  },
-  primaryButton: {
-    backgroundColor: "#2ecc71",
-    paddingVertical: 8,
-    borderRadius:100,
-  },
-  secondaryButton: {
-    backgroundColor: "#333",
-    paddingVertical: 8,
-    borderRadius:100,
-  },
+  buttonContainer: { marginTop: 20, gap: 12 },
+  primaryButton: { backgroundColor: "#2ecc71", paddingVertical: 8, borderRadius: 100 },
+  secondaryButton: { backgroundColor: "#333", paddingVertical: 8, borderRadius: 100 },
 });

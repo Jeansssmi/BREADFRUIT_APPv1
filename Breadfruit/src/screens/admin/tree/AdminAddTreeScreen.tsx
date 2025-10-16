@@ -38,6 +38,7 @@ export default function AddTreeScreen() {
 
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [hasSaved, setHasSaved] = useState(false);
 
   const [showStatusMenu, setShowStatusMenu] = useState(false);
   const [cityOptionsMenuVisible, setCityOptionsMenuVisible] = useState(false);
@@ -101,17 +102,46 @@ const getLocation = async () => {
       { enableHighAccuracy: true, timeout: 15000, maximumAge: 10000 }
     );
   };
-
+ const requestCameraPermission = async () => {
+    if (Platform.OS === 'android') {
+      try {
+        const granted = await PermissionsAndroid.request(
+          PermissionsAndroid.PERMISSIONS.CAMERA,
+          {
+            title: "Camera Permission",
+            message: "This app needs access to your camera to take photos.",
+            buttonPositive: "OK",
+            buttonNegative: "Cancel",
+          }
+        );
+        return granted === PermissionsAndroid.RESULTS.GRANTED;
+      } catch (err) {
+        console.warn(err);
+        return false;
+      }
+    }
+    return true; // For iOS, permissions are handled differently
+  };
   // ✅ Image Selection
   const handleImageSelection = () => {
-    const options = { mediaType: "photo" as const, quality: 0.8 };
-    Alert.alert("Select Image", "Choose an option", [
-      { text: "Take Photo", onPress: () => launchCamera(options, handleImageResponse) },
-      { text: "Choose from Gallery", onPress: () => launchImageLibrary(options, handleImageResponse) },
-      { text: "Cancel", style: "cancel" },
-    ]);
-  };
-
+     const options = { mediaType: "photo" as const, quality: 0.8 };
+     Alert.alert("Select Image", "Choose an option", [
+       {
+         text: "Take Photo",
+         onPress: async () => {
+           // ✅ FIX: Request permission before launching the camera
+           const hasPermission = await requestCameraPermission();
+           if (hasPermission) {
+             launchCamera(options, handleImageResponse);
+           } else {
+             Alert.alert("Permission Denied", "Camera permission is required to take photos.");
+           }
+         }
+       },
+       { text: "Choose from Gallery", onPress: () => launchImageLibrary(options, handleImageResponse) },
+       { text: "Cancel", style: "cancel" },
+     ]);
+   };
 
   const handleImageResponse = (response: any) => {
     if (response.didCancel) return;
@@ -125,14 +155,20 @@ const getLocation = async () => {
   };
 const handleRemoveImage = () => setImage(null);
 
-const handleSaveTree = async () => {
-  try {
-    setLoading(true);
-    const currentUser = auth().currentUser;
 
+
+const handleSaveTree = async () => {
+  if (hasSaved) return; // stop multiple saves
+
+  try {
+    setSaving(true);
+    setHasSaved(true);
+
+    const currentUser = auth().currentUser;
     if (!currentUser) {
       Alert.alert("Authentication Error", "You must be logged in to add a tree.");
-      setLoading(false);
+      setSaving(false);
+      setHasSaved(false);
       return;
     }
 
@@ -143,16 +179,15 @@ const handleSaveTree = async () => {
       const fileName = `images/trees/${currentUser.uid}_${Date.now()}.jpg`;
       const reference = storage().ref(fileName);
 
-      console.log("Uploading to:", fileName);
-
-      // Remove 'file://' prefix if exists
-      const filePath = image.startsWith('file://') ? image.replace('file://', '') : image;
+      const filePath = image.startsWith("file://")
+        ? image.replace("file://", "")
+        : image;
 
       await reference.putFile(filePath);
       imageUrl = await reference.getDownloadURL();
     }
 
-    // ✅ Prepare and save tree data
+    // ✅ Prepare new tree data
     const newTree = {
       treeID: `BFT-${new Date().getFullYear()}-${Math.floor(Math.random() * 100000)
         .toString()
@@ -175,19 +210,34 @@ const handleSaveTree = async () => {
     const docRef = await firestore().collection("trees").add(newTree);
 
     Alert.alert("Success", "Tree added successfully!");
+
+    // ✅ Clear all inputs after saving
+    setImage(null);
+    setCity("");
+    setBarangay("");
+    setFruitStatus("none");
+    setDiameterInput("");
+    setHeightInput("");
+    setLatitudeInput("");
+    setLongitudeInput("");
+    setHasSaved(false); // Allow future saves
+
+    // ✅ Navigate to Map only (stay there, manual back to pending trees)
     navigation.navigate("Map", {
       lat: parseFloat(latitudeInput),
       lng: parseFloat(longitudeInput),
-      treeID: docRef.id, // Pass Firestore ID to map
+      treeID: docRef.id,
     });
 
   } catch (error: any) {
     console.error("Error saving tree:", error);
-    Alert.alert("Error", `[${error.code}] ${error.message}`);
+    Alert.alert("Error", error.message);
+    setHasSaved(false); // allow retry
   } finally {
     setSaving(false);
   }
 };
+
 
   return (
     <KeyboardAvoidingView
@@ -357,7 +407,7 @@ const handleSaveTree = async () => {
               style={styles.secondaryButton}
               loading={saving}
             >
-              {saving ? "Saving..." : "Save Tree"}
+              {saving ? "Saving..." : "Add Tree"}
             </Button>
           </View>
         </ScrollView>

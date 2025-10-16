@@ -11,11 +11,15 @@ export default function SearchScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const navigation = useNavigation();
 
+  // ✅ Filter by city, barangay, or treeID
   const filteredTrees = useMemo(() => {
-    if (!searchQuery) return [];
-    return trees.filter(tree => 
-      tree.city.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      tree.treeID.toString().includes(searchQuery.toLowerCase())
+    if (!searchQuery.trim()) return trees;
+    const query = searchQuery.toLowerCase();
+    return trees.filter(
+      tree =>
+        tree.city?.toLowerCase().includes(query) ||
+        tree.barangay?.toLowerCase().includes(query) ||
+        tree.treeID?.toLowerCase().includes(query)
     );
   }, [searchQuery, trees]);
 
@@ -24,21 +28,22 @@ export default function SearchScreen() {
       <View style={styles.searchBar}>
         <TextInput
           placeholder="Search for trees by City or ID..."
-          value={searchQuery} onChangeText={setSearchQuery} style={styles.searchInput}
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          style={styles.searchInput}
           left={<TextInput.Icon icon={() => <MaterialIcons name="arrow-back" size={24} color="#666" />} onPress={() => navigation.goBack()} />}
-          mode="outlined" outlineColor="transparent" activeOutlineColor="transparent"
+          mode="outlined"
+          outlineColor="transparent"
+          activeOutlineColor="transparent"
         />
       </View>
       <FlatList
         data={filteredTrees}
         keyExtractor={item => item.treeID}
         renderItem={({ item }) => (
-          <Card 
+          <Card
             style={styles.card}
-            onPress={() => navigation.navigate('Map', {
-              lat: item.coordinates.latitude,
-              lng: item.coordinates.longitude
-            })}
+            onPress={() => navigation.navigate('TreeDetails', { treeID: item.treeID })}
           >
             <Card.Content>
               <Text style={styles.treeIdText}>
@@ -57,9 +62,9 @@ export default function SearchScreen() {
 }
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 20, backgroundColor: '#ffffff' },
-  searchBar: { marginTop: 25, marginBottom: 16, borderRadius: 25, backgroundColor: '#f8f8f8', overflow: 'hidden', borderWidth: 1, borderColor: '#eee' }, 
+  searchBar: { marginTop: 25, marginBottom: 16, borderRadius: 25, backgroundColor: '#f8f8f8', overflow: 'hidden', borderWidth: 1, borderColor: '#eee' },
   searchInput: { backgroundColor: 'transparent', height: 48, fontSize: 16 },
-  card: { marginBottom: 12, borderRadius: 12, elevation: 2, borderLeftWidth: 4, borderLeftColor: '#2ecc71' },
+  card: { marginBottom: 12, borderRadius: 12, backgroundColor: '#ffffff', elevation: 2, borderLeftWidth: 4, borderLeftColor: '#2ecc71' },
   location: { color: '#666', marginTop: 6, fontSize: 14 },
   empty: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 40, marginTop: 20 }, 
   treeIdText: { fontSize: 16, fontWeight: '600', color: '#333', marginBottom: 4 },

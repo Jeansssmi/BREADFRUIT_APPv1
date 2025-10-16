@@ -41,7 +41,6 @@ function TreeStack() {
   return (
     <TreeStackNav.Navigator initialRouteName="TreeManagement">
       <TreeStackNav.Screen name="TreeManagement" component={TreeManagementScreen} options={{ headerShown: false }} />
-      <TreeStackNav.Screen name="TreeList" component={TreeListScreen} options={{ headerTitle: 'Tree List' }} />
       <TreeStackNav.Screen name="PendingTrees" component={PendingTreesScreen} options={{ headerTitle: 'Pending Trees' }} />
     </TreeStackNav.Navigator>
   );
@@ -108,13 +107,15 @@ export default function ResearcherNavigator() {
       <MainStack.Screen name="TrackedTrees" component={TrackedTreesScreen} options={{ headerTitle: 'Tracked Trees' }} />
 
       {/* Scanner Screens */}
-      <MainStack.Screen name="DiameterScanner" component={DiameterScannerScreen} options={{ headerTitle: 'Scan Diameter' }} />
+      <MainStack.Screen name="DiameterScannerScreen" component={DiameterScannerScreen} options={{ headerTitle: 'Scan Diameter' }} />
       <MainStack.Screen name="EditDiameterScanner" component={EditDiameterScannerScreen} options={{ headerTitle: 'Rescan Diameter' }} />
 
       {/* Other Screens */}
       <MainStack.Screen name="EditProfile" component={EditProfileScreen} options={{ title: 'Edit Profile' }} />
       <MainStack.Screen name="Camera" component={CameraScreen} options={{ presentation: 'modal', headerShown: false }} />
-      <MainStackStack.Screen name="EditUser" component={EditUserScreen} options={{ headerTitle: 'Edit User' }} />
+      <MainStack.Screen name="EditUser" component={EditUserScreen} options={{ headerTitle: 'Edit User' }} />
+      <MainStack.Screen name="TreeList" component={TreeListScreen} options={{ headerTitle: 'Tree List' }} />
+
       <MainStack.Screen name="Search" component={SearchScreen} options={{ headerShown: false }} />
     </MainStack.Navigator>
   );

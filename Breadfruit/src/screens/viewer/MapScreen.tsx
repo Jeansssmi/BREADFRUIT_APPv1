@@ -1,10 +1,25 @@
 import { useTreeData } from '@/hooks/useTreeData';
 import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Alert, Dimensions, StyleSheet, TextInput, View, Animated } from 'react-native';
+import {
+  Alert,
+  Dimensions,
+  StyleSheet,
+  TextInput,
+  View,
+  Animated,
+  TouchableOpacity,
+  PermissionsAndroid,
+  Platform,
+} from 'react-native';
 import Geocoder from 'react-native-geocoding';
+import Geolocation from 'react-native-geolocation-service';
 import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
+
+
+// ✅ Initialize with your API key once
+Geocoder.init("AIzaSyDkaDuJ4kRUpUJiXZrj7MHczYUFIcCIZNk", { language: "en" });
 
 let lastRegion: any = null;
 
@@ -74,7 +89,59 @@ export default function MapScreen() {
     }, 5000);
   };
 
-  // ✅ Handle search
+  // ✅ Request location permission (Android)
+  const requestLocationPermission = async () => {
+    try {
+      if (Platform.OS === 'android') {
+        const granted = await PermissionsAndroid.request(
+          PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+          {
+            title: 'Location Permission',
+            message: 'This app requires access to your location.',
+            buttonPositive: 'OK',
+          }
+        );
+        return granted === PermissionsAndroid.RESULTS.GRANTED;
+      }
+      return true;
+    } catch (err) {
+      console.warn(err);
+      return false;
+    }
+  };
+
+  // ✅ Get current location and move the map there
+// ✅ Get current location and move the map there
+const handleMyLocation = async () => {
+  const hasPermission = await requestLocationPermission();
+  if (!hasPermission) {
+    Alert.alert('Permission Denied', 'Location access is required.');
+    return;
+  }
+
+  Geolocation.getCurrentPosition(
+    (position) => {
+      const { latitude, longitude } = position.coords;
+
+      const newRegion = {
+        latitude,
+        longitude,
+        latitudeDelta: 0.015,
+        longitudeDelta: 0.015 * (width / height),
+      };
+
+      mapRef.current?.animateToRegion(newRegion, 1500);
+      setRegion(newRegion);
+    },
+    (error) => {
+      console.error('Location error:', error);
+      Alert.alert('Error', 'Unable to get your location. Please check GPS.');
+    },
+    { enableHighAccuracy: true, timeout: 15000, maximumAge: 10000 }
+  );
+};
+
+  // ✅ Handle search by location name
   const handleSearch = async () => {
     if (!searchQuery.trim()) return;
 
@@ -92,8 +159,8 @@ export default function MapScreen() {
       mapRef.current?.animateToRegion(newRegion, 1500);
       setRegion(newRegion);
     } catch (error) {
-      console.error(error);
-      Alert.alert('Search failed', 'Could not find this location.');
+      console.error('Search error:', error);
+      Alert.alert('Search failed', 'Could not find this location. Check your internet or API key.');
     } finally {
       setSearchQuery('');
     }
@@ -104,9 +171,9 @@ export default function MapScreen() {
       {/* 🔍 Search Bar */}
       <View style={styles.searchBar}>
         <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10 }}>
-          <MaterialIcons name="location-on" size={24} color="#2ecc71" />
+          <MaterialIcons name="search" size={24} color="#2ecc71" />
           <TextInput
-            placeholder="Search for locations..."
+            placeholder="Search barangay, city, or location..."
             value={searchQuery}
             onChangeText={setSearchQuery}
             style={styles.searchInput}
@@ -124,7 +191,7 @@ export default function MapScreen() {
         region={region}
         onRegionChangeComplete={setRegion}
         showsUserLocation={true}
-        showsMyLocationButton={true}
+
       >
         {trees
           .filter(
@@ -166,6 +233,11 @@ export default function MapScreen() {
             );
           })}
       </MapView>
+
+      {/* 📍 My Location Floating Button */}
+      <TouchableOpacity style={styles.myLocationButton} onPress={handleMyLocation}>
+        <MaterialIcons name="my-location" size={28} color="#fff" />
+      </TouchableOpacity>
     </View>
   );
 }
@@ -197,5 +269,17 @@ const styles = StyleSheet.create({
   map: {
     width: '100%',
     height: '100%',
+  },
+  myLocationButton: {
+    position: 'absolute',
+    bottom: 25,
+    right: 20,
+    backgroundColor: '#2ecc71',
+    padding: 14,
+    borderRadius: 50,
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOpacity: 0.3,
+    shadowOffset: { width: 0, height: 2 },
   },
 });
