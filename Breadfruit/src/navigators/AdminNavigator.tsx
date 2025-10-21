@@ -4,22 +4,28 @@ import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import MaterialIcons from "react-native-vector-icons/MaterialIcons";
 
 // --- Import all screens ---
+
 import EditDiameterScannerScreen from "../screens/researcher/tree/EditDiameterScannerScreen";
 import DiameterScannerScreen from "../screens/researcher/tree/DiameterScannerScreen";
 import AccountManagementScreen from "../screens/admin/AccountManagementScreen";
 import AdminDashboardScreen from "../screens/admin/AdminDashboardScreen";
 import TreeManagementScreen from "../screens/admin/TreeManagementScreen";
 import ProfileScreen from "../screens/shared/ProfileScreen";
+import HarvestedListScreen from "../screens/shared/HarvestedListScreen";
 import EditProfileScreen from "../screens/shared/EditProfileScreen";
 import NotificationPreferencesScreen from "../screens/shared/NotificationPreferencesScreen";
 import AboutHelpScreen from "../screens/shared/AboutHelpScreen";
 import AdminAddTreeScreen from "../screens/admin/tree/AdminAddTreeScreen";
 import SearchScreen from "../screens/admin/tree/SearchScreen";
+
+import ActivityLogsScreen from "../screens/admin/tree/ActivityLogsScreen";
 import EditTreeScreen from "../screens/admin/tree/EditTreeScreen";
+import EditTree from "../screens/admin/tree/EditTree";
 import AdminPendingTreesScreen from "../screens/admin/tree/AdminPendingTreesScreen";
 import PendingApprovalScreen from "../screens/admin/tree/PendingApprovalScreen";
 import TreeDetailsScreen from "../screens/admin/tree/TreeDetailsScreen";
 import TreeListScreen from "../screens/admin/tree/TreeListScreen";
+import NotificationsScreen from "../screens/admin/tree/NotificationsScreen";
 import TrackedTreesScreen from "../screens/admin/tree/TrackedTreesScreen";
 import AddUserScreen from "../screens/admin/user/AddUserScreen";
 import EditUserScreen from "../screens/admin/user/EditUserScreen";
@@ -164,18 +170,22 @@ export default function AdminNavigator() {
       />
       <MainStack.Screen name="UserList" component={UserListScreen} options={{ headerTitle: "All Users" }} />
       <MainStack.Screen name="TreeList" component={TreeListScreen} options={{ headerTitle: "Trees Tracked" }} />
-      <MainStack.Screen name="PendingUsers" component={PendingUsersScreen} options={{ headerTitle: "Pending List" }} />
+      <MainStack.Screen name="PendingUsers" component={PendingUsersScreen} options={{ headerTitle: "Pending User List" }} />
       <MainStack.Screen name="UserDetails" component={UserDetailsScreen} options={{ headerTitle: "User Details" }} />
-      <MainStack.Screen name="TrackedTreesScreen" component={TrackedTreesScreen} options={{ headerTitle: "Tracked Trees" }} />
+      <MainStack.Screen name="TrackedTrees" component={TrackedTreesScreen} options={{ headerTitle: "Tracked Trees" }} />
+      <MainStack.Screen name="EditTreeScreen" component={EditTree} options={{ headerTitle: "Edit Tree" }} />
       <MainStack.Screen name="EditTree" component={EditTreeScreen} options={{ headerTitle: "Edit Tree" }} />
        <MainStack.Screen name="TreeDetails" component={TreeDetailsScreen} options={{ headerTitle: " Tree Details" }} />
        <MainStack.Screen name="AddTree" component={AdminAddTreeScreen} options={{ headerTitle: "Add Tree" }} />
       <MainStack.Screen name="Search" component={SearchScreen} options={{ headerShown: false }} />
      <MainStack.Screen name="EditUser" component={EditUserScreen} options={{ headerTitle: "Edit User" }} />
       <MainStack.Screen name="DiameterScannerScreen" component={DiameterScannerScreen} options={{ headerTitle: "Scan Diameter" }} />
-     <MainStack.Screen name="EditDiameterScannerScreen" component={EditDiameterScannerScreen} options={{ headerTitle: "Re-Scan Diameter" }} />
+     <MainStack.Screen name="EditDiameterScanner" component={EditDiameterScannerScreen} options={{ headerTitle: "Re-Scan Diameter" }} />
      <MainStack.Screen name="PendingApprovalScreen" component={PendingApprovalScreen} options={{ headerTitle: "Pending Approval Trees" }} />
      <MainStack.Screen name="PendingTrees" component={AdminPendingTreesScreen} options={{ headerTitle: "Pending Trees" }} />
+     <MainStack.Screen name="NotificationsScreen" component={NotificationsScreen} options={{ headerShown: false }} />
+     <MainStack.Screen name="HarvestedList" component={HarvestedListScreen}  />
+     <MainStack.Screen name="ActivityLogsScreen" component={ActivityLogsScreen} options={{ headerShown: false }} />
       <MainStack.Screen
         name="ResearchersScreen"
         component={UserListScreen}

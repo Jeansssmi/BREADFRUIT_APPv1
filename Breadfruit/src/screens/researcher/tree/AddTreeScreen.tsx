@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from "react";
 import {
   View,
@@ -21,6 +22,7 @@ import firestore from "@react-native-firebase/firestore";
 import storage from "@react-native-firebase/storage";
 import barangayData from "@/constants/barangayData";
 import { useAuth } from "@/context/AuthContext";
+
 const FRUIT_STATUS_OPTIONS = ["none", "unripe", "ripe"];
 const CITY_OPTIONS = Object.keys(barangayData);
 
@@ -28,6 +30,7 @@ export default function AddTreeScreen() {
   const navigation = useNavigation();
   const route = useRoute();
   const { user: currentUser } = useAuth();
+
   const [image, setImage] = useState<string | null>(route.params?.imageUri || null);
   const [diameterInput, setDiameterInput] = useState(route.params?.diameter?.toString() || "");
   const [latitudeInput, setLatitudeInput] = useState<string>("");
@@ -37,39 +40,44 @@ export default function AddTreeScreen() {
   const [fruitStatus, setFruitStatus] = useState("none");
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-
   const [showStatusMenu, setShowStatusMenu] = useState(false);
   const [cityOptionsMenuVisible, setCityOptionsMenuVisible] = useState(false);
   const [barangayOptionsMenuVisible, setBarangayOptionsMenuVisible] = useState(false);
   const BARANGAY_OPTIONS = barangayData[city] || [];
-  const [heightInput, setHeightInput] = useState("");
 
   useEffect(() => {
     if (route.params?.diameter) {
       setDiameterInput(route.params.diameter.toString());
     }
   }, [route.params?.diameter]);
-
-  const handleNavigateToScanner = () => {
-    if (!image) {
-      Alert.alert("Image Required", "Please select an image first.");
-      return;
-    }
-    navigation.navigate("DiameterScannerScreen", { imageUri: image });
+const handleNavigateToScanner = () => { if (!image) { Alert.alert("Image Required", "Please select an image first."); return; } navigation.navigate("DiameterScannerScreen", { imageUri: image }); };
+  // 📸 Select Image
+  const handleImageSelection = () => {
+    const options = { mediaType: "photo" as const, quality: 0.8 };
+    Alert.alert("Select Image", "Choose an option", [
+      { text: "Take Photo", onPress: () => launchCamera(options, handleImageResponse) },
+      { text: "Choose from Gallery", onPress: () => launchImageLibrary(options, handleImageResponse) },
+      { text: "Cancel", style: "cancel" },
+    ]);
   };
 
-  // ✅ Request and Get Location
+  const handleImageResponse = (response: any) => {
+    if (response.didCancel) return;
+    if (response.errorCode) {
+      console.error("ImagePicker Error: ", response.errorMessage);
+      return;
+    }
+    if (response.assets && response.assets.length > 0) {
+      setImage(response.assets[0].uri || null);
+    }
+  };
+
+  // 📍 Location Permission
   const requestLocationPermission = async () => {
     try {
       if (Platform.OS === "android") {
         const granted = await PermissionsAndroid.request(
-          PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
-          {
-            title: "Location Permission",
-            message: "App needs access to your location.",
-            buttonPositive: "OK",
-            buttonNegative: "Cancel",
-          }
+          PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION
         );
         return granted === PermissionsAndroid.RESULTS.GRANTED;
       }
@@ -103,84 +111,119 @@ export default function AddTreeScreen() {
     );
   };
 
-  // ✅ Image selection
-  const handleImageSelection = () => {
-    const options = { mediaType: "photo" as const, quality: 0.8 };
-    Alert.alert("Select Image", "Choose an option", [
-      { text: "Take Photo", onPress: () => launchCamera(options, handleImageResponse) },
-      { text: "Choose from Gallery", onPress: () => launchImageLibrary(options, handleImageResponse) },
-      { text: "Cancel", style: "cancel" },
-    ]);
-  };
-
-  const handleImageResponse = (response: any) => {
-    if (response.didCancel) return;
-    if (response.errorCode) {
-      console.error("ImagePicker Error: ", response.errorMessage);
-      return;
-    }
-    if (response.assets && response.assets.length > 0) {
-      setImage(response.assets[0].uri || null);
-    }
-  };
-
-  const handleRemoveImage = () => setImage(null);
-
-
-  const handleSaveTree = async () => {
-    setSaving(true);
+const handleSaveTree = async () => {
     try {
+      setSaving(true);
       if (!currentUser) {
         Alert.alert("Authentication Error", "You must be logged in.");
         setSaving(false);
         return;
       }
 
-      // ✅ FIX: Determine tree status based on user's role
-      const userRole = currentUser.role;
-      const treeStatus = userRole === 'researcher' ? 'pending' : 'verified';
+      // 🔹 Get user role (admin or researcher)
+      const userRole = currentUser.role?.toLowerCase() || "researcher";
 
+      // 🔹 Determine tree status based on role
+      let treeStatus = "";
+
+      if (userRole === "admin") {
+        // Admin-created trees are auto-categorized
+        if (fruitStatus === "ripe") treeStatus = "harvest-ready";
+        else if (fruitStatus === "unripe") treeStatus = "not-ready";
+        else treeStatus = "verified";
+      } else {
+        // Researcher trees always start as pending
+        treeStatus = "pending";
+      }
+
+      // 📸 Upload image if available
       let imageUrl = "";
       if (image) {
         const fileName = `images/trees/${currentUser.uid}_${Date.now()}.jpg`;
         const reference = storage().ref(fileName);
-        const filePath = image.startsWith('file://') ? image.replace('file://', '') : image;
+        const filePath = image.startsWith("file://") ? image.replace("file://", "") : image;
         await reference.putFile(filePath);
         imageUrl = await reference.getDownloadURL();
       }
 
+      // 🆔 Generate Tree ID
+      const year = new Date().getFullYear();
+      const treesRef = firestore().collection("trees");
+      const lastDoc = await treesRef
+        .where("treeID", ">=", `BFT-${year}-000000`)
+        .where("treeID", "<=", `BFT-${year}-999999`)
+        .orderBy("treeID", "desc")
+        .limit(1)
+        .get();
+
+      let newNumber = 1;
+      if (!lastDoc.empty) {
+        const lastTreeID = lastDoc.docs[0].data().treeID;
+        const lastNum = parseInt(lastTreeID.split("-")[2], 10);
+        if (!isNaN(lastNum)) newNumber = lastNum + 1;
+      }
+
+      const newTreeID = `BFT-${year}-${String(newNumber).padStart(6, "0")}`;
+      const formattedDate = new Date().toISOString().split("T")[0];
+
       const newTree = {
-        treeID: `BFT-${new Date().getFullYear()}-${Math.floor(Math.random() * 100000).toString().padStart(6, "0")}`,
-        city,
-        barangay,
-        coordinates: new firestore.GeoPoint(parseFloat(latitudeInput) || 0, parseFloat(longitudeInput) || 0),
+        barangay: barangay.trim().toLowerCase(),
+        city: city.trim().toLowerCase(),
+        coordinates: {
+          latitude: parseFloat(latitudeInput) || 0,
+          longitude: parseFloat(longitudeInput) || 0,
+        },
+        dateTracked: formattedDate,
         diameter: parseFloat(diameterInput) || 0,
-        height: parseFloat(heightInput) || 0,
         fruitStatus,
         image: imageUrl,
-        trackedBy: currentUser.uid, // Use UID for tracking
-        dateTracked: firestore.FieldValue.serverTimestamp(),
-        status: treeStatus, // Use the determined status
+        status: treeStatus,
+        trackedById: currentUser.uid,
+        trackedBy: currentUser.name || currentUser.displayName || "Unknown",
+        treeID: newTreeID,
+        createdAt: firestore.FieldValue.serverTimestamp(),
       };
 
-      const docRef = await firestore().collection("trees").add(newTree);
+      await treesRef.doc(newTreeID).set(newTree);
 
-      // ✅ FIX: Navigate based on user role
-      if (userRole === 'researcher') {
-        Alert.alert("Success", "Tree submitted for approval!");
+       // 🔹 Log activity
+          await firestore().collection("activityLog").add({
+            actionType: "create",
+            description: `${currentUser.displayName || "Researcher"} added a new tree (${newTreeID})`,
+            uid: currentUser.uid,
+            userRole,
+            timestamp: firestore.FieldValue.serverTimestamp(),
+          });
+
+      Alert.alert(
+        "Success",
+        userRole === "researcher"
+          ? "Tree submitted! Waiting for admin approval."
+          : "Tree added successfully!"
+      );
+
+      // Reset
+      setImage(null);
+      setDiameterInput("");
+      setLatitudeInput("");
+      setLongitudeInput("");
+      setCity("");
+      setBarangay("");
+      setFruitStatus("none");
+
+      // Navigate
+      if (userRole === "researcher") {
         navigation.navigate("PendingTrees");
-      } else { // Admin
-        Alert.alert("Success", "Tree added successfully!");
+      } else {
         navigation.navigate("Map", {
           lat: parseFloat(latitudeInput),
           lng: parseFloat(longitudeInput),
-          treeID: docRef.id,
+          treeID: newTreeID,
         });
       }
-
     } catch (error: any) {
       console.error("Error saving tree:", error);
-      Alert.alert("Error", `[${error.code}] ${error.message}`);
+      Alert.alert("Error", error.message || "Failed to save tree.");
     } finally {
       setSaving(false);
     }
@@ -191,17 +234,11 @@ export default function AddTreeScreen() {
     <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
       <SafeAreaView style={styles.safeArea}>
         <ScrollView contentContainerStyle={styles.scrollContainer} keyboardShouldPersistTaps="handled">
-          {/* Image Upload Section */}
           <TouchableOpacity style={styles.imageContainer} onPress={handleImageSelection}>
             {image ? (
               <>
                 <Image source={{ uri: image }} style={styles.image} />
-                <Button
-                  mode="contained"
-                  onPress={handleRemoveImage}
-                  style={styles.removeButton}
-                  labelStyle={{ fontSize: 12 }}
-                >
+                <Button mode="contained" onPress={() => setImage(null)} style={styles.removeButton}>
                   Change
                 </Button>
               </>
@@ -209,12 +246,10 @@ export default function AddTreeScreen() {
               <View style={styles.imagePlaceholder}>
                 <MaterialIcons name="add-a-photo" size={40} color="#2ecc71" />
                 <Text style={styles.imageLabel}>Capture or Upload Picture</Text>
-                <Text style={styles.imageHint}>Tap to choose</Text>
               </View>
             )}
           </TouchableOpacity>
 
-          {/* City & Barangay */}
           <View style={styles.row}>
             <View style={styles.halfWidth}>
               <Menu
@@ -279,14 +314,12 @@ export default function AddTreeScreen() {
             </View>
           </View>
 
-          {/* Diameter, Fruit Status */}
           <View style={styles.row}>
             <View style={styles.halfWidth}>
               <TextInput
                 label="Diameter (m)"
                 value={diameterInput}
                 onChangeText={setDiameterInput}
-                placeholder="Scan to get value"
                 style={styles.input}
                 mode="outlined"
               />
@@ -323,7 +356,6 @@ export default function AddTreeScreen() {
             </View>
           </View>
 
-          {/* Location */}
           <View style={styles.coordinateGroup}>
             <View style={styles.row}>
               <TextInput
@@ -348,7 +380,6 @@ export default function AddTreeScreen() {
             </TouchableOpacity>
           </View>
 
-          {/* Date */}
           <TextInput
             label="Date Tracked"
             value={new Date().toLocaleDateString()}
@@ -357,17 +388,11 @@ export default function AddTreeScreen() {
             mode="outlined"
           />
 
-          {/* Buttons */}
           <View style={styles.buttonContainer}>
-            <Button mode="contained" onPress={handleNavigateToScanner} style={styles.primaryButton}>
-              Scan Diameter
-            </Button>
-            <Button
-              mode="contained"
-              onPress={handleSaveTree}
-              style={styles.secondaryButton}
-              loading={saving}
-            >
+            <Button mode="contained" onPress={handleNavigateToScanner} style={styles.primaryButton} > Scan Diameter </Button>
+
+
+            <Button mode="contained" onPress={handleSaveTree} loading={saving} style={styles.secondaryButton}>
               {saving ? "Saving..." : "Save Tree"}
             </Button>
           </View>
@@ -393,9 +418,8 @@ const styles = StyleSheet.create({
   },
   image: { width: "100%", height: "100%" },
   removeButton: { position: "absolute", top: 10, right: 10, backgroundColor: "rgba(0,0,0,0.5)" },
-  imagePlaceholder: { justifyContent: "center", alignItems: "center", gap: 8 },
+  imagePlaceholder: { justifyContent: "center", alignItems: "center" },
   imageLabel: { color: "#2ecc71", fontSize: 16, fontWeight: "600" },
-  imageHint: { fontSize: 12, color: "#666" },
   row: { flexDirection: "row", gap: 15, marginBottom: 10 },
   halfWidth: { flex: 1 },
   input: { backgroundColor: "#fff" },
@@ -415,7 +439,7 @@ const styles = StyleSheet.create({
     marginTop: 10,
     textAlign: "right",
   },
-  buttonContainer: { marginTop: 20, gap: 12 },
-  primaryButton: { backgroundColor: "#2ecc71", paddingVertical: 8, borderRadius: 100 },
+  buttonContainer: { marginTop: 20 },
+  primaryButton: { backgroundColor: "#2ecc71", paddingVertical: 8, borderRadius: 100, marginBottom:10 },
   secondaryButton: { backgroundColor: "#333", paddingVertical: 8, borderRadius: 100 },
 });

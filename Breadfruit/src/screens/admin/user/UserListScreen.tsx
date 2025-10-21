@@ -5,12 +5,18 @@ import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityI
 import { useNavigation } from '@react-navigation/native';
 import firestore from '@react-native-firebase/firestore';
 import UserCard from '@/components/UserCard';
+import {  useRoute } from '@react-navigation/native';
+
 
 export default function UserListScreen() {
+
   const navigation = useNavigation();
+
   const [users, setUsers] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [selectedRole, setSelectedRole] = useState('All');
+  const route = useRoute(); // get route
+  const { filter } = route.params || {};
+  const [selectedRole, setSelectedRole] = useState(filter || 'All');
   const [searchQuery, setSearchQuery] = useState('');
 
   // ✅ Fetch all VERIFIED users from Firestore

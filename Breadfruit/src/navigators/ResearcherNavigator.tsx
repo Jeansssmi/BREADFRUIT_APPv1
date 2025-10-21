@@ -10,14 +10,18 @@ import SearchScreen from '../screens/researcher/SearchScreen';
 import TreeManagementScreen from '../screens/researcher/tree/TreeManagementScreen';
 import ProfileScreen from '../screens/shared/ProfileScreen';
 import EditProfileScreen from '../screens/shared/EditProfileScreen';
+import HarvestListScreen from '../screens/shared/HarvestListScreen';
+import HarvestedListScreen from '../screens/shared/HarvestedListScreen';
 import NotificationPreferencesScreen from '../screens/shared/NotificationPreferencesScreen';
 import AboutHelpScreen from '../screens/shared/AboutHelpScreen';
 
 // Import nested tree screens
+import ActivityLogsScreen from '../screens/researcher/tree/ActivityLogsScreen';
 import AddTreeScreen from '../screens/researcher/tree/AddTreeScreen';
 import DiameterScannerScreen from '../screens/researcher/tree/DiameterScannerScreen';
 import EditDiameterScannerScreen from '../screens/researcher/tree/EditDiameterScannerScreen';
 import EditTreeScreen from '../screens/researcher/tree/EditTreeScreen';
+import EditTree from '../screens/researcher/tree/EditTree';
 import PendingDetailsScreen from '../screens/researcher/tree/PendingDetailsScreen';
 import PendingTreesScreen from '../screens/researcher/tree/PendingTreesScreen';
 import ProcessFruitScreen from '../screens/researcher/tree/ProcessFruitScreen';
@@ -100,7 +104,7 @@ export default function ResearcherNavigator() {
 
       {/* All screens that should appear OVER the tabs are now defined here ONLY */}
       <MainStack.Screen name="TreeDetails" component={TreeDetailsScreen} options={{ headerTitle: 'Tree Details' }} />
-      <MainStack.Screen name="EditTree" component={EditTreeScreen} options={{ headerTitle: 'Edit Tree' }} />
+
       <MainStack.Screen name="AddTree" component={AddTreeScreen} options={{ headerTitle: 'Add Tree' }} />
       <MainStack.Screen name="PendingDetails" component={PendingDetailsScreen} options={{ headerTitle: 'Pending Details' }} />
       <MainStack.Screen name="ProcessFruit" component={ProcessFruitScreen} options={{ headerTitle: 'Process Fruit' }} />
@@ -114,8 +118,11 @@ export default function ResearcherNavigator() {
       <MainStack.Screen name="EditProfile" component={EditProfileScreen} options={{ title: 'Edit Profile' }} />
       <MainStack.Screen name="Camera" component={CameraScreen} options={{ presentation: 'modal', headerShown: false }} />
       <MainStack.Screen name="EditUser" component={EditUserScreen} options={{ headerTitle: 'Edit User' }} />
-      <MainStack.Screen name="TreeList" component={TreeListScreen} options={{ headerTitle: 'Tree List' }} />
-
+     <MainStack.Screen name="TreeList" component={TreeListScreen} options={{ headerTitle: 'Tree List' }} />
+      <MainStack.Screen name="EditTree" component={EditTree} options={{ headerTitle: 'Update Your Tree' }} />
+      <MainStack.Screen name="HarvestList" component={HarvestListScreen} />
+      <MainStack.Screen name="HarvestedList" component={HarvestedListScreen} />
+      <MainStack.Screen name="ActivityLogsScreen" component={ActivityLogsScreen} />
       <MainStack.Screen name="Search" component={SearchScreen} options={{ headerShown: false }} />
     </MainStack.Navigator>
   );

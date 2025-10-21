@@ -1,85 +1,154 @@
 import React, { useState, useEffect } from 'react';
-import {
-  Alert,
-  Image,
-  ScrollView,
-  StyleSheet,
-  View,
-  ActivityIndicator,
-} from 'react-native';
-import { Button, Card, Text } from 'react-native-paper';
+import { Alert, Image, ScrollView, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Button, Card, Text } from 'react-native-paper';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import firestore from '@react-native-firebase/firestore';
+import auth from '@react-native-firebase/auth';
 import { LoadingAlert, NotificationAlert } from '@/components/NotificationModal';
-import { useTreeData } from '@/hooks/useTreeData';
-// ✅ 1. Import the useAuth hook to get the current user
-import { useAuth } from '@/context/AuthContext';
 
 export default function PendingDetailsScreen() {
   const route = useRoute<any>();
   const navigation = useNavigation<any>();
-  const treeID = route.params?.treeID;
+  const { treeID } = route.params;
 
-  // ✅ 2. Get the current user from your authentication context
-  const { user: currentUser } = useAuth();
-
-  const { trees, isLoading, error } = useTreeData({ mode: 'single', treeID });
-  const tree = trees[0];
-
-  const [loading, setLoading] = useState(false);
+  const [tree, setTree] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
   const [notificationVisible, setNotificationVisible] = useState(false);
   const [notificationMessage, setNotificationMessage] = useState('');
-  const [notificationType, setNotificationType] = useState<
-    'success' | 'info' | 'error'
-  >('info');
+  const [notificationType, setNotificationType] = useState<'success' | 'error' | 'info'>('info');
 
-  // This function will now work correctly because `currentUser` is defined.
-const handleCancel = () => {
-  const isOwner = currentUser?.uid === tree?.trackedBy;
-  const alertTitle = isOwner ? 'Confirm Cancellation' : 'Confirm Rejection';
-  const alertMessage = isOwner
-    ? 'Are you sure you want to cancel this submission?'
-    : 'Are you sure you want to reject this tree? This cannot be undone.';
-  const buttonText = isOwner ? 'Yes, Cancel' : 'Yes, Reject';
+  const getTreeStatus = (fruitStatus: string) => {
+    switch (fruitStatus?.toLowerCase()) {
+      case 'ripe':
+        return 'harvest-ready';
+      case 'none':
+        return 'verified';
+      case 'unripe':
+        return 'not-ready';
+      default:
+        return 'pending';
+    }
+  };
 
-  Alert.alert(alertTitle, alertMessage, [
-    { text: 'No', style: 'cancel' },
-    {
-      text: buttonText,
-      style: 'destructive',
-      onPress: async () => {
-        setLoading(true);
-        try {
-          // 🔥 Delete the tree document
-          await firestore().collection('trees').doc(treeID).delete();
+  useEffect(() => {
+    const unsubscribe = firestore()
+      .collection('trees')
+      .doc(treeID)
+      .onSnapshot(async (doc) => {
+        if (doc.exists) {
+          const data = { id: doc.id, ...doc.data() };
+          setTree(data);
 
-          // ✅ Show success notification
-          setNotificationMessage('Tree submission canceled successfully.');
-          setNotificationType('success');
-          setNotificationVisible(true);
-
-          // Wait for the notification to display before navigation
-          setTimeout(() => {
-            setNotificationVisible(false);
-            navigation.navigate('PendingTrees', { refresh: true });
-          }, 1200);
-        } catch (e) {
-          console.error(e);
-          setNotificationMessage('Operation failed.');
-          setNotificationType('error');
-          setNotificationVisible(true);
-        } finally {
-          setLoading(false);
+          const correctStatus = getTreeStatus(data.fruitStatus);
+          if (data.status !== correctStatus) {
+            try {
+              await firestore().collection('trees').doc(treeID).update({
+                status: correctStatus,
+              });
+              console.log(`Tree status updated to ${correctStatus}`);
+            } catch (err) {
+              console.warn('Auto status update failed:', err);
+            }
+          }
         }
+        setLoading(false);
+      });
+
+    return () => unsubscribe();
+  }, [treeID]);
+
+  const safeToFixed = (value: any, digits = 6) =>
+    typeof value === 'number' ? value.toFixed(digits) : 'N/A';
+
+  const formatTrackedDate = (dateTracked: any) => {
+    if (!dateTracked) return 'N/A';
+    if (dateTracked.toDate) {
+      return dateTracked.toDate().toLocaleDateString();
+    }
+    if (typeof dateTracked === 'string') {
+      const parsed = new Date(dateTracked);
+      return isNaN(parsed.getTime()) ? 'N/A' : parsed.toLocaleDateString();
+    }
+    return 'N/A';
+  };
+
+ const notifyAdminsOnCancel = async (userName: string, treeID: string) => {
+    try {
+      const adminsSnap = await firestore()
+        .collection('users')
+        .where('role', '==', 'admin')
+        .get();
+
+      if (!adminsSnap.empty) {
+        const batch = firestore().batch();
+        const now = new Date().toISOString();
+
+        adminsSnap.forEach((adminDoc) => {
+          const notifRef = firestore().collection('notification').doc();
+          batch.set(notifRef, {
+            title: 'Tree Submission Cancelled ❗',
+            message: `${userName} cancelled their tree submission (${treeID}).`,
+            recipientID: adminDoc.id,
+            recipientRole: 'Admin',
+            relatedTreeID: treeID,
+            timestamp: now,
+            read: false,
+          });
+        });
+
+        await batch.commit();
+        console.log('✅ Admins notified of cancellation.');
+      }
+    } catch (error) {
+      console.error('Error notifying admins:', error);
+    }
+  };
+
+  const handleCancelSubmission = () => {
+    Alert.alert('Cancel Submission', 'Are you sure you want to cancel this submission?', [
+      { text: 'No', style: 'cancel' },
+      {
+        text: 'Yes, Cancel',
+        style: 'destructive',
+        onPress: async () => {
+          setLoading(true);
+          try {
+            const user = firestore().collection('users').doc(auth().currentUser.uid);
+            const userDoc = await user.get();
+            const userName = userDoc.exists ? userDoc.data().name || 'Unknown User' : 'Unknown User';
+
+            await firestore().collection('trees').doc(treeID).update({
+              status: 'cancelled',
+            });
+
+            await firestore().collection('activityLog').add({
+              treeID,
+              action: 'Cancelled Submission',
+              description: `Tree submission was cancelled by ${userName}.`,
+              userID: auth().currentUser.uid,
+              userName,
+              timestamp: firestore.FieldValue.serverTimestamp(),
+            });
+
+            setNotificationMessage('Submission cancelled successfully.');
+            setNotificationType('success');
+            setNotificationVisible(true);
+          } catch (error) {
+            console.error('Cancel submission error:', error);
+            setNotificationMessage('Failed to cancel submission.');
+            setNotificationType('error');
+            setNotificationVisible(true);
+          } finally {
+            setLoading(false);
+          }
+        },
       },
-    },
-  ]);
-};
+    ]);
+  };
 
-
-  if (isLoading) {
+  if (loading) {
     return (
       <View style={styles.center}>
         <ActivityIndicator size="large" color="#2ecc71" />
@@ -87,90 +156,91 @@ const handleCancel = () => {
     );
   }
 
-  if (error || !tree) {
+  if (!tree) {
     return (
       <View style={styles.center}>
-        <Text>Tree not found.</Text>
+        <Text>No tree data found.</Text>
       </View>
     );
   }
 
-  // --- The rest of your JSX and styles remain unchanged ---
   return (
     <ScrollView contentContainerStyle={styles.scrollContainer}>
       <View style={styles.container}>
         <LoadingAlert visible={loading} message="Please wait..." />
+
         <NotificationAlert
           visible={notificationVisible}
           message={notificationMessage}
           type={notificationType}
-          onClose={() => setNotificationVisible(false)}
+          onClose={() => {
+            setNotificationVisible(false);
+            if (notificationType === 'success') navigation.goBack();
+          }}
         />
+
         {tree.image ? (
-          <Image
-            source={{ uri: tree.image }}
-            style={styles.treeImage}
-            resizeMode="cover"
-          />
+          <Image source={{ uri: tree.image }} style={styles.treeImage} resizeMode="cover" />
         ) : (
           <View style={[styles.treeImage, styles.imagePlaceholder]}>
             <MaterialIcons name="no-photography" size={40} color="#666" />
           </View>
         )}
+
         <Card style={styles.detailsCard}>
           <Card.Content>
             <Text variant="titleLarge" style={styles.title}>
               {tree.treeID}
             </Text>
+
             <View style={styles.detailRow}>
               <MaterialIcons name="location-on" size={20} color="#2ecc71" />
               <Text style={styles.detailText}>
-                {tree.city || 'Unknown City'}, {tree.barangay || 'Unknown Barangay'}
+                {tree.city}, {tree.barangay}
               </Text>
             </View>
+
             <View style={styles.detailRow}>
               <MaterialCommunityIcons name="tag" size={20} color="#2ecc71" />
-              <Text style={styles.detailText}>{tree.trackedBy || 'Unknown'}</Text>
+              <Text style={styles.detailText}>{tree.trackedBy || 'Unknown User'}</Text>
             </View>
+
             <View style={styles.statsContainer}>
               <View style={styles.statItem}>
                 <Text style={styles.statLabel}>Diameter</Text>
                 <Text style={styles.statValue}>
-                  {tree.diameter ? `${Number(tree.diameter).toFixed(2)} m` : 'N/A'}
-                </Text>
-              </View>
-              <View style={styles.statItem}>
-                <Text style={styles.statLabel}>Tracked Date</Text>
-                <Text style={styles.statValue}>
-                  {tree.dateTracked?.toDate ? tree.dateTracked.toDate().toLocaleDateString() : 'N/A'}
+                  {tree.diameter?.toFixed(2) || 'N/A'} m
                 </Text>
               </View>
               <View style={styles.statItem}>
                 <Text style={styles.statLabel}>Fruit Status</Text>
+                <Text style={styles.statValue}>{tree.fruitStatus || 'N/A'}</Text>
+              </View>
+              <View style={styles.statItem}>
+                <Text style={styles.statLabel}>Tracked Date</Text>
                 <Text style={styles.statValue}>
-                  {tree.fruitStatus || 'Unknown'}
+                  {formatTrackedDate(tree.dateTracked)}
                 </Text>
               </View>
             </View>
+
             <View style={styles.coordinateContainer}>
               <MaterialIcons name="map" size={20} color="#2ecc71" />
               <Text style={styles.coordinateText}>
-                {tree.coordinates?.latitude?.toFixed
-                  ? `${tree.coordinates.latitude.toFixed(6)}, ${tree.coordinates.longitude.toFixed(6)}`
-                  : 'No coordinates'}
+                {safeToFixed(tree.coordinates?.latitude)},{' '}
+                {safeToFixed(tree.coordinates?.longitude)}
               </Text>
             </View>
           </Card.Content>
         </Card>
-        <View style={styles.buttonGroup}>
-          <Button
-            mode="contained"
-            style={styles.cancelButton}
-            onPress={handleCancel}
-          >
-            Cancel Submission
-          </Button>
-        </View>
+
+        <Button
+          mode="contained"
+          onPress={handleCancelSubmission}
+          style={[styles.button, { backgroundColor: '#e74c3c' }]}
+        >
+          Cancel Submission
+        </Button>
       </View>
     </ScrollView>
   );
@@ -178,7 +248,7 @@ const handleCancel = () => {
 
 const styles = StyleSheet.create({
   scrollContainer: { flexGrow: 1 },
-  container: { flex: 1, padding: 16, backgroundColor: '#ffffff' },
+  container: { flex: 1, padding: 16, backgroundColor: '#fff' },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   treeImage: { height: 300, borderRadius: 12, marginBottom: 16 },
   imagePlaceholder: { backgroundColor: '#eee', justifyContent: 'center', alignItems: 'center' },
@@ -192,6 +262,5 @@ const styles = StyleSheet.create({
   statValue: { fontSize: 16, fontWeight: '600', color: '#333' },
   coordinateContainer: { flexDirection: 'row', alignItems: 'center', marginTop: 12, gap: 8 },
   coordinateText: { fontSize: 14, color: '#666', fontFamily: 'monospace' },
-  buttonGroup: { flexDirection: 'row', marginTop: 20 },
-  cancelButton: { flex: 1, borderRadius: 25, backgroundColor: '#e74c3c' },
+  button: { borderRadius: 25, marginTop: 20 },
 });

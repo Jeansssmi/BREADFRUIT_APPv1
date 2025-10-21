@@ -1,104 +1,136 @@
-import { LoadingAlert, NotificationAlert } from '@/components/NotificationModal';
-import { useTreeData } from '@/hooks/useTreeData';
+import React, { useState, useEffect } from 'react';
+import { Alert, Image, ScrollView, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Button, Card, Text } from 'react-native-paper';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import React, { useEffect, useState } from 'react';
-import { Alert, Image, ScrollView, StyleSheet, View, ActivityIndicator } from 'react-native';
-import { Button, Card, Text } from 'react-native-paper';
-import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
+import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import firestore from '@react-native-firebase/firestore';
-import { useAuth } from '@/context/AuthContext'; // Import useAuth to check user role
+import auth from '@react-native-firebase/auth';
+import { LoadingAlert, NotificationAlert } from '@/components/NotificationModal';
 
-export default function PendingDetailsScreen() {
+export default function PendingApprovalScreen() {
   const route = useRoute<any>();
   const navigation = useNavigation<any>();
-  const { user: currentUser } = useAuth(); // Get current user
   const { treeID } = route.params;
 
-  const { trees, isLoading, error } = useTreeData({ mode: 'single', treeID });
-  const tree = trees[0];
-
-  const [loading, setLoading] = useState(false);
+  const [tree, setTree] = useState<any>(null);
+  const [trackedByName, setTrackedByName] = useState<string>('Unknown User');
+  const [loading, setLoading] = useState(true);
   const [notificationVisible, setNotificationVisible] = useState(false);
   const [notificationMessage, setNotificationMessage] = useState('');
-  const [notificationType, setNotificationType] = useState<'success' | 'info' | 'error'>('info');
-  const [trackerName, setTrackerName] = useState('Loading...');
+  const [notificationType, setNotificationType] =
+    useState<'success' | 'error' | 'info'>('info');
 
+  // ✅ Real-time fetch of tree data
   useEffect(() => {
-    if (tree?.trackedBy) {
-      const fetchTrackerName = async () => {
-        try {
-          const userDoc = await firestore().collection('users').doc(tree.trackedBy).get();
-          setTrackerName(userDoc.exists ? userDoc.data()?.name : 'Unknown User');
-        } catch (e) {
-          setTrackerName('N/A');
+    const unsubscribe = firestore()
+      .collection('trees')
+      .doc(treeID)
+      .onSnapshot(async (doc) => {
+        if (doc.exists) {
+          const treeData = { id: doc.id, ...doc.data() };
+          setTree(treeData);
+
+          // Fetch researcher name
+          if (treeData.trackedById) {
+            try {
+              const userDoc = await firestore()
+                .collection('users')
+                .doc(treeData.trackedById)
+                .get();
+              if (userDoc.exists) {
+                const userData = userDoc.data();
+                setTrackedByName(userData?.name || 'Unknown User');
+              } else {
+                setTrackedByName('Unknown User');
+              }
+            } catch (err) {
+              console.error('Error fetching user:', err);
+              setTrackedByName('Unknown User');
+            }
+          }
         }
-      };
-      fetchTrackerName();
-    } else if (tree) {
-      setTrackerName('N/A');
+        setLoading(false);
+      });
+    return () => unsubscribe();
+  }, [treeID]);
+
+  const safeToFixed = (value: any, digits = 6) =>
+    typeof value === 'number' ? value.toFixed(digits) : 'N/A';
+
+  const formatTrackedDate = (dateTracked: any) => {
+    if (!dateTracked) return 'N/A';
+    if (dateTracked.toDate) return dateTracked.toDate().toLocaleDateString();
+    if (typeof dateTracked === 'string') {
+      const parsed = new Date(dateTracked);
+      return isNaN(parsed.getTime()) ? 'N/A' : parsed.toLocaleDateString();
     }
-  }, [tree]);
+    return 'N/A';
+  };
 
-const handleApprove = async () => {
-  Alert.alert("Approve Tree", "Are you sure you want to approve this tree submission?", [
-    { text: "Cancel", style: "cancel" },
-    {
-      text: "Approve",
-      onPress: async () => {
-        setLoading(true);
-        try {
-          await firestore().collection("trees").doc(treeID).update({
-            status: "verified",
-            verifiedAt: firestore.FieldValue.serverTimestamp(),
-          });
+   // 🔔 Send notification to researcher
+   const sendNotification = async (title: string, message: string) => {
+     try {
+       if (!tree?.trackedById) return;
+       await firestore().collection('notification').add({
+         title,
+         message,
+         recipientID: tree.trackedById,
+         recipientRole: 'Researcher',
+         relatedTreeID: tree.treeID,
+         timestamp: new Date().toISOString(),
+         read: false,
+       });
+     } catch (error) {
+       console.error('Error sending notification:', error);
+     }
+   };
 
-          // ✅ Show success message, then navigate to Map
-          setNotificationMessage("Tree approved successfully!");
-          setNotificationType("success");
-          setNotificationVisible(true);
-
-          setTimeout(() => {
-            navigation.navigate("Map"); // ✅ go to Map screen after success
-          }, 1000);
-        } catch (error) {
-          console.error("Approve error:", error);
-          setNotificationMessage("Failed to approve tree.");
-          setNotificationType("error");
-          setNotificationVisible(true);
-        } finally {
-          setLoading(false);
-        }
-      },
-    },
-  ]);
-};
-
-
-  const handleCancelOrReject = async () => {
-    const isOwner = currentUser?.uid === tree?.trackedBy;
-    const alertTitle = isOwner ? 'Confirm Cancellation' : 'Confirm Rejection';
-    const alertMessage = isOwner
-      ? 'Are you sure you want to cancel this submission?'
-      : 'Are you sure you want to reject this tree? This cannot be undone.';
-    const buttonText = isOwner ? 'Yes, Cancel' : 'Yes, Reject';
-
-    Alert.alert(alertTitle, alertMessage, [
-      { text: 'No', style: 'cancel' },
+  // ✅ Approve Tree
+  const handleApprove = async () => {
+    Alert.alert('Approve Tree', 'Are you sure you want to approve this tree?', [
+      { text: 'Cancel', style: 'cancel' },
       {
-        text: buttonText,
-        style: 'destructive',
+        text: 'Approve',
         onPress: async () => {
           setLoading(true);
           try {
-            await firestore().collection('trees').doc(treeID).delete();
-            // In a full app, you might add a notification for the researcher here.
-            setNotificationMessage('Submission removed successfully.');
+            const admin = auth().currentUser;
+            const newStatus =
+              tree.fruitStatus === 'ripe'
+                ? 'harvest-ready'
+                : tree.fruitStatus === 'unripe'
+                ? 'not-ready'
+                : 'verified';
+
+            await firestore().collection('trees').doc(treeID).update({
+              status: newStatus,
+              approvedBy: admin?.displayName || 'Admin',
+              approvedAt: firestore.FieldValue.serverTimestamp(),
+            });
+
+            // Log activity
+            await firestore().collection('activityLog').add({
+              treeID,
+              action: 'Tree Approved',
+              description: `${admin?.displayName || 'Admin'} approved tree ${tree.treeID} as "${newStatus}"`,
+              userID: admin?.uid,
+              timestamp: firestore.FieldValue.serverTimestamp(),
+            });
+
+            // Send notification to researcher
+            await sendNotification(
+              'Tree Approved ✅',
+              `Your tree ${tree.treeID || ''} has been approved as "${newStatus}".`,
+              newStatus
+            );
+
+            setNotificationMessage('Tree approved successfully.');
             setNotificationType('success');
             setNotificationVisible(true);
-          } catch (e) {
-            console.error(e);
-            setNotificationMessage('Operation failed.');
+          } catch (error) {
+            console.error('Approval Error:', error);
+            setNotificationMessage('Approval failed.');
             setNotificationType('error');
             setNotificationVisible(true);
           } finally {
@@ -109,16 +141,69 @@ const handleApprove = async () => {
     ]);
   };
 
-  if (isLoading) {
-    return <View style={styles.center}><ActivityIndicator size="large" color="#2ecc71" /></View>;
+  // ❌ Reject Tree
+  const handleReject = async () => {
+    Alert.alert('Reject Tree', 'Are you sure you want to reject this tree?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Reject',
+        style: 'destructive',
+        onPress: async () => {
+          setLoading(true);
+          try {
+            const admin = auth().currentUser;
+            await firestore().collection('trees').doc(treeID).update({
+              status: 'rejected',
+              rejectedBy: admin?.displayName || 'Admin',
+              rejectedAt: firestore.FieldValue.serverTimestamp(),
+            });
+
+            // Log activity
+            await firestore().collection('activityLog').add({
+              treeID,
+              action: 'Tree Rejected',
+              description: `${admin?.displayName || 'Admin'} rejected tree ${tree.treeID}.`,
+              userID: admin?.uid,
+              timestamp: firestore.FieldValue.serverTimestamp(),
+            });
+
+            // Send notification to researcher
+            await sendNotification(
+              'Tree Rejected ❌',
+              `Your submitted tree ${tree.treeID || ''} was rejected by the admin.`
+            );
+
+            setNotificationMessage('Tree rejected successfully.');
+            setNotificationType('success');
+            setNotificationVisible(true);
+          } catch (error) {
+            console.error('Rejection Error:', error);
+            setNotificationMessage('Failed to reject tree.');
+            setNotificationType('error');
+            setNotificationVisible(true);
+          } finally {
+            setLoading(false);
+          }
+        },
+      },
+    ]);
+  };
+
+  if (loading) {
+    return (
+      <View style={styles.center}>
+        <ActivityIndicator size="large" color="#2ecc71" />
+      </View>
+    );
   }
 
-  if (error || !tree) {
-    return <View style={styles.center}><Text>Tree not found.</Text></View>;
+  if (!tree) {
+    return (
+      <View style={styles.center}>
+        <Text>No tree data found.</Text>
+      </View>
+    );
   }
-
-  const isAdmin = currentUser?.role === 'admin';
-  const isOwner = currentUser?.uid === tree.trackedBy;
 
   return (
     <ScrollView contentContainerStyle={styles.scrollContainer}>
@@ -135,7 +220,11 @@ const handleApprove = async () => {
         />
 
         {tree.image ? (
-          <Image source={{ uri: tree.image }} style={styles.treeImage} />
+          <Image
+            source={{ uri: tree.image }}
+            style={styles.treeImage}
+            resizeMode="cover"
+          />
         ) : (
           <View style={[styles.treeImage, styles.imagePlaceholder]}>
             <MaterialIcons name="no-photography" size={40} color="#666" />
@@ -144,45 +233,65 @@ const handleApprove = async () => {
 
         <Card style={styles.detailsCard}>
           <Card.Content>
-            <Text variant="titleLarge" style={styles.title}>{tree.treeID || 'N/A'}</Text>
+            <Text variant="titleLarge" style={styles.title}>
+              {tree.treeID}
+            </Text>
+
             <View style={styles.detailRow}>
               <MaterialIcons name="location-on" size={20} color="#2ecc71" />
-              <Text style={styles.detailText}>{tree.city ? `${tree.city}${tree.barangay ? `, ${tree.barangay}` : ''}` : 'N/A'}</Text>
+              <Text style={styles.detailText}>
+                {tree.city}, {tree.barangay}
+              </Text>
             </View>
+
             <View style={styles.detailRow}>
               <MaterialCommunityIcons name="account" size={20} color="#2ecc71" />
-              <Text style={styles.detailText}>{trackerName}</Text>
+              <Text style={styles.detailText}>{trackedByName}</Text>
             </View>
+
             <View style={styles.statsContainer}>
               <View style={styles.statItem}>
                 <Text style={styles.statLabel}>Diameter</Text>
-                <Text style={styles.statValue}>{typeof tree.diameter === 'number' ? `${tree.diameter.toFixed(2)}m` : 'N/A'}</Text>
+                <Text style={styles.statValue}>
+                  {tree.diameter?.toFixed(2) || 'N/A'} m
+                </Text>
               </View>
               <View style={styles.statItem}>
                 <Text style={styles.statLabel}>Fruit Status</Text>
-                <Text style={styles.statValue}>{tree.fruitStatus && tree.fruitStatus !== 'none' ? tree.fruitStatus : 'N/A'}</Text>
+                <Text style={styles.statValue}>{tree.fruitStatus}</Text>
               </View>
               <View style={styles.statItem}>
                 <Text style={styles.statLabel}>Tracked Date</Text>
-                <Text style={styles.statValue}>{tree.dateTracked?.toDate ? tree.dateTracked.toDate().toLocaleDateString() : 'N/A'}</Text>
+                <Text style={styles.statValue}>
+                  {formatTrackedDate(tree.dateTracked)}
+                </Text>
               </View>
             </View>
+
             <View style={styles.coordinateContainer}>
               <MaterialIcons name="map" size={20} color="#2ecc71" />
-              <Text style={styles.coordinateText}>{typeof tree.coordinates?.latitude === 'number' && typeof tree.coordinates?.longitude === 'number' ? `${tree.coordinates.latitude.toFixed(6)}, ${tree.coordinates.longitude.toFixed(6)}` : 'N/A'}</Text>
+              <Text style={styles.coordinateText}>
+                {safeToFixed(tree.coordinates?.latitude)}, {safeToFixed(tree.coordinates?.longitude)}
+              </Text>
             </View>
           </Card.Content>
         </Card>
 
         <View style={styles.buttonGroup}>
-          {isAdmin ? (
-            <>
-              <Button mode="contained" style={[styles.button, styles.approveButton]} onPress={handleApprove}>Approve</Button>
-              <Button mode="contained" style={[styles.button, styles.rejectButton]} onPress={handleCancelOrReject}>Reject</Button>
-            </>
-          ) : isOwner ? (
-            <Button mode="contained" style={[styles.button, styles.rejectButton]} onPress={handleCancelOrReject}>Cancel Submission</Button>
-          ) : null}
+          <Button
+            mode="contained"
+            style={[styles.button, { backgroundColor: '#2ecc71' }]}
+            onPress={handleApprove}
+          >
+            Approve
+          </Button>
+          <Button
+            mode="contained"
+            style={[styles.button, { backgroundColor: '#e74c3c' }]}
+            onPress={handleReject}
+          >
+            Reject
+          </Button>
         </View>
       </View>
     </ScrollView>
@@ -191,7 +300,7 @@ const handleApprove = async () => {
 
 const styles = StyleSheet.create({
   scrollContainer: { flexGrow: 1 },
-  container: { flex: 1, padding: 16, backgroundColor: '#ffffff' },
+  container: { flex: 1, padding: 16, backgroundColor: '#fff' },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   treeImage: { height: 300, borderRadius: 12, marginBottom: 16 },
   imagePlaceholder: { backgroundColor: '#eee', justifyContent: 'center', alignItems: 'center' },
@@ -206,7 +315,5 @@ const styles = StyleSheet.create({
   coordinateContainer: { flexDirection: 'row', alignItems: 'center', marginTop: 12, gap: 8 },
   coordinateText: { fontSize: 14, color: '#666', fontFamily: 'monospace' },
   buttonGroup: { flexDirection: 'row', gap: 10, marginTop: 20 },
-  button: { flex: 1, borderRadius: 25, justifyContent: 'center' },
-  approveButton: { backgroundColor: '#2ecc71' },
-  rejectButton: { backgroundColor: '#e74c3c' },
+  button: { flex: 1, borderRadius: 25 },
 });

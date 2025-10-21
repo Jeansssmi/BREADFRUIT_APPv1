@@ -1,7 +1,7 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useCallback } from 'react';
 import { ActivityIndicator, FlatList, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { Appbar, Chip, Text } from 'react-native-paper';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useUserData } from '@/hooks/useUserData';
 
@@ -47,11 +47,20 @@ const PendingUserItem = ({ user, onPress }) => (
 );
 
 export default function PendingUsersScreen() {
+    const [refreshKey, setRefreshKey] = useState(0);
+
   const { users, isLoading } = useUserData({
     mode: 'criteria', field: 'status', operator: '==', value: 'pending',
   });
   const navigation = useNavigation();
   const [selectedRole, setSelectedRole] = useState('All');
+
+    // ⬇️ Re-fetch whenever screen regains focus
+    useFocusEffect(
+      useCallback(() => {
+        setRefreshKey(prev => prev + 1);
+      }, [])
+    );
 
   // ✅ Client-side filtering based on the selected role
   const filteredUsers = useMemo(() => {

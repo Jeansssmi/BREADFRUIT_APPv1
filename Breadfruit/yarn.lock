@@ -2121,6 +2121,11 @@
   resolved "https://registry.yarnpkg.com/@react-native-firebase/functions/-/functions-23.4.0.tgz#a9326751dfef7fc327b1d63899dcf55eee61e3fb"
   integrity sha512-plIEsZbUFqV2/Xc0y0yp2yRF99G7NS1kqzPF1bmOUP3ue0PUL4NnydvRupg8Ivoae/cdW31ReSLEE+X83BXTsQ==
 
+"@react-native-firebase/messaging@^23.4.1":
+  version "23.4.1"
+  resolved "https://registry.yarnpkg.com/@react-native-firebase/messaging/-/messaging-23.4.1.tgz#08b83eed9e2c5353e18851cd0ad0a19cd92c42ce"
+  integrity sha512-KeSfDMIz7rKu1zx3z1yCvfCB9FYaB6dt5ls5J5x4vZov+YeRvgAmHvoNrwRpgDUAM/AchU8aEI1M5LkrDx0p/Q==
+
 "@react-native-firebase/storage@^23.4.0":
   version "23.4.0"
   resolved "https://registry.yarnpkg.com/@react-native-firebase/storage/-/storage-23.4.0.tgz#9a5a7eed2173cd3449cc7163629e28ebb41fd819"

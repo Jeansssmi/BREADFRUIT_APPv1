@@ -13,7 +13,7 @@ import firestore from '@react-native-firebase/firestore';
 import storage from '@react-native-firebase/storage';
 import { PermissionsAndroid } from 'react-native';
 
-const FRUIT_STATUS_OPTIONS = ['none', 'unripe', 'ripe', 'overripe'];
+const FRUIT_STATUS_OPTIONS = ['none', 'unripe', 'ripe'];
 
 function EditTreeForm({ treeID }) {
   const navigation = useNavigation();
@@ -159,6 +159,7 @@ function EditTreeForm({ treeID }) {
            const docRef = firestore().collection('trees').doc(currentTreeID);
            let newImageURL = tree.image;
 
+           // 🔄 Upload new image if changed
            if (image && image.startsWith('file://')) {
              if (tree.image) {
                try {
@@ -175,14 +176,24 @@ function EditTreeForm({ treeID }) {
              newImageURL = await reference.getDownloadURL();
            }
 
-           // ✅ SAFER latitude/longitude handling
+           // ✅ Auto-convert fruit status → tree status
+           let newStatus = tree.status; // keep original if none/other
+           const fruit = fruitStatus.toLowerCase();
+
+           if (fruit === 'ripe') newStatus = 'harvest-ready';
+           else if (fruit === 'unripe') newStatus = 'not-ready';
+           else if (fruit === 'none') newStatus = 'verified';
+           else newStatus = tree.status; // unchanged
+
+           // ✅ Safe coordinate parsing
            const lat = parseFloat(latitudeInput);
            const lon = parseFloat(longitudeInput);
 
            const treeData = {
              city,
              barangay,
-             fruitStatus,
+             fruitStatus: fruit,
+             status: newStatus, // ✅ apply converted status
              diameter: parseFloat(diameter) || 0,
              coordinates: new firestore.GeoPoint(
                isNaN(lat) ? 0 : lat,
@@ -193,14 +204,24 @@ function EditTreeForm({ treeID }) {
 
            await docRef.update(treeData);
 
-           setNotificationMessage('Successfully saved.');
+           setNotificationMessage(
+             `Tree updated successfully${
+               fruit === 'ripe'
+                 ? ' (Status changed to Harvest-Ready)'
+                 : fruit === 'unripe'
+                 ? ' (Status changed to Not-Ready)'
+                 : fruit === 'none'
+                 ? ' (Status changed to Verified)'
+                 : ''
+             }.`
+           );
            setNotificationType('success');
            setNotificationVisible(true);
          } catch (error) {
+           console.error(error);
            setNotificationMessage('Failed to save changes. Check your network and permissions.');
            setNotificationType('error');
            setNotificationVisible(true);
-           console.error(error);
          } finally {
            setLoading(false);
          }
@@ -208,6 +229,7 @@ function EditTreeForm({ treeID }) {
      },
    ]);
  };
+
 
 
   if (isLoading) {

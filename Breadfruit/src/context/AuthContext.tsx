@@ -74,42 +74,39 @@ export function AuthProvider({ children }) {
     }
   }, []);
 
-  const login = useCallback(
-      async (email, password) => {
-        try {
-          const credential = await auth().signInWithEmailAndPassword(email, password);
-          const firebaseUser = credential.user;
-          const userData = await fetchUserData(firebaseUser);
+ const login = useCallback(
+     async (email, password) => {
+       try {
+         const credential = await auth().signInWithEmailAndPassword(email, password);
+         const firebaseUser = credential.user;
+         const userData = await fetchUserData(firebaseUser);
 
+         if (userData) {
+           // ✅ FIX: The condition is now correct.
+           // It now blocks researchers and admins whose status is 'pending'.
+           if (
+             (userData.role === 'researcher' || userData.role === 'admin') &&
+             userData.status === 'pending'
+           ) {
+             await auth().signOut();
+             const error = new Error('Your account is pending approval.');
+             (error as any).code = 'auth/pending-approval';
+             throw error;
+           }
 
-          if (userData) {
-            // 🚫 Researchers and Admins require approval
-            if (
-              (userData.role === 'researcher' || userData.role === 'admin') &&
-              userData.status === 'approved'
-            ) {
-              await auth().signOut();
-              const error = new Error('Your account is pending approval.');
-              (error as any).code = 'auth/pending-approval';
-              throw error;
-            }
-
-            // ✅ Viewers can always log in
-            setUser(userData);
-            await Keychain.setGenericPassword('user', JSON.stringify(userData), {
-              service: KEYCHAIN_SERVICE,
-            });
-            return userData;
-          }
-          return null;
-        } catch (err) {
-          console.error('Login error:', err);
-          throw err;
-        }
-      },
-      [fetchUserData]
-    );
-
+           // All other users (viewers, approved researchers/admins) can log in.
+           setUser(userData);
+           await Keychain.setGenericPassword('user', JSON.stringify(userData), { service: KEYCHAIN_SERVICE });
+           return userData;
+         }
+         return null;
+       } catch (err) {
+         console.error('Login error:', err);
+         throw err;
+       }
+     },
+     [fetchUserData]
+   );
   const logout = useCallback(async () => {
     try {
       await auth().signOut();

@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from "react";
 import {
   View,
@@ -11,67 +12,74 @@ import {
   Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Button, Text, TextInput, Menu, Appbar} from "react-native-paper";
+import { Button, Text, TextInput, Menu } from "react-native-paper";
 import MaterialIcons from "react-native-vector-icons/MaterialIcons";
 import Geolocation from "react-native-geolocation-service";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import { launchCamera, launchImageLibrary } from "react-native-image-picker";
-import auth from '@react-native-firebase/auth';
-import firestore from '@react-native-firebase/firestore';
-import storage from '@react-native-firebase/storage';
+import auth from "@react-native-firebase/auth";
+import firestore from "@react-native-firebase/firestore";
+import storage from "@react-native-firebase/storage";
 import barangayData from "@/constants/barangayData";
+import { useAuth } from "@/context/AuthContext";
+
 const FRUIT_STATUS_OPTIONS = ["none", "unripe", "ripe"];
 const CITY_OPTIONS = Object.keys(barangayData);
 
 export default function AddTreeScreen() {
   const navigation = useNavigation();
   const route = useRoute();
+  const { user: currentUser } = useAuth();
 
   const [image, setImage] = useState<string | null>(route.params?.imageUri || null);
   const [diameterInput, setDiameterInput] = useState(route.params?.diameter?.toString() || "");
   const [latitudeInput, setLatitudeInput] = useState<string>("");
   const [longitudeInput, setLongitudeInput] = useState<string>("");
-
   const [city, setCity] = useState("");
   const [barangay, setBarangay] = useState("");
   const [fruitStatus, setFruitStatus] = useState("none");
-
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [hasSaved, setHasSaved] = useState(false);
-
   const [showStatusMenu, setShowStatusMenu] = useState(false);
   const [cityOptionsMenuVisible, setCityOptionsMenuVisible] = useState(false);
   const [barangayOptionsMenuVisible, setBarangayOptionsMenuVisible] = useState(false);
-
   const BARANGAY_OPTIONS = barangayData[city] || [];
-  const [heightInput, setHeightInput] = useState("");
 
   useEffect(() => {
     if (route.params?.diameter) {
       setDiameterInput(route.params.diameter.toString());
     }
   }, [route.params?.diameter]);
- const handleNavigateToScanner = () => {
-   if (!image) {
-     Alert.alert("Image Required", "Please select an image first.");
-     return;
-   }
-     navigation.navigate("DiameterScannerScreen", { imageUri: image });
- };
 
-// ✅ Location Permission and Get Location
+  const handleNavigateToScanner = () => { if (!image) { Alert.alert("Image Required", "Please select an image first."); return; } navigation.navigate("EditDiameterScanner", { imageUri: image }); };
+
+  // 📸 Select Image
+  const handleImageSelection = () => {
+    const options = { mediaType: "photo" as const, quality: 0.8 };
+    Alert.alert("Select Image", "Choose an option", [
+      { text: "Take Photo", onPress: () => launchCamera(options, handleImageResponse) },
+      { text: "Choose from Gallery", onPress: () => launchImageLibrary(options, handleImageResponse) },
+      { text: "Cancel", style: "cancel" },
+    ]);
+  };
+
+  const handleImageResponse = (response: any) => {
+    if (response.didCancel) return;
+    if (response.errorCode) {
+      console.error("ImagePicker Error: ", response.errorMessage);
+      return;
+    }
+    if (response.assets && response.assets.length > 0) {
+      setImage(response.assets[0].uri || null);
+    }
+  };
+
+  // 📍 Location Permission
   const requestLocationPermission = async () => {
     try {
       if (Platform.OS === "android") {
         const granted = await PermissionsAndroid.request(
-          PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
-          {
-            title: "Location Permission",
-            message: "App needs access to your location.",
-            buttonPositive: "OK",
-            buttonNegative: "Cancel",
-          }
+          PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION
         );
         return granted === PermissionsAndroid.RESULTS.GRANTED;
       }
@@ -81,12 +89,14 @@ export default function AddTreeScreen() {
       return false;
     }
   };
-const getLocation = async () => {
+
+  const getLocation = async () => {
     const hasPermission = await requestLocationPermission();
     if (!hasPermission) {
       Alert.alert("Permission Denied", "Location permission is required.");
       return;
     }
+
     setLoading(true);
     Geolocation.getCurrentPosition(
       (position) => {
@@ -102,137 +112,112 @@ const getLocation = async () => {
       { enableHighAccuracy: true, timeout: 15000, maximumAge: 10000 }
     );
   };
- const requestCameraPermission = async () => {
-    if (Platform.OS === 'android') {
-      try {
-        const granted = await PermissionsAndroid.request(
-          PermissionsAndroid.PERMISSIONS.CAMERA,
-          {
-            title: "Camera Permission",
-            message: "This app needs access to your camera to take photos.",
-            buttonPositive: "OK",
-            buttonNegative: "Cancel",
-          }
-        );
-        return granted === PermissionsAndroid.RESULTS.GRANTED;
-      } catch (err) {
-        console.warn(err);
-        return false;
-      }
-    }
-    return true; // For iOS, permissions are handled differently
-  };
-  // ✅ Image Selection
-  const handleImageSelection = () => {
-     const options = { mediaType: "photo" as const, quality: 0.8 };
-     Alert.alert("Select Image", "Choose an option", [
-       {
-         text: "Take Photo",
-         onPress: async () => {
-           // ✅ FIX: Request permission before launching the camera
-           const hasPermission = await requestCameraPermission();
-           if (hasPermission) {
-             launchCamera(options, handleImageResponse);
-           } else {
-             Alert.alert("Permission Denied", "Camera permission is required to take photos.");
-           }
-         }
-       },
-       { text: "Choose from Gallery", onPress: () => launchImageLibrary(options, handleImageResponse) },
-       { text: "Cancel", style: "cancel" },
-     ]);
-   };
-
-  const handleImageResponse = (response: any) => {
-    if (response.didCancel) return;
-    if (response.errorCode) {
-      console.error("ImagePicker Error: ", response.errorMessage);
-      return;
-    }
-    if (response.assets && response.assets.length > 0) {
-      setImage(response.assets[0].uri || null);
-    }
-  };
-const handleRemoveImage = () => setImage(null);
-
-
 
 const handleSaveTree = async () => {
-  if (hasSaved) return; // stop multiple saves
-
   try {
     setSaving(true);
-    setHasSaved(true);
-
-    const currentUser = auth().currentUser;
     if (!currentUser) {
-      Alert.alert("Authentication Error", "You must be logged in to add a tree.");
+      Alert.alert("Authentication Error", "You must be logged in.");
       setSaving(false);
-      setHasSaved(false);
       return;
     }
 
-    let imageUrl = "";
+    const userRole = currentUser.role || "verifier";
+    let treeStatus = "";
 
-    // ✅ Upload image if selected
+    // 🌳 Auto set tree status based on fruitStatus
+    if (fruitStatus === "ripe") {
+      treeStatus = "harvest-ready";
+    } else if (fruitStatus === "unripe") {
+      treeStatus = "not-ready";
+    } else if (fruitStatus === "none") {
+      treeStatus = "verified";
+    }
+
+    // 🔄 Researchers still go to pending if required by your approval logic
+    if (userRole === "researcher") {
+      // researcher trees start as pending no matter what fruit status is
+      treeStatus = "pending";
+    }
+
+    // 📸 Upload image if available
+    let imageUrl = "";
     if (image) {
       const fileName = `images/trees/${currentUser.uid}_${Date.now()}.jpg`;
       const reference = storage().ref(fileName);
-
-      const filePath = image.startsWith("file://")
-        ? image.replace("file://", "")
-        : image;
-
+      const filePath = image.startsWith("file://") ? image.replace("file://", "") : image;
       await reference.putFile(filePath);
       imageUrl = await reference.getDownloadURL();
     }
 
-    // ✅ Prepare new tree data
+    // 🕒 Current year
+    const year = new Date().getFullYear();
+
+    // 🔢 Get latest tree for the same year
+    const treesRef = firestore().collection("trees");
+    const lastDoc = await treesRef
+      .where("treeID", ">=", `BFT-${year}-000000`)
+      .where("treeID", "<=", `BFT-${year}-999999`)
+      .orderBy("treeID", "desc")
+      .limit(1)
+      .get();
+
+    let newNumber = 1;
+    if (!lastDoc.empty) {
+      const lastTreeID = lastDoc.docs[0].data().treeID;
+      const lastNum = parseInt(lastTreeID.split("-")[2], 10);
+      if (!isNaN(lastNum)) {
+        newNumber = lastNum + 1;
+      }
+    }
+
+    const newTreeID = `BFT-${year}-${String(newNumber).padStart(6, "0")}`;
+    const formattedDate = new Date().toISOString().split("T")[0];
+
+    // 🌳 Create the tree data
     const newTree = {
-      treeID: `BFT-${new Date().getFullYear()}-${Math.floor(Math.random() * 100000)
-        .toString()
-        .padStart(6, "0")}`,
-      city,
-      barangay,
+      barangay: barangay.trim().toLowerCase(),
+      city: city.trim().toLowerCase(),
       coordinates: {
         latitude: parseFloat(latitudeInput) || 0,
         longitude: parseFloat(longitudeInput) || 0,
       },
+      dateTracked: formattedDate,
       diameter: parseFloat(diameterInput) || 0,
-      height: parseFloat(heightInput) || 0,
       fruitStatus,
       image: imageUrl,
-      trackedBy: currentUser.displayName || currentUser.email,
-      dateTracked: firestore.FieldValue.serverTimestamp(),
-      status: "pending",
+      status: treeStatus,
+      trackedById: currentUser.uid,
+      treeID: newTreeID,
     };
 
-    const docRef = await firestore().collection("trees").add(newTree);
+    await treesRef.doc(newTreeID).set(newTree);
 
     Alert.alert("Success", "Tree added successfully!");
 
-    // ✅ Clear all inputs after saving
+    // 🧹 Reset fields
     setImage(null);
+    setDiameterInput("");
+    setLatitudeInput("");
+    setLongitudeInput("");
     setCity("");
     setBarangay("");
     setFruitStatus("none");
-    setDiameterInput("");
-    setHeightInput("");
-    setLatitudeInput("");
-    setLongitudeInput("");
-    setHasSaved(false); // Allow future saves
 
-    // ✅ Navigate to Map only (stay there, manual back to pending trees)
-    navigation.navigate("Map", {
-      lat: parseFloat(latitudeInput),
-      lng: parseFloat(longitudeInput),
-      treeID: docRef.id,
-    });
+    // 🔁 Navigation logic
+    if (userRole !== "researcher") {
+      navigation.navigate("Map", {
+        lat: parseFloat(latitudeInput),
+        lng: parseFloat(longitudeInput),
+        treeID: newTreeID,
+      });
+    } else {
+      navigation.navigate("PendingTrees");
+    }
 
-  } catch (error: any) {
+  } catch (error) {
     console.error("Error saving tree:", error);
     Alert.alert("Error", error.message);
-    setHasSaved(false); // allow retry
   } finally {
     setSaving(false);
   }
@@ -240,20 +225,14 @@ const handleSaveTree = async () => {
 
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-      style={{ flex: 1 }}
-    >
+    <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
       <SafeAreaView style={styles.safeArea}>
-
         <ScrollView contentContainerStyle={styles.scrollContainer} keyboardShouldPersistTaps="handled">
-
-
           <TouchableOpacity style={styles.imageContainer} onPress={handleImageSelection}>
             {image ? (
               <>
                 <Image source={{ uri: image }} style={styles.image} />
-                <Button mode="contained" onPress={handleRemoveImage} style={styles.removeButton} labelStyle={{fontSize: 12}}>
+                <Button mode="contained" onPress={() => setImage(null)} style={styles.removeButton}>
                   Change
                 </Button>
               </>
@@ -261,7 +240,6 @@ const handleSaveTree = async () => {
               <View style={styles.imagePlaceholder}>
                 <MaterialIcons name="add-a-photo" size={40} color="#2ecc71" />
                 <Text style={styles.imageLabel}>Capture or Upload Picture</Text>
-                <Text style={styles.imageHint}>Tap to choose</Text>
               </View>
             )}
           </TouchableOpacity>
@@ -287,12 +265,17 @@ const handleSaveTree = async () => {
                 {CITY_OPTIONS.map((option) => (
                   <Menu.Item
                     key={option}
-                    onPress={() => { setCity(option); setBarangay(""); setCityOptionsMenuVisible(false); }}
+                    onPress={() => {
+                      setCity(option);
+                      setBarangay("");
+                      setCityOptionsMenuVisible(false);
+                    }}
                     title={option}
                   />
                 ))}
               </Menu>
             </View>
+
             <View style={styles.halfWidth}>
               <Menu
                 visible={barangayOptionsMenuVisible}
@@ -314,7 +297,10 @@ const handleSaveTree = async () => {
                 {BARANGAY_OPTIONS.map((option) => (
                   <Menu.Item
                     key={option}
-                    onPress={() => { setBarangay(option); setBarangayOptionsMenuVisible(false); }}
+                    onPress={() => {
+                      setBarangay(option);
+                      setBarangayOptionsMenuVisible(false);
+                    }}
                     title={option}
                   />
                 ))}
@@ -328,11 +314,11 @@ const handleSaveTree = async () => {
                 label="Diameter (m)"
                 value={diameterInput}
                 onChangeText={setDiameterInput}
-                placeholder="Scan to get value"
                 style={styles.input}
                 mode="outlined"
               />
             </View>
+
             <View style={styles.halfWidth}>
               <Menu
                 visible={showStatusMenu}
@@ -353,7 +339,10 @@ const handleSaveTree = async () => {
                 {FRUIT_STATUS_OPTIONS.map((option) => (
                   <Menu.Item
                     key={option}
-                    onPress={() => { setFruitStatus(option); setShowStatusMenu(false); }}
+                    onPress={() => {
+                      setFruitStatus(option);
+                      setShowStatusMenu(false);
+                    }}
                     title={option.charAt(0).toUpperCase() + option.slice(1)}
                   />
                 ))}
@@ -394,19 +383,8 @@ const handleSaveTree = async () => {
           />
 
           <View style={styles.buttonContainer}>
-            <Button
-              mode="contained"
-              onPress={handleNavigateToScanner}
-              style={styles.primaryButton}
-            >
-              Scan Diameter
-            </Button>
-             <Button
-              mode="contained"
-              onPress={handleSaveTree}
-              style={styles.secondaryButton}
-              loading={saving}
-            >
+          <Button mode="contained" onPress={handleNavigateToScanner} style={styles.primaryButton} > Scan Diameter </Button>
+            <Button mode="contained" onPress={handleSaveTree} loading={saving} style={styles.secondaryButton}>
               {saving ? "Saving..." : "Add Tree"}
             </Button>
           </View>
@@ -418,19 +396,7 @@ const handleSaveTree = async () => {
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: "#fff" },
-// ✅ 3. Add styles for the Appbar
-  appbarHeader: {
-    backgroundColor: '#fff',
-    elevation: 0, // Remove shadow on Android
-  },
-  appbarTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
-  },
-
   scrollContainer: { padding: 20, flexGrow: 1 },
-  title: { fontSize: 24, fontWeight: "bold", marginBottom: 20, color: "#333", textAlign: 'center' },
   imageContainer: {
     height: 200,
     borderRadius: 12,
@@ -443,25 +409,19 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   image: { width: "100%", height: "100%" },
-  removeButton: {
-    position: "absolute",
-    top: 10,
-    right: 10,
-    backgroundColor: "rgba(0,0,0,0.5)",
-  },
-  imagePlaceholder: { justifyContent: "center", alignItems: "center", gap: 8 },
+  removeButton: { position: "absolute", top: 10, right: 10, backgroundColor: "rgba(0,0,0,0.5)" },
+  imagePlaceholder: { justifyContent: "center", alignItems: "center" },
   imageLabel: { color: "#2ecc71", fontSize: 16, fontWeight: "600" },
-  imageHint: { fontSize: 12, color: "#666" },
   row: { flexDirection: "row", gap: 15, marginBottom: 10 },
   halfWidth: { flex: 1 },
   input: { backgroundColor: "#fff" },
   menuInput: { backgroundColor: "#fff" },
   coordinateGroup: {
-    backgroundColor: '#f9f9f9',
+    backgroundColor: "#f9f9f9",
     padding: 15,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#e0e0e0',
+    borderColor: "#e0e0e0",
     marginVertical: 10,
   },
   useLocationText: {
@@ -471,20 +431,7 @@ const styles = StyleSheet.create({
     marginTop: 10,
     textAlign: "right",
   },
-  buttonContainer: {
-    marginTop: 20,
-    gap: 12,
-  },
-  primaryButton: {
-    backgroundColor: "#2ecc71",
-    paddingVertical: 8,
-    borderRadius:100,
-
-
-  },
-  secondaryButton: {
-    backgroundColor: "#333",
-    paddingVertical: 8,
-    borderRadius:100,
-  },
+  buttonContainer: { marginTop: 20 },
+  primaryButton: { backgroundColor: "#2ecc71", paddingVertical: 8, borderRadius: 100, marginBottom:10 },
+  secondaryButton: { backgroundColor: "#333", paddingVertical: 8, borderRadius: 100 },
 });

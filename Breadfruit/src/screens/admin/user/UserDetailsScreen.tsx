@@ -113,16 +113,7 @@ export default function UserDetailsScreen() {
               <Text style={styles.detailText}>{user?.role}</Text>
             </View>
 
-            {/* ✅ Make "Tracked Trees" tappable */}
-              <TouchableOpacity
-                style={styles.detailItem}
-                onPress={() => navigation.navigate("TrackedTreesScreen", { userID: user.uid })}
-                       >
-                <MaterialCommunityIcons name="tree-outline" size={24} color="#2ecc71" />
-                <Text style={[styles.detailText, { color: "#2ecc71", fontWeight: "bold" }]}>
-                           View Tracked Trees
-                 </Text>
-                 </TouchableOpacity>
+
 
             <View style={styles.detailItem}>
               <MaterialCommunityIcons name="calendar-blank-outline" size={24} color="#2ecc71" />

@@ -1,4 +1,3 @@
-import { useTreeData } from '@/hooks/useTreeData';
 import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -11,49 +10,102 @@ import {
   TouchableOpacity,
   PermissionsAndroid,
   Platform,
+  ActivityIndicator,
+  Text,
 } from 'react-native';
 import Geocoder from 'react-native-geocoding';
 import Geolocation from 'react-native-geolocation-service';
 import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
+import firestore from '@react-native-firebase/firestore';
+import { Snackbar } from 'react-native-paper';
 
-
-// ✅ Initialize with your API key once
+// ✅ Initialize Geocoder
 Geocoder.init("AIzaSyDkaDuJ4kRUpUJiXZrj7MHczYUFIcCIZNk", { language: "en" });
 
 let lastRegion: any = null;
 
 export default function MapScreen() {
-  const { trees } = useTreeData();
   const route = useRoute();
-  const navigation = useNavigation<any>();
+  const navigation = useNavigation();
   const mapRef = useRef<MapView>(null);
   const { width, height } = Dimensions.get('window');
 
   const [region, setRegion] = useState({
     latitude: 9.8833,
-    longitude: 123.6000,
+    longitude: 123.6,
     latitudeDelta: 0.03,
     longitudeDelta: 0.03 * (width / height),
   });
 
+  const [trees, setTrees] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [highlightedTreeID, setHighlightedTreeID] = useState<string | null>(null);
   const highlightAnim = useRef(new Animated.Value(1)).current;
 
-  // ✅ Save last viewed map region
+  const [snackbarVisible, setSnackbarVisible] = useState(false);
+  const [snackbarMessage, setSnackbarMessage] = useState('');
+  const [previousCount, setPreviousCount] = useState(0);
+  const [selectedStatus, setSelectedStatus] = useState<string | null>(null);
+
+  // ✅ Pin colors for each status
+const getPinColor = (status: string) => {
+  switch (status) {
+    case 'verified':
+      return '#2ecc71';
+    case 'harvest-ready':
+      return '#f1c40f';
+    case 'not-ready':
+      return '#e67e22'; // new color for not ready
+    default:
+      return '#95a5a6';
+  }
+};
+
+  // ✅ Save last viewed region
   useEffect(() => {
     lastRegion = region;
   }, [region]);
 
-  // ✅ Restore last region when coming back
+  // ✅ Restore last region on focus
   useFocusEffect(
     useCallback(() => {
       if (lastRegion) setRegion(lastRegion);
     }, [])
   );
 
-  // ✅ When navigated from AddTreeScreen with new coordinates
+  // ✅ Fetch all trees with verified, harvest-ready, or harvested
+  useEffect(() => {
+    setLoading(true);
+    const unsubscribe = firestore()
+      .collection('trees')
+      .where('status', 'in', ['verified', 'harvest-ready', 'harvested','not-ready'])
+      .onSnapshot(snapshot => {
+        const treeData: any[] = [];
+        snapshot.forEach(doc => treeData.push({ treeID: doc.id, ...doc.data() }));
+        setTrees(treeData);
+        setLoading(false);
+      });
+    return () => unsubscribe();
+  }, [route.params?.refresh]);
+
+  // ✅ Highlight animation
+  const startHighlightAnimation = () => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(highlightAnim, { toValue: 1.8, duration: 500, useNativeDriver: true }),
+        Animated.timing(highlightAnim, { toValue: 1, duration: 500, useNativeDriver: true }),
+      ])
+    ).start();
+
+    setTimeout(() => {
+      highlightAnim.stopAnimation();
+      setHighlightedTreeID(null);
+    }, 5000);
+  };
+
+  // ✅ Highlight newly added tree
   useEffect(() => {
     if (route.params?.lat && route.params?.lng) {
       const newRegion = {
@@ -62,7 +114,6 @@ export default function MapScreen() {
         latitudeDelta: 0.01,
         longitudeDelta: 0.01 * (width / height),
       };
-
       mapRef.current?.animateToRegion(newRegion, 1500);
       setRegion(newRegion);
 
@@ -73,23 +124,7 @@ export default function MapScreen() {
     }
   }, [route.params?.lat, route.params?.lng]);
 
-  // ✅ Pulsing animation for highlighted marker
-  const startHighlightAnimation = () => {
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(highlightAnim, { toValue: 1.8, duration: 500, useNativeDriver: true }),
-        Animated.timing(highlightAnim, { toValue: 1, duration: 500, useNativeDriver: true }),
-      ])
-    ).start();
-
-    // Stop animation after 5 seconds
-    setTimeout(() => {
-      highlightAnim.stopAnimation();
-      setHighlightedTreeID(null);
-    }, 5000);
-  };
-
-  // ✅ Request location permission (Android)
+  // ✅ Request location permission
   const requestLocationPermission = async () => {
     try {
       if (Platform.OS === 'android') {
@@ -110,61 +145,81 @@ export default function MapScreen() {
     }
   };
 
-  // ✅ Get current location and move the map there
-// ✅ Get current location and move the map there
-const handleMyLocation = async () => {
-  const hasPermission = await requestLocationPermission();
-  if (!hasPermission) {
-    Alert.alert('Permission Denied', 'Location access is required.');
-    return;
-  }
+  // ✅ My Location
+  const handleMyLocation = async () => {
+    const hasPermission = await requestLocationPermission();
+    if (!hasPermission) {
+      Alert.alert('Permission Denied', 'Location access is required.');
+      return;
+    }
 
-  Geolocation.getCurrentPosition(
-    (position) => {
-      const { latitude, longitude } = position.coords;
+    Geolocation.getCurrentPosition(
+      (position) => {
+        const { latitude, longitude } = position.coords;
+        const newRegion = {
+          latitude,
+          longitude,
+          latitudeDelta: 0.015,
+          longitudeDelta: 0.015 * (width / height),
+        };
+        mapRef.current?.animateToRegion(newRegion, 1500);
+        setRegion(newRegion);
+      },
+      (error) => {
+        console.error('Location error:', error);
+        Alert.alert('Error', 'Unable to get your location. Please check GPS.');
+      },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 10000 }
+    );
+  };
 
-      const newRegion = {
-        latitude,
-        longitude,
-        latitudeDelta: 0.015,
-        longitudeDelta: 0.015 * (width / height),
-      };
-
-      mapRef.current?.animateToRegion(newRegion, 1500);
-      setRegion(newRegion);
-    },
-    (error) => {
-      console.error('Location error:', error);
-      Alert.alert('Error', 'Unable to get your location. Please check GPS.');
-    },
-    { enableHighAccuracy: true, timeout: 15000, maximumAge: 10000 }
-  );
-};
-
-  // ✅ Handle search by location name
+  // ✅ Search location
   const handleSearch = async () => {
     if (!searchQuery.trim()) return;
-
     try {
       const json = await Geocoder.from(searchQuery.trim());
       const location = json.results[0].geometry.location;
-
       const newRegion = {
         latitude: location.lat,
         longitude: location.lng,
         latitudeDelta: 0.015,
         longitudeDelta: 0.015 * (width / height),
       };
-
       mapRef.current?.animateToRegion(newRegion, 1500);
       setRegion(newRegion);
     } catch (error) {
       console.error('Search error:', error);
-      Alert.alert('Search failed', 'Could not find this location. Check your internet or API key.');
+      Alert.alert('Search failed', 'Could not find this location.');
     } finally {
       setSearchQuery('');
     }
   };
+
+  // ✅ Snackbar for tree approval/removal
+  useEffect(() => {
+    if (previousCount === 0) {
+      setPreviousCount(trees.length);
+      return;
+    }
+
+    if (trees.length < previousCount) {
+      setSnackbarMessage('Tree removed successfully.');
+      setSnackbarVisible(true);
+    } else if (trees.length > previousCount) {
+      setSnackbarMessage('Tree approved successfully.');
+      setSnackbarVisible(true);
+    }
+
+    setPreviousCount(trees.length);
+  }, [trees]);
+
+  if (loading) {
+    return (
+      <View style={styles.center}>
+        <ActivityIndicator size="large" color="#2ecc71" />
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -183,7 +238,27 @@ const handleMyLocation = async () => {
         </View>
       </View>
 
-      {/* 🗺️ Google Map */}
+      {/* 🌈 Legend */}
+      <View style={styles.legendContainer}>
+        {['verified', 'harvest-ready', 'not-ready'].map((status) => (
+          <TouchableOpacity
+            key={status}
+            style={[
+              styles.legendItem,
+              selectedStatus === status && { backgroundColor: 'rgba(46,204,113,0.15)', borderRadius: 6, padding: 2 }
+            ]}
+            onPress={() => setSelectedStatus(selectedStatus === status ? null : status)}
+          >
+            <View style={[styles.legendColor, { backgroundColor: getPinColor(status) }]} />
+            <Text style={styles.legendText}>
+              {status === 'not-ready' ? 'unripe' : status.charAt(0).toUpperCase() + status.slice(1)}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+
+      {/* 🗺️ Map */}
       <MapView
         ref={mapRef}
         provider={PROVIDER_GOOGLE}
@@ -191,28 +266,20 @@ const handleMyLocation = async () => {
         region={region}
         onRegionChangeComplete={setRegion}
         showsUserLocation={true}
-
       >
         {trees
-          .filter(
-            (tree) =>
-              tree.coordinates &&
-              typeof tree.coordinates.latitude === 'number' &&
-              typeof tree.coordinates.longitude === 'number' &&
-              !isNaN(tree.coordinates.latitude) &&
-              !isNaN(tree.coordinates.longitude)
-          )
+          .filter(tree => !selectedStatus || tree.status === selectedStatus)
           .map((tree) => {
             const isHighlighted = tree.treeID === highlightedTreeID;
             return (
               <Marker
                 key={tree.treeID}
                 coordinate={{
-                  latitude: tree.coordinates.latitude,
-                  longitude: tree.coordinates.longitude,
+                  latitude: tree.coordinates?.latitude ?? 0,
+                  longitude: tree.coordinates?.longitude ?? 0,
                 }}
-                pinColor={isHighlighted ? '#00FF00' : '#2ecc71'}
-                title={tree.barangay || 'Unknown Barangay'}
+                pinColor={isHighlighted ? '#00FF00' : getPinColor(tree.status)}
+                title={tree.treeName || 'Unnamed Tree'}
                 description={`Tracked by: ${tree.trackedBy || 'N/A'}`}
                 onPress={() => navigation.navigate('TreeDetails', { treeID: tree.treeID })}
               >
@@ -234,7 +301,17 @@ const handleMyLocation = async () => {
           })}
       </MapView>
 
-      {/* 📍 My Location Floating Button */}
+      {/* ✅ Snackbar */}
+      <Snackbar
+        visible={snackbarVisible}
+        onDismiss={() => setSnackbarVisible(false)}
+        duration={2500}
+        style={{ backgroundColor: '#2ecc71' }}
+      >
+        {snackbarMessage}
+      </Snackbar>
+
+      {/* 📍 My Location Button */}
       <TouchableOpacity style={styles.myLocationButton} onPress={handleMyLocation}>
         <MaterialIcons name="my-location" size={28} color="#fff" />
       </TouchableOpacity>
@@ -266,10 +343,7 @@ const styles = StyleSheet.create({
     flex: 1,
     marginLeft: 10,
   },
-  map: {
-    width: '100%',
-    height: '100%',
-  },
+  map: { width: '100%', height: '100%' },
   myLocationButton: {
     position: 'absolute',
     bottom: 25,
@@ -281,5 +355,32 @@ const styles = StyleSheet.create({
     shadowColor: '#000',
     shadowOpacity: 0.3,
     shadowOffset: { width: 0, height: 2 },
+  },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+
+  // Legend
+  legendContainer: {
+    position: 'absolute',
+    top: 90,
+    left: 16,
+    flexDirection: 'row',
+    zIndex: 1,
+  },
+  legendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: 10,
+    paddingHorizontal: 6,
+    paddingVertical: 4,
+  },
+  legendColor: {
+    width: 16,
+    height: 16,
+    borderRadius: 4,
+    marginRight: 4,
+  },
+  legendText: {
+    fontSize: 14,
+    fontWeight: '500',
   },
 });

@@ -11,6 +11,7 @@ import {
   PermissionsAndroid,
   Platform,
   ActivityIndicator,
+  Text,
 } from 'react-native';
 import Geocoder from 'react-native-geocoding';
 import Geolocation from 'react-native-geolocation-service';
@@ -26,7 +27,7 @@ let lastRegion: any = null;
 
 export default function MapScreen() {
   const route = useRoute();
-  const navigation = useNavigation<any>();
+  const navigation = useNavigation();
   const mapRef = useRef<MapView>(null);
   const { width, height } = Dimensions.get('window');
 
@@ -45,40 +46,49 @@ export default function MapScreen() {
 
   const [snackbarVisible, setSnackbarVisible] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState('');
-  const [previousCount, setPreviousCount] = useState(0); // ✅ FIX: Added this missing state
+  const [previousCount, setPreviousCount] = useState(0);
+  const [selectedStatus, setSelectedStatus] = useState<string | null>(null);
 
-  // ✅ Save last viewed map region
+  // ✅ Pin colors for each status
+const getPinColor = (status: string) => {
+  switch (status) {
+    case 'verified':
+      return '#2ecc71';
+    case 'harvest-ready':
+      return '#f1c40f';
+    case 'not-ready':
+      return '#e67e22'; // new color for not ready
+    default:
+      return '#95a5a6';
+  }
+};
+
+  // ✅ Save last viewed region
   useEffect(() => {
     lastRegion = region;
   }, [region]);
 
-  // ✅ Restore last region when coming back
+  // ✅ Restore last region on focus
   useFocusEffect(
     useCallback(() => {
       if (lastRegion) setRegion(lastRegion);
     }, [])
   );
 
-  // ✅ Fetch only verified trees
+  // ✅ Fetch all trees with verified, harvest-ready, or harvested
   useEffect(() => {
     setLoading(true);
     const unsubscribe = firestore()
       .collection('trees')
-      .where('status', '==', 'verified')
-      .onSnapshot(
-        (snapshot) => {
-          const treeData: any[] = [];
-          snapshot.forEach((doc) => treeData.push({ treeID: doc.id, ...doc.data() }));
-          setTrees(treeData);
-          setLoading(false);
-        },
-        (err) => {
-          console.error(err);
-          setLoading(false);
-        }
-      );
+      .where('status', 'in', ['verified', 'harvest-ready', 'harvested'])
+      .onSnapshot(snapshot => {
+        const treeData: any[] = [];
+        snapshot.forEach(doc => treeData.push({ treeID: doc.id, ...doc.data() }));
+        setTrees(treeData);
+        setLoading(false);
+      });
     return () => unsubscribe();
-  }, []);
+  }, [route.params?.refresh]);
 
   // ✅ Highlight animation
   const startHighlightAnimation = () => {
@@ -95,7 +105,7 @@ export default function MapScreen() {
     }, 5000);
   };
 
-  // ✅ Highlight newly added tree from route
+  // ✅ Highlight newly added tree
   useEffect(() => {
     if (route.params?.lat && route.params?.lng) {
       const newRegion = {
@@ -135,7 +145,7 @@ export default function MapScreen() {
     }
   };
 
-  // ✅ My Location handler
+  // ✅ My Location
   const handleMyLocation = async () => {
     const hasPermission = await requestLocationPermission();
     if (!hasPermission) {
@@ -163,10 +173,9 @@ export default function MapScreen() {
     );
   };
 
-  // ✅ Search handler
+  // ✅ Search location
   const handleSearch = async () => {
     if (!searchQuery.trim()) return;
-
     try {
       const json = await Geocoder.from(searchQuery.trim());
       const location = json.results[0].geometry.location;
@@ -186,7 +195,7 @@ export default function MapScreen() {
     }
   };
 
-  // ✅ Detect tree approval or deletion and show snackbar
+  // ✅ Snackbar for tree approval/removal
   useEffect(() => {
     if (previousCount === 0) {
       setPreviousCount(trees.length);
@@ -229,6 +238,26 @@ export default function MapScreen() {
         </View>
       </View>
 
+      {/* 🌈 Legend */}
+      <View style={styles.legendContainer}>
+        {['verified', 'harvest-ready', 'not-ready'].map((status) => (
+          <TouchableOpacity
+            key={status}
+            style={[
+              styles.legendItem,
+              selectedStatus === status && { backgroundColor: 'rgba(46,204,113,0.15)', borderRadius: 6, padding: 2 }
+            ]}
+            onPress={() => setSelectedStatus(selectedStatus === status ? null : status)}
+          >
+            <View style={[styles.legendColor, { backgroundColor: getPinColor(status) }]} />
+            <Text style={styles.legendText}>
+              {status === 'not-ready' ? 'unripe' : status.charAt(0).toUpperCase() + status.slice(1)}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+
       {/* 🗺️ Map */}
       <MapView
         ref={mapRef}
@@ -238,39 +267,41 @@ export default function MapScreen() {
         onRegionChangeComplete={setRegion}
         showsUserLocation={true}
       >
-        {trees.map((tree) => {
-          const isHighlighted = tree.treeID === highlightedTreeID;
-          return (
-            <Marker
-              key={tree.treeID}
-              coordinate={{
-                latitude: tree.coordinates?.latitude ?? 0,
-                longitude: tree.coordinates?.longitude ?? 0,
-              }}
-              pinColor={isHighlighted ? '#00FF00' : '#2ecc71'}
-              title={tree.barangay || 'Unknown Barangay'}
-              description={`Tracked by: ${tree.trackedBy || 'N/A'}`}
-              onPress={() => navigation.navigate('TreeDetails', { treeID: tree.treeID })}
-            >
-              {isHighlighted && (
-                <Animated.View
-                  style={{
-                    transform: [{ scale: highlightAnim }],
-                    backgroundColor: 'rgba(46, 204, 113, 0.5)',
-                    width: 30,
-                    height: 30,
-                    borderRadius: 15,
-                    borderWidth: 2,
-                    borderColor: '#2ecc71',
-                  }}
-                />
-              )}
-            </Marker>
-          );
-        })}
+        {trees
+          .filter(tree => !selectedStatus || tree.status === selectedStatus)
+          .map((tree) => {
+            const isHighlighted = tree.treeID === highlightedTreeID;
+            return (
+              <Marker
+                key={tree.treeID}
+                coordinate={{
+                  latitude: tree.coordinates?.latitude ?? 0,
+                  longitude: tree.coordinates?.longitude ?? 0,
+                }}
+                pinColor={isHighlighted ? '#00FF00' : getPinColor(tree.status)}
+                title={tree.treeName || 'Unnamed Tree'}
+                description={`Tracked by: ${tree.trackedBy || 'N/A'}`}
+                onPress={() => navigation.navigate('TreeDetails', { treeID: tree.treeID })}
+              >
+                {isHighlighted && (
+                  <Animated.View
+                    style={{
+                      transform: [{ scale: highlightAnim }],
+                      backgroundColor: 'rgba(46, 204, 113, 0.5)',
+                      width: 30,
+                      height: 30,
+                      borderRadius: 15,
+                      borderWidth: 2,
+                      borderColor: '#2ecc71',
+                    }}
+                  />
+                )}
+              </Marker>
+            );
+          })}
       </MapView>
 
-      {/* ✅ Snackbar for success notifications */}
+      {/* ✅ Snackbar */}
       <Snackbar
         visible={snackbarVisible}
         onDismiss={() => setSnackbarVisible(false)}
@@ -284,13 +315,6 @@ export default function MapScreen() {
       <TouchableOpacity style={styles.myLocationButton} onPress={handleMyLocation}>
         <MaterialIcons name="my-location" size={28} color="#fff" />
       </TouchableOpacity>
-
-      {/* ⏳ Loading Overlay */}
-      {loading && (
-        <View style={styles.loadingOverlay}>
-          <ActivityIndicator size="large" color="#2ecc71" />
-        </View>
-      )}
     </View>
   );
 }
@@ -333,10 +357,30 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
   },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  loadingOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(255,255,255,0.6)',
-    justifyContent: 'center',
+
+  // Legend
+  legendContainer: {
+    position: 'absolute',
+    top: 90,
+    left: 16,
+    flexDirection: 'row',
+    zIndex: 1,
+  },
+  legendItem: {
+    flexDirection: 'row',
     alignItems: 'center',
+    marginRight: 10,
+    paddingHorizontal: 6,
+    paddingVertical: 4,
+  },
+  legendColor: {
+    width: 16,
+    height: 16,
+    borderRadius: 4,
+    marginRight: 4,
+  },
+  legendText: {
+    fontSize: 14,
+    fontWeight: '500',
   },
 });

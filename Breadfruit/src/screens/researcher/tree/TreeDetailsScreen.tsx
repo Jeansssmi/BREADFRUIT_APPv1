@@ -1,26 +1,44 @@
-import React from 'react';
-import { ActivityIndicator, Image, ScrollView, StyleSheet, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { Alert, Image, ScrollView, StyleSheet, View, ActivityIndicator } from 'react-native';
 import { Button, Card, Text } from 'react-native-paper';
 import { useNavigation, useRoute } from '@react-navigation/native';
+import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
+import firestore from '@react-native-firebase/firestore';
+import storage from '@react-native-firebase/storage';
+import { LoadingAlert, NotificationAlert } from '@/components/NotificationModal';
 import { useTreeData } from '@/hooks/useTreeData';
-
 export default function TreeDetailsScreen() {
-  const navigation = useNavigation<any>();
   const route = useRoute<any>();
+  const navigation = useNavigation<any>();
   const { treeID } = route.params;
 
-  const { trees, isLoading, error } = useTreeData({ mode: 'single', treeID: treeID });
-  const tree = trees[0];
 
-  if (isLoading) {
-    return <View style={styles.center}><ActivityIndicator size="large" color="#2ecc71" /></View>;
+  const [loading, setLoading] = useState(false);
+  const [notificationVisible, setNotificationVisible] = useState(false);
+  const [notificationMessage, setNotificationMessage] = useState('');
+  const [notificationType, setNotificationType] = useState<'success' | 'error' | 'info'>('info');
+  const [trackerName, setTrackerName] = useState('Loading...');
+
+ // Use your standard hook for data fetching
+   const { trees, isLoading, error } = useTreeData({ mode: 'single', treeID });
+   const tree = trees[0];
+
+if (loading) {
+    return (
+      <View style={styles.center}>
+        <ActivityIndicator size="large" color="#2ecc71" />
+      </View>
+    );
   }
 
-  if (error || !tree) {
-    return <View style={styles.center}><Text>Tree not found.</Text></View>;
+  if (!tree) {
+    return (
+      <View style={styles.center}>
+        <Text>Tree not found.</Text>
+      </View>
+    );
   }
-
   return (
     <View style={{ flex: 1 }}>
       <ScrollView contentContainerStyle={styles.scrollContainer}>
@@ -65,13 +83,7 @@ export default function TreeDetailsScreen() {
 
           {/* ✅ Buttons */}
           <View style={styles.buttonGroup}>
-            <Button
-              mode="contained"
-              style={[styles.button, styles.updateButton]}
-              onPress={() => navigation.navigate('EditTree', { treeID: tree.treeID })}
-            >
-              Update Details
-            </Button>
+
             <Button
               mode="contained"
               style={[styles.button, styles.closeButton]}
