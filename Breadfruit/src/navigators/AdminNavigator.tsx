@@ -17,7 +17,7 @@ import NotificationPreferencesScreen from "../screens/shared/NotificationPrefere
 import AboutHelpScreen from "../screens/shared/AboutHelpScreen";
 import AdminAddTreeScreen from "../screens/admin/tree/AdminAddTreeScreen";
 import SearchScreen from "../screens/admin/tree/SearchScreen";
-
+import TreeListToMap from "../screens/admin/tree/TreeListToMap";
 import ActivityLogsScreen from "../screens/admin/tree/ActivityLogsScreen";
 import EditTreeScreen from "../screens/admin/tree/EditTreeScreen";
 import EditTree from "../screens/admin/tree/EditTree";
@@ -170,6 +170,7 @@ export default function AdminNavigator() {
       />
       <MainStack.Screen name="UserList" component={UserListScreen} options={{ headerTitle: "All Users" }} />
       <MainStack.Screen name="TreeList" component={TreeListScreen} options={{ headerTitle: "Trees Tracked" }} />
+       <MainStack.Screen name="TreeListToMap" component={TreeListToMap} options={{ headerTitle: "Trees Tracked" }} />
       <MainStack.Screen name="PendingUsers" component={PendingUsersScreen} options={{ headerTitle: "Pending User List" }} />
       <MainStack.Screen name="UserDetails" component={UserDetailsScreen} options={{ headerTitle: "User Details" }} />
       <MainStack.Screen name="TrackedTrees" component={TrackedTreesScreen} options={{ headerTitle: "Tracked Trees" }} />

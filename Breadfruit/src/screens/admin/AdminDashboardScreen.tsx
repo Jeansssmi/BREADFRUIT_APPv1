@@ -150,7 +150,7 @@ export default function AdminDashboardScreen() {
         <View style={styles.gridContainer}>
           <Pressable
             style={styles.gridItem}
-            onPress={() => navigation.navigate("TreeList")}
+            onPress={() => navigation.navigate("TreeListToMap")}
           >
             <Card style={[styles.card, styles.primaryCard]}>
               <Card.Content>
