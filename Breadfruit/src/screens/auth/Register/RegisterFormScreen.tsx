@@ -92,29 +92,35 @@ export default function RegisterFormScreen() {
       } else {
         throw new Error('Registration failed.');
       }
-    } catch (error: any) {
-      console.error('❌ Registration error:', error);
+     } catch (error: any) {
+        console.error('❌ Registration error:', error);
 
-      let errorMessage = 'Registration failed. Please try again later.';
-      let errorType: 'error' | 'info' = 'error';
+        let errorMessage = 'Registration failed. Please try again later.';
+        let errorType: 'error' | 'info' = 'error';
 
-      // The react-native-firebase library returns a 'code' property on the error
-      if (error.code === 'functions/already-exists') {
-        errorMessage =
-          'An account with this email already exists. Please use another email or log in.';
-        errorType = 'info';
-      } else if (error.code === 'functions/invalid-argument') {
-        errorMessage = 'Invalid data submitted. Please check your inputs.';
-      } else if (error.message) {
-        errorMessage = error.message;
+        // ✅ Detect email already in use
+        if (
+          error.code === 'auth/email-already-in-use' ||
+          error.code === 'functions/already-exists' ||
+          error.message?.toLowerCase().includes('already registered') ||
+          error.message?.toLowerCase().includes('already exists')
+        ) {
+          errorMessage =
+            'This email is already registered. Please log in or use another email address.';
+          errorType = 'info';
+        } else if (error.code === 'functions/invalid-argument') {
+          errorMessage = 'Invalid data submitted. Please check your inputs.';
+        } else if (error.message) {
+          errorMessage = error.message;
+        }
+
+        setNotificationMessage(errorMessage);
+        setNotificationType(errorType);
+        setNotificationVisible(true);
+      } finally {
+        setLoading(false);
       }
 
-      setNotificationMessage(errorMessage);
-      setNotificationType(errorType);
-      setNotificationVisible(true);
-    } finally {
-      setLoading(false);
-    }
   };
 
   return (

@@ -1,224 +1,248 @@
-import React, { useState } from "react";
-import { Alert, ScrollView, StyleSheet, View } from "react-native";
-import { Appbar, Button, Menu, Text, TextInput } from "react-native-paper";
-import { useNavigation } from "@react-navigation/native";
-import firestore from "@react-native-firebase/firestore";
-import auth from "@react-native-firebase/auth";
+import React, { useState } from 'react';
+import {
+  Image,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import { Button, Menu, Text, TextInput } from 'react-native-paper';
+import { useNavigation } from '@react-navigation/native';
+import { launchImageLibrary } from 'react-native-image-picker';
+import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
+
+// ✅ Firebase imports
+import storage from '@react-native-firebase/storage';
+import functions from '@react-native-firebase/functions';
+
+import { LoadingAlert, NotificationAlert } from '@/components/NotificationModal';
 
 export default function AddUserScreen() {
   const navigation = useNavigation();
 
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [role, setRole] = useState("researcher");
-  const [password, setPassword] = useState("");
-  const [menuVisible, setMenuVisible] = useState(false);
+  const [image, setImage] = useState<string | null>(null);
+  const [showRoleMenu, setShowRoleMenu] = useState(false);
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [role, setRole] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
 
-const pickImage = async () => {
+  const [notificationVisible, setNotificationVisible] = useState(false);
+  const [notificationMessage, setNotificationMessage] = useState('');
+  const [notificationType, setNotificationType] = useState<'success' | 'info' | 'error'>('info');
+
+  // ✅ Pick profile image
+  const pickImage = async () => {
     const result = await launchImageLibrary({ mediaType: 'photo', quality: 0.8 });
     if (result.didCancel || !result.assets || result.assets.length === 0) return;
     setImage(result.assets[0].uri || null);
   };
 
-  // ✅ Password strength logic (invisible)
-  const [passwordStrength, setPasswordStrength] = useState({
-    score: 0,
-    label: "Weak",
-  });
-
-  const evaluatePasswordStrength = (password: string) => {
-    let score = 0;
-    if (password.length >= 6) score++;
-    if (/[A-Z]/.test(password)) score++;
-    if (/[0-9]/.test(password)) score++;
-    if (/[^A-Za-z0-9]/.test(password)) score++;
-    let label = "Weak";
-    if (score === 2) label = "Medium";
-    else if (score >= 3) label = "Strong";
-    setPasswordStrength({ score, label });
-  };
-
-  const handlePasswordChange = (text: string) => {
-    setPassword(text);
-    evaluatePasswordStrength(text);
-  };
-
-  const resetFields = () => {
-    setEmail("");
-    setPassword("");
-    setName("");
-    setRole("researcher");
-    setPasswordStrength({ score: 0, label: "Weak" });
-  };
-
-  const handleCreateUser = async () => {
-    if (!email || !password || !name) {
-      Alert.alert("Missing Fields", "Please fill out all required fields.");
+  // ✅ Handle create user with Cloud Function
+  const handleSubmit = async () => {
+    if (!name || !email || !password || !confirmPassword || !role) {
+      setNotificationMessage('All fields are required.');
+      setNotificationType('error');
+      setNotificationVisible(true);
       return;
     }
 
-    if (password.trim().length < 6) {
-      Alert.alert("Weak Password", "Password must be at least 6 characters.");
-      return;
-    }
-
-    // 🚫 Enforce strong password only for admin accounts
-    if (role === "admin" && passwordStrength.label === "Weak") {
-      Alert.alert(
-        "Weak Password",
-        "Admin passwords must be stronger. Please include uppercase, numbers, or symbols."
-      );
+    if (password !== confirmPassword) {
+      setNotificationMessage('Passwords do not match.');
+      setNotificationType('error');
+      setNotificationVisible(true);
       return;
     }
 
     setLoading(true);
 
     try {
-      // ✅ Create the user in Firebase Authentication
-      const newUser = await auth().createUserWithEmailAndPassword(
-        email,
-        password
-      );
+      let downloadURL: string | null = null;
 
-      // ✅ Save the user to Firestore
-      await firestore().collection("users").doc(newUser.user.uid).set({
-        uid: newUser.user.uid,
+      // ✅ Attempt image upload (skip if unauthorized)
+      if (image) {
+        try {
+          const fileName = `images/user-profile/${Date.now()}_${image.split('/').pop()}`;
+          const reference = storage().ref(fileName);
+          await reference.putFile(image.replace('file://', ''));
+          downloadURL = await reference.getDownloadURL();
+        } catch (uploadError: any) {
+          console.warn('⚠️ Image upload failed, continuing without image:', uploadError.code);
+          downloadURL = null; // continue creating user even if image upload fails
+        }
+      }
+
+      // ✅ Call Cloud Function (runs with admin privileges)
+      const createUser = functions().httpsCallable('createNewUser');
+      const result = await createUser({
         name,
         email,
+        password,
         role,
-        status: "verified",
-        createdAt: firestore.FieldValue.serverTimestamp(),
+        status: 'verified',
+        image: downloadURL,
       });
 
-      Alert.alert("Success", `${name} (${role}) has been added successfully!`, [
-        {
-          text: "OK",
-          onPress: () => navigation.navigate("UserListScreen"), // ✅ Back to UserList
-        },
-      ]);
+      if (result.data?.success) {
+        setNotificationMessage(`✅ ${role} account created successfully!`);
+        setNotificationType('success');
+        setNotificationVisible(true);
 
-      resetFields();
-    } catch (error: any) {
-      console.error("Error creating user:", error);
-
-      if (error.code === "auth/email-already-in-use") {
-        Alert.alert("Error", "This email is already in use.");
-      } else if (error.code === "auth/invalid-email") {
-        Alert.alert("Error", "Invalid email format.");
-      } else if (error.code === "auth/weak-password") {
-        Alert.alert("Error", "Password is too weak (min 6 chars).");
+        // Reset fields
+        setName('');
+        setEmail('');
+        setPassword('');
+        setConfirmPassword('');
+        setRole('');
+        setImage(null);
       } else {
-        Alert.alert("Error", "Failed to create user. Please try again.");
+        throw new Error('User creation failed.');
       }
+    } catch (error: any) {
+      console.error('❌ Error creating user:', error);
+      let message = 'Failed to create user. Please try again.';
+      if (error.message?.includes('already registered')) message = 'This email is already in use.';
+      if (error.message?.includes('invalid')) message = 'Invalid email or password.';
+      setNotificationMessage(message);
+      setNotificationType('error');
+      setNotificationVisible(true);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <View style={styles.container}>
-      <Appbar.Header style={styles.header}>
-        <Appbar.BackAction onPress={() => navigation.goBack()} />
-        <Appbar.Content title="Create User" titleStyle={styles.headerTitle} />
-      </Appbar.Header>
+    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+      <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+        <View style={styles.container}>
+          <LoadingAlert visible={loading} message="Creating user..." />
 
-      <ScrollView contentContainerStyle={styles.scroll}>
-        <Text style={styles.label}>Full Name</Text>
-        <TextInput
-          mode="outlined"
-          placeholder="Enter full name"
-          value={name}
-          onChangeText={setName}
-          style={styles.input}
-        />
-
-        <Text style={styles.label}>Email</Text>
-        <TextInput
-          mode="outlined"
-          placeholder="Enter email"
-          value={email}
-          onChangeText={setEmail}
-          autoCapitalize="none"
-          keyboardType="email-address"
-          style={styles.input}
-        />
-
-        <Text style={styles.label}>Password</Text>
-        <TextInput
-          mode="outlined"
-          placeholder="Enter password"
-          value={password}
-          onChangeText={handlePasswordChange}
-          secureTextEntry
-          style={styles.input}
-        />
-
-        <Text style={styles.label}>Role</Text>
-        <Menu
-          visible={menuVisible}
-          onDismiss={() => setMenuVisible(false)}
-          anchor={
-            <Button
-              mode="outlined"
-              onPress={() => setMenuVisible(true)}
-              style={styles.dropdown}
-            >
-              {role === "admin" ? "Admin" : "Researcher"}
-            </Button>
-          }
-        >
-          <Menu.Item
-            onPress={() => {
-              setRole("admin");
-              setMenuVisible(false);
+          <NotificationAlert
+            visible={notificationVisible}
+            message={notificationMessage}
+            type={notificationType}
+            onClose={() => {
+              setNotificationVisible(false);
+              if (notificationType === 'success') navigation.goBack();
             }}
-            title="Admin"
           />
-          <Menu.Item
-            onPress={() => {
-              setRole("researcher");
-              setMenuVisible(false);
-            }}
-            title="Researcher"
-          />
-        </Menu>
 
-        <Button
-          mode="contained"
-          onPress={handleCreateUser}
-          style={styles.createButton}
-          loading={loading}
-          disabled={loading}
-        >
-          Create User
-        </Button>
+          {/* Profile picture */}
+          <TouchableOpacity onPress={pickImage} style={styles.imageContainer}>
+            {image ? (
+              <Image source={{ uri: image }} style={styles.image} />
+            ) : (
+              <View style={styles.imagePlaceholder}>
+                <MaterialIcons name="add-a-photo" size={40} color="#2ecc71" />
+                <Text style={styles.imageLabel}>Add Profile Picture</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+
+          {/* Inputs */}
+          <TextInput label="Full Name" value={name} onChangeText={setName} style={styles.input} />
+          <TextInput
+            label="Email Address"
+            value={email}
+            onChangeText={setEmail}
+            style={styles.input}
+            keyboardType="email-address"
+            autoCapitalize="none"
+          />
+          <TextInput
+            label="Password"
+            value={password}
+            onChangeText={setPassword}
+            style={styles.input}
+            secureTextEntry
+          />
+          <TextInput
+            label="Confirm Password"
+            value={confirmPassword}
+            onChangeText={setConfirmPassword}
+            style={styles.input}
+            secureTextEntry
+          />
+
+          {/* Role selection */}
+          <Menu
+            visible={showRoleMenu}
+            onDismiss={() => setShowRoleMenu(false)}
+            anchor={
+              <Button
+                mode="outlined"
+                onPress={() => setShowRoleMenu(true)}
+                style={styles.roleButton}>
+                {role ? role.charAt(0).toUpperCase() + role.slice(1) : 'Select Role'}
+              </Button>
+            }>
+            <Menu.Item
+              title="Admin"
+              onPress={() => {
+                setRole('admin');
+                setShowRoleMenu(false);
+              }}
+            />
+            <Menu.Item
+              title="Researcher"
+              onPress={() => {
+                setRole('researcher');
+                setShowRoleMenu(false);
+              }}
+            />
+            <Menu.Item
+              title="Viewer"
+              onPress={() => {
+                setRole('viewer');
+                setShowRoleMenu(false);
+              }}
+            />
+          </Menu>
+
+          {/* Submit button */}
+          <Button mode="contained" onPress={handleSubmit} style={styles.primaryButton}>
+            Create User
+          </Button>
+        </View>
       </ScrollView>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
+// ✅ Styles (UI unchanged)
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#fff" },
-  header: {
-    backgroundColor: "#fff",
-    borderBottomWidth: 1,
-    borderBottomColor: "#eee",
+  container: { flex: 1, padding: 20, backgroundColor: '#ffffff' },
+  scrollContent: { flexGrow: 1 },
+  input: { backgroundColor: '#f8f8f8', marginBottom: 15 },
+  primaryButton: { marginTop: 15, backgroundColor: '#2ecc71', borderRadius: 25 },
+  imageContainer: {
+    height: 200,
+    borderRadius: 12,
+    marginBottom: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#eee',
+    backgroundColor: '#f8f8f8',
   },
-  headerTitle: { color: "#2ecc71", fontWeight: "bold", fontSize: 20 },
-  scroll: { padding: 16 },
-  label: {
-    fontSize: 14,
-    fontWeight: "bold",
-    marginTop: 12,
-    color: "#2ecc71",
+  image: { width: '100%', height: '100%', borderRadius: 10 },
+  imagePlaceholder: {
+    gap: 12,
+    borderStyle: 'dashed',
+    borderColor: '#2ecc71',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  input: { marginBottom: 8 },
-  dropdown: { marginBottom: 16 },
-  createButton: {
-    backgroundColor: "#2ecc71",
-    marginTop: 16,
-    paddingVertical: 6,
+  imageLabel: { color: '#2ecc71', fontSize: 16, fontWeight: '500' },
+  roleButton: {
+    width: '100%',
     borderRadius: 25,
+    paddingVertical: 8,
+    borderColor: '#333',
+    marginBottom: 10,
   },
 });

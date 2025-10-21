@@ -43,54 +43,39 @@ export default function MapScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [highlightedTreeID, setHighlightedTreeID] = useState<string | null>(null);
   const highlightAnim = useRef(new Animated.Value(1)).current;
-
   const [snackbarVisible, setSnackbarVisible] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState('');
-  const [previousCount, setPreviousCount] = useState(0);
-  const [selectedStatus, setSelectedStatus] = useState<string | null>(null);
 
-  // ✅ Pin colors for each status
-const getPinColor = (status: string) => {
-  switch (status) {
-    case 'verified':
-      return '#2ecc71';
-    case 'harvest-ready':
-      return '#f1c40f';
-    case 'not-ready':
-      return '#e67e22'; // new color for not ready
-    default:
-      return '#95a5a6';
-  }
-};
+  // ✅ All pins will be green
+  const pinColor = '#2ecc71';
 
-  // ✅ Save last viewed region
+  // ✅ Save last region
   useEffect(() => {
     lastRegion = region;
   }, [region]);
 
-  // ✅ Restore last region on focus
   useFocusEffect(
     useCallback(() => {
       if (lastRegion) setRegion(lastRegion);
     }, [])
   );
 
-  // ✅ Fetch all trees with verified, harvest-ready, or harvested
+  // ✅ Fetch all verified / visible trees
   useEffect(() => {
     setLoading(true);
     const unsubscribe = firestore()
       .collection('trees')
-      .where('status', 'in', ['verified', 'harvest-ready', 'harvested','not-ready'])
+      .where('status', 'in', ['verified', 'harvest-ready', 'not-ready'])
       .onSnapshot(snapshot => {
-        const treeData: any[] = [];
-        snapshot.forEach(doc => treeData.push({ treeID: doc.id, ...doc.data() }));
-        setTrees(treeData);
+        const data: any[] = [];
+        snapshot.forEach(doc => data.push({ treeID: doc.id, ...doc.data() }));
+        setTrees(data);
         setLoading(false);
       });
     return () => unsubscribe();
   }, [route.params?.refresh]);
 
-  // ✅ Highlight animation
+  // ✅ Highlight animation for new marker
   const startHighlightAnimation = () => {
     Animated.loop(
       Animated.sequence([
@@ -105,7 +90,7 @@ const getPinColor = (status: string) => {
     }, 5000);
   };
 
-  // ✅ Highlight newly added tree
+  // ✅ If user just added/selected a tree
   useEffect(() => {
     if (route.params?.lat && route.params?.lng) {
       const newRegion = {
@@ -145,7 +130,6 @@ const getPinColor = (status: string) => {
     }
   };
 
-  // ✅ My Location
   const handleMyLocation = async () => {
     const hasPermission = await requestLocationPermission();
     if (!hasPermission) {
@@ -173,46 +157,6 @@ const getPinColor = (status: string) => {
     );
   };
 
-  // ✅ Search location
-  const handleSearch = async () => {
-    if (!searchQuery.trim()) return;
-    try {
-      const json = await Geocoder.from(searchQuery.trim());
-      const location = json.results[0].geometry.location;
-      const newRegion = {
-        latitude: location.lat,
-        longitude: location.lng,
-        latitudeDelta: 0.015,
-        longitudeDelta: 0.015 * (width / height),
-      };
-      mapRef.current?.animateToRegion(newRegion, 1500);
-      setRegion(newRegion);
-    } catch (error) {
-      console.error('Search error:', error);
-      Alert.alert('Search failed', 'Could not find this location.');
-    } finally {
-      setSearchQuery('');
-    }
-  };
-
-  // ✅ Snackbar for tree approval/removal
-  useEffect(() => {
-    if (previousCount === 0) {
-      setPreviousCount(trees.length);
-      return;
-    }
-
-    if (trees.length < previousCount) {
-      setSnackbarMessage('Tree removed successfully.');
-      setSnackbarVisible(true);
-    } else if (trees.length > previousCount) {
-      setSnackbarMessage('Tree approved successfully.');
-      setSnackbarVisible(true);
-    }
-
-    setPreviousCount(trees.length);
-  }, [trees]);
-
   if (loading) {
     return (
       <View style={styles.center}>
@@ -232,31 +176,10 @@ const getPinColor = (status: string) => {
             value={searchQuery}
             onChangeText={setSearchQuery}
             style={styles.searchInput}
-            onSubmitEditing={handleSearch}
             returnKeyType="search"
           />
         </View>
       </View>
-
-      {/* 🌈 Legend */}
-      <View style={styles.legendContainer}>
-        {['verified', 'harvest-ready', 'not-ready'].map((status) => (
-          <TouchableOpacity
-            key={status}
-            style={[
-              styles.legendItem,
-              selectedStatus === status && { backgroundColor: 'rgba(46,204,113,0.15)', borderRadius: 6, padding: 2 }
-            ]}
-            onPress={() => setSelectedStatus(selectedStatus === status ? null : status)}
-          >
-            <View style={[styles.legendColor, { backgroundColor: getPinColor(status) }]} />
-            <Text style={styles.legendText}>
-              {status === 'not-ready' ? 'unripe' : status.charAt(0).toUpperCase() + status.slice(1)}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-
 
       {/* 🗺️ Map */}
       <MapView
@@ -267,39 +190,29 @@ const getPinColor = (status: string) => {
         onRegionChangeComplete={setRegion}
         showsUserLocation={true}
       >
-        {trees
-          .filter(tree => !selectedStatus || tree.status === selectedStatus)
-          .map((tree) => {
-            const isHighlighted = tree.treeID === highlightedTreeID;
-            return (
-              <Marker
-                key={tree.treeID}
-                coordinate={{
-                  latitude: tree.coordinates?.latitude ?? 0,
-                  longitude: tree.coordinates?.longitude ?? 0,
-                }}
-                pinColor={isHighlighted ? '#00FF00' : getPinColor(tree.status)}
-                title={tree.treeName || 'Unnamed Tree'}
-                description={`Tracked by: ${tree.trackedBy || 'N/A'}`}
-                onPress={() => navigation.navigate('TreeDetails', { treeID: tree.treeID })}
-              >
-                {isHighlighted && (
-                  <Animated.View
-                    style={{
-                      transform: [{ scale: highlightAnim }],
-                      backgroundColor: 'rgba(46, 204, 113, 0.5)',
-                      width: 30,
-                      height: 30,
-                      borderRadius: 15,
-                      borderWidth: 2,
-                      borderColor: '#2ecc71',
-                    }}
-                  />
-                )}
-              </Marker>
-            );
-          })}
+        {trees.map((tree) => (
+          <Marker
+            key={tree.treeID}
+            coordinate={{
+              latitude: tree.coordinates?.latitude ?? 0,
+              longitude: tree.coordinates?.longitude ?? 0,
+            }}
+            pinColor={pinColor} // ✅ all markers green
+            title={tree.treeID || 'Tree'}
+            description={`Tracked by: ${tree.trackedBy || 'N/A'}`}
+            onPress={() =>
+              navigation.navigate('TreeDetails', {
+                treeID: tree.treeID,
+              })
+            }
+          />
+        ))}
       </MapView>
+
+      {/* 📍 My Location Button */}
+      <TouchableOpacity style={styles.myLocationButton} onPress={handleMyLocation}>
+        <MaterialIcons name="my-location" size={28} color="#fff" />
+      </TouchableOpacity>
 
       {/* ✅ Snackbar */}
       <Snackbar
@@ -310,11 +223,6 @@ const getPinColor = (status: string) => {
       >
         {snackbarMessage}
       </Snackbar>
-
-      {/* 📍 My Location Button */}
-      <TouchableOpacity style={styles.myLocationButton} onPress={handleMyLocation}>
-        <MaterialIcons name="my-location" size={28} color="#fff" />
-      </TouchableOpacity>
     </View>
   );
 }
@@ -357,30 +265,4 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
   },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-
-  // Legend
-  legendContainer: {
-    position: 'absolute',
-    top: 90,
-    left: 16,
-    flexDirection: 'row',
-    zIndex: 1,
-  },
-  legendItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginRight: 10,
-    paddingHorizontal: 6,
-    paddingVertical: 4,
-  },
-  legendColor: {
-    width: 16,
-    height: 16,
-    borderRadius: 4,
-    marginRight: 4,
-  },
-  legendText: {
-    fontSize: 14,
-    fontWeight: '500',
-  },
 });

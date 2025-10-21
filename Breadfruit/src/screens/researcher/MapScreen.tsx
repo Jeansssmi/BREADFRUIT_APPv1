@@ -47,44 +47,43 @@ export default function MapScreen() {
   const [snackbarVisible, setSnackbarVisible] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState('');
   const [previousCount, setPreviousCount] = useState(0);
-  const [selectedStatus, setSelectedStatus] = useState<string | null>(null);
+  const [selectedFilter, setSelectedFilter] = useState<'All' | 'verified' | 'harvest-ready' | 'unripe'>('All');
 
-  // ✅ Pin colors for each status
-const getPinColor = (status: string) => {
-  switch (status) {
-    case 'verified':
-      return '#2ecc71';
-    case 'harvest-ready':
-      return '#f1c40f';
-    case 'not-ready':
-      return '#e67e22'; // new color for not ready
-    default:
-      return '#95a5a6';
-  }
-};
+  // ✅ Pin colors per fruit status
+  const getPinColor = (fruitStatus: string) => {
+    switch (fruitStatus) {
+      case 'none':
+        return '#00BFFF'; // Sky blue for verified
+      case 'ripe':
+        return '#FFD700'; // Yellow for harvest-ready
+      case 'unripe':
+        return '#2ecc71'; // Green for unripe
+      default:
+        return '#95a5a6'; // Gray fallback
+    }
+  };
 
-  // ✅ Save last viewed region
+  // ✅ Save last region
   useEffect(() => {
     lastRegion = region;
   }, [region]);
 
-  // ✅ Restore last region on focus
   useFocusEffect(
     useCallback(() => {
       if (lastRegion) setRegion(lastRegion);
     }, [])
   );
 
-  // ✅ Fetch all trees with verified, harvest-ready, or harvested
+  // ✅ Fetch trees (listen in real time)
   useEffect(() => {
     setLoading(true);
     const unsubscribe = firestore()
       .collection('trees')
-      .where('status', 'in', ['verified', 'harvest-ready', 'harvested'])
+      .where('status', 'in', ['verified', 'harvest-ready', 'not-ready'])
       .onSnapshot(snapshot => {
-        const treeData: any[] = [];
-        snapshot.forEach(doc => treeData.push({ treeID: doc.id, ...doc.data() }));
-        setTrees(treeData);
+        const data: any[] = [];
+        snapshot.forEach(doc => data.push({ treeID: doc.id, ...doc.data() }));
+        setTrees(data);
         setLoading(false);
       });
     return () => unsubscribe();
@@ -105,7 +104,7 @@ const getPinColor = (status: string) => {
     }, 5000);
   };
 
-  // ✅ Highlight newly added tree
+  // ✅ New tree highlight
   useEffect(() => {
     if (route.params?.lat && route.params?.lng) {
       const newRegion = {
@@ -124,7 +123,7 @@ const getPinColor = (status: string) => {
     }
   }, [route.params?.lat, route.params?.lng]);
 
-  // ✅ Request location permission
+  // ✅ Location permission
   const requestLocationPermission = async () => {
     try {
       if (Platform.OS === 'android') {
@@ -145,7 +144,6 @@ const getPinColor = (status: string) => {
     }
   };
 
-  // ✅ My Location
   const handleMyLocation = async () => {
     const hasPermission = await requestLocationPermission();
     if (!hasPermission) {
@@ -173,45 +171,14 @@ const getPinColor = (status: string) => {
     );
   };
 
-  // ✅ Search location
-  const handleSearch = async () => {
-    if (!searchQuery.trim()) return;
-    try {
-      const json = await Geocoder.from(searchQuery.trim());
-      const location = json.results[0].geometry.location;
-      const newRegion = {
-        latitude: location.lat,
-        longitude: location.lng,
-        latitudeDelta: 0.015,
-        longitudeDelta: 0.015 * (width / height),
-      };
-      mapRef.current?.animateToRegion(newRegion, 1500);
-      setRegion(newRegion);
-    } catch (error) {
-      console.error('Search error:', error);
-      Alert.alert('Search failed', 'Could not find this location.');
-    } finally {
-      setSearchQuery('');
-    }
-  };
-
-  // ✅ Snackbar for tree approval/removal
-  useEffect(() => {
-    if (previousCount === 0) {
-      setPreviousCount(trees.length);
-      return;
-    }
-
-    if (trees.length < previousCount) {
-      setSnackbarMessage('Tree removed successfully.');
-      setSnackbarVisible(true);
-    } else if (trees.length > previousCount) {
-      setSnackbarMessage('Tree approved successfully.');
-      setSnackbarVisible(true);
-    }
-
-    setPreviousCount(trees.length);
-  }, [trees]);
+  // ✅ Filter trees by fruit status
+  const filteredTrees = trees.filter(tree => {
+    if (selectedFilter === 'All') return true;
+    if (selectedFilter === 'verified') return tree.fruitStatus === 'none';
+    if (selectedFilter === 'harvest-ready') return tree.fruitStatus === 'ripe';
+    if (selectedFilter === 'unripe') return tree.fruitStatus === 'unripe';
+    return false;
+  });
 
   if (loading) {
     return (
@@ -232,31 +199,50 @@ const getPinColor = (status: string) => {
             value={searchQuery}
             onChangeText={setSearchQuery}
             style={styles.searchInput}
-            onSubmitEditing={handleSearch}
+            onSubmitEditing={() => {}}
             returnKeyType="search"
           />
         </View>
       </View>
 
-      {/* 🌈 Legend */}
+      {/* 🌈 Legend (Filter Buttons) */}
       <View style={styles.legendContainer}>
-        {['verified', 'harvest-ready', 'not-ready'].map((status) => (
+        {['All', 'verified', 'harvest-ready', 'unripe'].map((filter) => (
           <TouchableOpacity
-            key={status}
+            key={filter}
             style={[
               styles.legendItem,
-              selectedStatus === status && { backgroundColor: 'rgba(46,204,113,0.15)', borderRadius: 6, padding: 2 }
+              selectedFilter === filter && { backgroundColor: 'rgba(46,204,113,0.15)', borderRadius: 6, padding: 2 },
             ]}
-            onPress={() => setSelectedStatus(selectedStatus === status ? null : status)}
+            onPress={() => setSelectedFilter(filter as any)}
           >
-            <View style={[styles.legendColor, { backgroundColor: getPinColor(status) }]} />
+            <View
+              style={[
+                styles.legendColor,
+                {
+                  backgroundColor:
+                    filter === 'All'
+                      ? '#555'
+                      : filter === 'verified'
+                      ? '#00BFFF'
+                      : filter === 'harvest-ready'
+                      ? '#FFD700'
+                      : '#2ecc71',
+                },
+              ]}
+            />
             <Text style={styles.legendText}>
-              {status === 'not-ready' ? 'unripe' : status.charAt(0).toUpperCase() + status.slice(1)}
+              {filter === 'unripe'
+                ? 'Unripe'
+                : filter === 'harvest-ready'
+                ? 'Harvest-Ready'
+                : filter === 'verified'
+                ? 'Verified'
+                : 'All'}
             </Text>
           </TouchableOpacity>
         ))}
       </View>
-
 
       {/* 🗺️ Map */}
       <MapView
@@ -267,39 +253,24 @@ const getPinColor = (status: string) => {
         onRegionChangeComplete={setRegion}
         showsUserLocation={true}
       >
-        {trees
-          .filter(tree => !selectedStatus || tree.status === selectedStatus)
-          .map((tree) => {
-            const isHighlighted = tree.treeID === highlightedTreeID;
-            return (
-              <Marker
-                key={tree.treeID}
-                coordinate={{
-                  latitude: tree.coordinates?.latitude ?? 0,
-                  longitude: tree.coordinates?.longitude ?? 0,
-                }}
-                pinColor={isHighlighted ? '#00FF00' : getPinColor(tree.status)}
-                title={tree.treeName || 'Unnamed Tree'}
-                description={`Tracked by: ${tree.trackedBy || 'N/A'}`}
-                onPress={() => navigation.navigate('TreeDetails', { treeID: tree.treeID })}
-              >
-                {isHighlighted && (
-                  <Animated.View
-                    style={{
-                      transform: [{ scale: highlightAnim }],
-                      backgroundColor: 'rgba(46, 204, 113, 0.5)',
-                      width: 30,
-                      height: 30,
-                      borderRadius: 15,
-                      borderWidth: 2,
-                      borderColor: '#2ecc71',
-                    }}
-                  />
-                )}
-              </Marker>
-            );
-          })}
+        {filteredTrees.map((tree) => (
+          <Marker
+            key={tree.treeID}
+            coordinate={{
+              latitude: tree.coordinates?.latitude ?? 0,
+              longitude: tree.coordinates?.longitude ?? 0,
+            }}
+            pinColor={getPinColor(tree.fruitStatus)}
+            title={tree.treeID || 'Tree'}
+            description={`Tracked by: ${tree.trackedBy || 'N/A'}`}
+          />
+        ))}
       </MapView>
+
+      {/* 📍 My Location */}
+      <TouchableOpacity style={styles.myLocationButton} onPress={handleMyLocation}>
+        <MaterialIcons name="my-location" size={28} color="#fff" />
+      </TouchableOpacity>
 
       {/* ✅ Snackbar */}
       <Snackbar
@@ -310,11 +281,6 @@ const getPinColor = (status: string) => {
       >
         {snackbarMessage}
       </Snackbar>
-
-      {/* 📍 My Location Button */}
-      <TouchableOpacity style={styles.myLocationButton} onPress={handleMyLocation}>
-        <MaterialIcons name="my-location" size={28} color="#fff" />
-      </TouchableOpacity>
     </View>
   );
 }
@@ -357,8 +323,6 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
   },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-
-  // Legend
   legendContainer: {
     position: 'absolute',
     top: 90,
@@ -370,8 +334,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginRight: 10,
-    paddingHorizontal: 6,
+    paddingHorizontal: 2,
     paddingVertical: 4,
+    marginHorizontal: 2,
   },
   legendColor: {
     width: 16,

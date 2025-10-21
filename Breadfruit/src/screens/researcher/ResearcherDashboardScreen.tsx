@@ -54,27 +54,39 @@ export default function ResearcherDashboardScreen() {
     return () => unsubscribe();
   }, [currentUser]);
 
-  // Fetch activity logs
-  useEffect(() => {
+
+ // Fetch activity logs for the current user only
+ useEffect(() => {
+   const user = auth().currentUser;
+   if (!user) return;
+
+
     const unsubscribe = firestore()
       .collection('activityLog')
-      .orderBy('timestamp', 'desc')
-      .limit(30)
+      .where('uid', '==', user.uid) // ✅ Match your actual field name
+        .where('userRole', '==', 'researcher') // Fetch only logs belonging to this researcher
+      .limit(30) // removed orderBy to avoid index requirement
       .onSnapshot(
-        snapshot => {
-          const data = snapshot.docs.map(doc => {
-            const raw = doc.data();
-            let tsDate = raw.timestamp?.toDate
-              ? raw.timestamp.toDate()
-              : new Date(raw.timestamp);
-            return { id: doc.id, ...raw, timestampDate: tsDate };
-          });
+        (snapshot) => {
+          const data = snapshot.docs
+            .map((doc) => {
+              const raw = doc.data();
+              const tsDate = raw.timestamp?.toDate
+                ? raw.timestamp.toDate()
+                : new Date(raw.timestamp);
+              return { id: doc.id, ...raw, timestampDate: tsDate };
+            })
+            .sort((a, b) => b.timestampDate - a.timestampDate); // manual sort by date (newest first)
+
           setRecentActivity(data);
         },
-        error => console.error('Error fetching activity:', error)
+        (error) => console.error('Error fetching researcher activity:', error)
       );
+
     return () => unsubscribe();
   }, []);
+
+
 
   useEffect(() => {
     fetchAllCounts();

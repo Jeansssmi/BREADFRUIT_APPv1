@@ -122,7 +122,7 @@ export default function ResearcherNavigator() {
       <MainStack.Screen name="EditTree" component={EditTree} options={{ headerTitle: 'Update Your Tree' }} />
       <MainStack.Screen name="HarvestList" component={HarvestListScreen} />
       <MainStack.Screen name="HarvestedList" component={HarvestedListScreen} />
-      <MainStack.Screen name="ActivityLogsScreen" component={ActivityLogsScreen} />
+      <MainStack.Screen name="ActivityLogsScreen" component={ActivityLogsScreen} options={{ headerTitle: 'Activity Logs' }} />
       <MainStack.Screen name="Search" component={SearchScreen} options={{ headerShown: false }} />
     </MainStack.Navigator>
   );

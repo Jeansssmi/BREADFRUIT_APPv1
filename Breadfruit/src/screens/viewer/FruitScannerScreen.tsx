@@ -158,7 +158,7 @@ const handleUpdateStatus = async () => {
       return (
         <View style={styles.centered}>
           <ActivityIndicator size="large" color="#2ecc71" />
-          <Text style={styles.loadingText}>Analyzing Fruit...</Text>0
+          <Text style={styles.loadingText}>Analyzing Fruit...</Text>
         </View>
       );
     }
@@ -207,23 +207,6 @@ const handleUpdateStatus = async () => {
         {/* ✅ Conditionally render buttons */}
         {!loading && imageUri && (
           <View style={styles.buttonContainer}>
-            {result && (
-              <Button
-                mode="contained"
-                onPress={handleUpdateStatus}
-                style={styles.primaryButton}
-                disabled={
-                  isUpdating ||
-                  !result ||
-                  result.label === 'Not_breadfruit'
-                }
-                loading={isUpdating}
-              >
-                Update Tree Status
-              </Button>
-
-
-            )}
 
             <Button
               mode="outlined"
