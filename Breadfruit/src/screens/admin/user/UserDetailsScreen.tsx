@@ -1,40 +1,41 @@
 import React, { useState } from "react";
-import { Alert, Image, ScrollView, StyleSheet, View, TouchableOpacity } from 'react-native';
-import { ActivityIndicator, Appbar, Card, Text, Chip } from 'react-native-paper';
-import { useNavigation, useRoute } from '@react-navigation/native';
-import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
+import { Alert, Image, ScrollView, StyleSheet, View, TouchableOpacity } from "react-native";
+import { ActivityIndicator, Appbar, Card, Text, Chip, useTheme } from "react-native-paper";
+import { useNavigation, useRoute } from "@react-navigation/native";
+import MaterialCommunityIcons from "react-native-vector-icons/MaterialCommunityIcons";
+import firestore from "@react-native-firebase/firestore";
+import functions from "@react-native-firebase/functions";
 
-import firestore from '@react-native-firebase/firestore';
-import functions from '@react-native-firebase/functions';
-
-import { LoadingAlert, NotificationAlert } from '@/components/NotificationModal';
-import { useUserData } from '@/hooks/useUserData';
+import { LoadingAlert, NotificationAlert } from "@/components/NotificationModal";
+import { useUserData } from "@/hooks/useUserData";
 
 export default function UserDetailsScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute();
+  const theme = useTheme(); // ✅ added theme
   // @ts-ignore
   const { userID } = route.params;
-  const { users, isLoading } = useUserData({ mode: 'single', uid: userID.toString() });
+  const { users, isLoading } = useUserData({ mode: "single", uid: userID.toString() });
   const [loading, setLoading] = useState(false);
   const user = users[0];
 
   const [notificationVisible, setNotificationVisible] = useState(false);
-  const [notificationMessage, setNotificationMessage] = useState('');
-  const [notificationType, setNotificationType] = useState<'success' | 'info' | 'error'>('info');
+  const [notificationMessage, setNotificationMessage] = useState("");
+  const [notificationType, setNotificationType] = useState<"success" | "info" | "error">("info");
 
   const handleDelete = (uid: string) => {
-    Alert.alert('Confirm Reject/Delete', 'Are you sure you want to reject and delete this user?', [
-      { text: 'Cancel', style: 'cancel' },
+    Alert.alert("Confirm Reject/Delete", "Are you sure you want to reject and delete this user?", [
+      { text: "Cancel", style: "cancel" },
       {
-        text: 'Delete', style: 'destructive',
+        text: "Delete",
+        style: "destructive",
         onPress: async () => {
           setLoading(true);
           try {
-            const deleteUser = functions().httpsCallable('deleteUser');
+            const deleteUser = functions().httpsCallable("deleteUser");
             await deleteUser({ uid });
-            setNotificationMessage('User deleted successfully.');
-            setNotificationType('success');
+            setNotificationMessage("User deleted successfully.");
+            setNotificationType("success");
             setNotificationVisible(true);
           } catch (error) {
             console.error(error);
@@ -44,20 +45,20 @@ export default function UserDetailsScreen() {
         },
       },
     ]);
-  }
+  };
 
   const handleApprove = (uid: string) => {
-    Alert.alert('Confirm Approval', 'Are you sure you want to approve this user?', [
-      { text: 'Cancel', style: 'cancel' },
+    Alert.alert("Confirm Approval", "Are you sure you want to approve this user?", [
+      { text: "Cancel", style: "cancel" },
       {
-        text: 'Approve',
+        text: "Approve",
         onPress: async () => {
           setLoading(true);
           try {
-            const docRef = firestore().collection('users').doc(uid);
-            await docRef.update({ status: 'verified' });
-            setNotificationMessage('Successfully approved!');
-            setNotificationType('success');
+            const docRef = firestore().collection("users").doc(uid);
+            await docRef.update({ status: "verified" });
+            setNotificationMessage("Successfully approved!");
+            setNotificationType("success");
             setNotificationVisible(true);
           } catch (error) {
             console.error(error);
@@ -67,80 +68,135 @@ export default function UserDetailsScreen() {
         },
       },
     ]);
-  }
+  };
 
   if (isLoading) {
-    return <View style={styles.center}><ActivityIndicator size="large" color='#2ecc71' /></View>;
+    return (
+      <View style={[styles.center, { backgroundColor: theme.colors.background }]}>
+        <ActivityIndicator size="large" color={theme.colors.primary} />
+      </View>
+    );
   }
+
   if (!user) {
-    return <View style={styles.center}><Text>User not found</Text></View>;
+    return (
+      <View style={[styles.center, { backgroundColor: theme.colors.background }]}>
+        <Text style={{ color: theme.colors.text }}>User not found</Text>
+      </View>
+    );
   }
 
   return (
-    <View style={styles.container}>
-
-
+    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <ScrollView contentContainerStyle={styles.scrollContainer}>
         <LoadingAlert visible={loading} message="Please wait..." />
         <NotificationAlert
-          visible={notificationVisible} message={notificationMessage} type={notificationType}
+          visible={notificationVisible}
+          message={notificationMessage}
+          type={notificationType}
           onClose={() => {
             setNotificationVisible(false);
-            if (notificationType === 'success') navigation.goBack();
+            if (notificationType === "success") navigation.goBack();
           }}
         />
 
+        {/* 🧍 Profile Section */}
         <View style={styles.profileSection}>
-            <View style={styles.avatarCircle}>
-                {user?.image ? (
-                    <Image source={{ uri: user.image }} style={styles.avatarImage} />
-                ) : (
-                    <MaterialCommunityIcons name="account" size={60} color="#2ecc71" />
-                )}
-            </View>
-            <Text style={styles.userName}>{user?.name}</Text>
-            <Chip style={styles.roleChip} textStyle={styles.roleChipText}>{user?.role}</Chip>
+          <View
+            style={[
+              styles.avatarCircle,
+              {
+                backgroundColor: theme.dark ? "#1e1e1e" : "#eafaf1",
+                borderColor: theme.colors.primary,
+              },
+            ]}
+          >
+            {user?.image ? (
+              <Image source={{ uri: user.image }} style={styles.avatarImage} />
+            ) : (
+              <MaterialCommunityIcons name="account" size={60} color={theme.colors.primary} />
+            )}
+          </View>
+          <Text style={[styles.userName, { color: theme.colors.text }]}>{user?.name}</Text>
+          <Chip
+            style={[styles.roleChip, { backgroundColor: theme.colors.primary }]}
+            textStyle={styles.roleChipText}
+          >
+            {user?.role}
+          </Chip>
         </View>
 
-        <Card style={styles.detailsCard}>
+        {/* 📋 User Details Card */}
+        <Card style={[styles.detailsCard, { backgroundColor: theme.colors.card }]}>
           <Card.Content>
             <View style={styles.detailItem}>
-              <MaterialCommunityIcons name="email-outline" size={24} color="#2ecc71" />
-              <Text style={styles.detailText}>{user?.email}</Text>
-            </View>
-            <View style={styles.detailItem}>
-              <MaterialCommunityIcons name="account-cog-outline" size={24} color="#2ecc71" />
-              <Text style={styles.detailText}>{user?.role}</Text>
+              <MaterialCommunityIcons name="email-outline" size={24} color={theme.colors.primary} />
+              <Text style={[styles.detailText, { color: theme.colors.text }]}>{user?.email}</Text>
             </View>
 
-
+            <View style={styles.detailItem}>
+              <MaterialCommunityIcons
+                name="account-cog-outline"
+                size={24}
+                color={theme.colors.primary}
+              />
+              <Text style={[styles.detailText, { color: theme.colors.text }]}>{user?.role}</Text>
+            </View>
 
             <View style={styles.detailItem}>
-              <MaterialCommunityIcons name="calendar-blank-outline" size={24} color="#2ecc71" />
-              <Text style={styles.detailText}>
-                {user.status === 'pending' ? 'Requested:' : 'Joined:'} {user.joined?.toDate ? user.joined.toDate().toLocaleDateString() : new Date(user.joined).toLocaleDateString()}
+              <MaterialCommunityIcons
+                name="calendar-blank-outline"
+                size={24}
+                color={theme.colors.primary}
+              />
+              <Text style={[styles.detailText, { color: theme.colors.text }]}>
+                {user.status === "pending" ? "Requested:" : "Joined:"}{" "}
+                {user.joined?.toDate
+                  ? user.joined.toDate().toLocaleDateString()
+                  : new Date(user.joined).toLocaleDateString()}
               </Text>
             </View>
           </Card.Content>
         </Card>
       </ScrollView>
 
-      <View style={styles.buttonContainer}>
-        {user.status === 'pending' ? (
+      {/* 🔘 Bottom Buttons */}
+      <View
+        style={[
+          styles.buttonContainer,
+          {
+            backgroundColor: theme.colors.card,
+            borderTopColor: theme.dark ? "#333" : "#eee",
+          },
+        ]}
+      >
+        {user.status === "pending" ? (
           <>
-            <TouchableOpacity style={[styles.button, styles.approveButton]} onPress={() => handleApprove(userID.toString())}>
+            <TouchableOpacity
+              style={[styles.button, { backgroundColor: theme.colors.primary }]}
+              onPress={() => handleApprove(userID.toString())}
+            >
               <Text style={styles.buttonText}>Approve</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={[styles.button, styles.rejectButton]} onPress={() => handleDelete(userID.toString())}>
+            <TouchableOpacity
+              style={[styles.button, { backgroundColor: theme.dark ? "#444" : "#333" }]}
+              onPress={() => handleDelete(userID.toString())}
+            >
               <Text style={styles.buttonText}>Reject</Text>
             </TouchableOpacity>
           </>
         ) : (
           <>
-            <TouchableOpacity style={[styles.button, styles.approveButton]} onPress={() => navigation.navigate('EditUser', { userID: user.uid })}>
+            <TouchableOpacity
+              style={[styles.button, { backgroundColor: theme.colors.primary }]}
+              onPress={() => navigation.navigate("EditUser", { userID: user.uid })}
+            >
               <Text style={styles.buttonText}>Edit Profile</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={[styles.button, styles.rejectButton]} onPress={() => handleDelete(userID.toString())}>
+            <TouchableOpacity
+              style={[styles.button, { backgroundColor: theme.dark ? "#444" : "#333" }]}
+              onPress={() => handleDelete(userID.toString())}
+            >
               <Text style={styles.buttonText}>Delete User</Text>
             </TouchableOpacity>
           </>
@@ -151,96 +207,75 @@ export default function UserDetailsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f7f8fa' },
+  container: { flex: 1 },
   scrollContainer: { flexGrow: 1, paddingHorizontal: 20 },
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  appbarHeader: { backgroundColor: '#f7f8fa', elevation: 0 },
-  appbarTitle: { color: '#333', fontWeight: 'bold', fontSize: 18 },
-
+  center: { flex: 1, justifyContent: "center", alignItems: "center" },
   profileSection: {
-    alignItems: 'center',
+    alignItems: "center",
     marginBottom: 24,
   },
   avatarCircle: {
     width: 120,
     height: 120,
     borderRadius: 60,
-    backgroundColor: '#eafaf1',
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
     borderWidth: 2,
-    borderColor: '#2ecc71',
     marginBottom: 16,
     marginTop: 20,
   },
   avatarImage: {
-    width: '100%',
-    height: '100%',
+    width: "100%",
+    height: "100%",
     borderRadius: 60,
-
   },
   userName: {
     fontSize: 22,
-    fontWeight: 'bold',
-    color: '#333',
+    fontWeight: "bold",
   },
   roleChip: {
-    backgroundColor: '#2ecc71',
     marginTop: 8,
   },
   roleChipText: {
-    color: 'white',
-    fontWeight: 'bold',
+    color: "white",
+    fontWeight: "bold",
     fontSize: 12,
-    textTransform: 'uppercase',
+    textTransform: "uppercase",
   },
-
   detailsCard: {
     borderRadius: 12,
-    backgroundColor: '#ffffff',
     elevation: 2,
-    shadowColor: '#000',
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
     shadowRadius: 3,
   },
-  // ✅ Styles for the detail items are now more compressed
   detailItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 10,      // Reduced vertical padding
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 10,
     paddingHorizontal: 16,
-    gap: 12,                  // Reduced gap between icon and text
+    gap: 12,
   },
   detailText: {
-    fontSize: 15,             // Slightly smaller font size
-    color: '#333',
-    textTransform: 'capitalize',
+    fontSize: 15,
+    textTransform: "capitalize",
   },
-
   buttonContainer: {
     padding: 20,
     paddingTop: 10,
-    backgroundColor: '#f7f8fa',
     borderTopWidth: 1,
-    borderTopColor: '#eee',
     gap: 12,
   },
   button: {
     borderRadius: 25,
     paddingVertical: 12,
-    alignItems: 'center',
+    alignItems: "center",
     elevation: 2,
   },
-  approveButton: {
-    backgroundColor: '#2ecc71',
-  },
-  rejectButton: {
-    backgroundColor: '#333',
-  },
   buttonText: {
-    color: 'white',
+    color: "white",
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: "bold",
   },
 });

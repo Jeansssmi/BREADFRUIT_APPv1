@@ -1,20 +1,18 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { FlatList, StyleSheet, View, TextInput } from 'react-native';
-import { Appbar, ActivityIndicator, Chip, Text } from 'react-native-paper';
+import { Appbar, ActivityIndicator, Chip, Text, useTheme } from 'react-native-paper'; // ✅ useTheme added
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import firestore from '@react-native-firebase/firestore';
 import UserCard from '@/components/UserCard';
-import {  useRoute } from '@react-navigation/native';
-
 
 export default function UserListScreen() {
-
   const navigation = useNavigation();
+  const route = useRoute();
+  const theme = useTheme(); // ✅ Access global theme
 
-  const [users, setUsers] = useState<any[]>([]);
+  const [users, setUsers] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
-  const route = useRoute(); // get route
   const { filter } = route.params || {};
   const [selectedRole, setSelectedRole] = useState(filter || 'All');
   const [searchQuery, setSearchQuery] = useState('');
@@ -34,9 +32,11 @@ export default function UserListScreen() {
           return {
             uid: doc.id,
             ...data,
-            // ✅ Ensure joined is always a JS Date or null
-            joined: data.joined ? (data.joined.toDate ? data.joined.toDate() : new Date(data.joined)) : null,
-            // ✅ Ensure role is always a string
+            joined: data.joined
+              ? data.joined.toDate
+                ? data.joined.toDate()
+                : new Date(data.joined)
+              : null,
             role: data.role || 'viewer',
             name: data.name || 'Unknown',
             email: data.email || 'N/A',
@@ -73,20 +73,26 @@ export default function UserListScreen() {
   // ✅ Loading state
   if (isLoading) {
     return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color="#2ecc71" />
+      <View style={[styles.center, { backgroundColor: theme.colors.background }]}>
+        <ActivityIndicator size="large" color={theme.colors.primary} />
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
-
+    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       {/* 🔍 Search Input */}
       <TextInput
         placeholder="Search users by name or email..."
-        placeholderTextColor="#aaa"
-        style={styles.searchInput}
+        placeholderTextColor={theme.dark ? '#aaa' : '#888'}
+        style={[
+          styles.searchInput,
+          {
+            borderColor: theme.colors.primary,
+            color: theme.colors.text,
+            backgroundColor: theme.dark ? '#1e1e1e' : '#fff',
+          },
+        ]}
         value={searchQuery}
         onChangeText={setSearchQuery}
       />
@@ -100,12 +106,23 @@ export default function UserListScreen() {
             onPress={() => setSelectedRole(role)}
             style={[
               styles.filterChip,
-              selectedRole === role && styles.activeFilterChip,
+              {
+                borderColor: theme.colors.primary,
+                backgroundColor:
+                  selectedRole === role
+                    ? theme.colors.primary
+                    : theme.dark
+                    ? '#2a2a2a'
+                    : theme.colors.card,
+              },
             ]}
-            textStyle={[
-              styles.filterTextChip,
-              selectedRole === role && styles.activeFilterTextChip,
-            ]}
+            textStyle={{
+              color:
+                selectedRole === role
+                  ? '#fff'
+                  : theme.colors.primary,
+              fontWeight: selectedRole === role ? 'bold' : 'normal',
+            }}
           >
             {role.charAt(0).toUpperCase() + role.slice(1)}
           </Chip>
@@ -119,9 +136,7 @@ export default function UserListScreen() {
         renderItem={({ item }) => (
           <UserCard
             user={item}
-            onPress={() =>
-              navigation.navigate('UserDetails', { userID: item.uid })
-            }
+            onPress={() => navigation.navigate('UserDetails', { userID: item.uid })}
           />
         )}
         contentContainerStyle={styles.listContent}
@@ -130,9 +145,11 @@ export default function UserListScreen() {
             <MaterialCommunityIcons
               name="account-off-outline"
               size={40}
-              color="#888"
+              color={theme.dark ? '#aaa' : '#888'}
             />
-            <Text style={styles.emptyText}>No verified users found</Text>
+            <Text style={[styles.emptyText, { color: theme.colors.text }]}>
+              No verified users found
+            </Text>
           </View>
         }
       />
@@ -141,16 +158,14 @@ export default function UserListScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#ffffff' },
-  appbarHeader: { backgroundColor: '#f7f8fa', elevation: 0 },
-  appbarTitle: { color: '#333', fontWeight: 'bold', fontSize: 18 },
+  container: { flex: 1 },
+  appbarHeader: { elevation: 0 },
+  appbarTitle: { fontWeight: 'bold', fontSize: 18 },
   searchInput: {
     margin: 16,
     padding: 10,
     borderWidth: 1,
-    borderColor: '#2ecc71',
     borderRadius: 10,
-    color: '#333',
   },
   filterContainer: {
     flexDirection: 'row',
@@ -159,10 +174,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
     marginBottom: 16,
   },
-  filterChip: { borderRadius: 8, borderColor: '#2ecc71' },
-  filterTextChip: { color: '#2ecc71', fontSize: 12 },
-  activeFilterChip: { backgroundColor: '#2ecc71' },
-  activeFilterTextChip: { color: 'white' },
+  filterChip: { borderRadius: 8 },
   listContent: { paddingHorizontal: 16, paddingBottom: 24 },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   emptyState: {
@@ -171,5 +183,5 @@ const styles = StyleSheet.create({
     padding: 40,
     marginTop: 50,
   },
-  emptyText: { fontSize: 16, color: '#888', marginTop: 16 },
+  emptyText: { fontSize: 16, marginTop: 16 },
 });

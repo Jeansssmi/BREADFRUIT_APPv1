@@ -8,6 +8,7 @@ import AuthNavigator from './AuthNavigator';
 import ResearcherNavigator from './ResearcherNavigator';
 import ViewerNavigator from './ViewerNavigator'; // UPDATED: Uncommented this line
 
+
 export default function RootNavigator() {
   const { user, initialized } = useAuth();
 

@@ -250,6 +250,7 @@ export default function LoginScreen() {
           <TouchableOpacity style={styles.drawerItem} onPress={() => navigation.navigate('AboutHelp')}>
             <MaterialCommunityIcons name="information-outline" size={22} color={isDarkMode ? '#fff' : '#333'} />
             <Text style={[styles.drawerText, { color: isDarkMode ? '#fff' : '#333' }]}>About App</Text>
+
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.drawerItem} onPress={() => navigation.navigate('NotificationPreferences')}>

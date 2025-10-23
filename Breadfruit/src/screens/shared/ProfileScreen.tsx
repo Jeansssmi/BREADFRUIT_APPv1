@@ -2,23 +2,42 @@ import { useAuth } from '@/context/AuthContext';
 import { useNavigation } from '@react-navigation/native';
 import React from 'react';
 import { Alert, StyleSheet, View, Image, ScrollView, TouchableOpacity } from 'react-native';
-import { Text, Button, Appbar } from 'react-native-paper';
+import { Text, Button, Appbar, useTheme } from 'react-native-paper'; // ✅ Added useTheme
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 
-
-// Custom component for each setting item in the list
-const SettingsItem = ({ icon, name, onPress, isLogout = false }) => (
-  <TouchableOpacity onPress={onPress} style={styles.settingsItem}>
-    <MaterialIcons name={icon} size={24} color={isLogout ? '#D32F2F' : '#333'} />
-    <Text style={[styles.settingsItemText, isLogout && { color: '#D32F2F' }]}>{name}</Text>
-    {!isLogout && <MaterialIcons name="chevron-right" size={24} color="#ccc" />}
+// ✅ Custom component for each setting item
+const SettingsItem = ({ icon, name, onPress, isLogout = false, theme }) => (
+  <TouchableOpacity
+    onPress={onPress}
+    style={[
+      styles.settingsItem,
+      { backgroundColor: theme.colors.card },
+    ]}
+  >
+    <MaterialIcons
+      name={icon}
+      size={24}
+      color={isLogout ? '#D32F2F' : theme.colors.text}
+    />
+    <Text
+      style={[
+        styles.settingsItemText,
+        { color: isLogout ? '#D32F2F' : theme.colors.text },
+      ]}
+    >
+      {name}
+    </Text>
+    {!isLogout && (
+      <MaterialIcons name="chevron-right" size={24} color={theme.colors.text} />
+    )}
   </TouchableOpacity>
 );
 
 export default function ProfileScreen() {
   const navigation = useNavigation<any>();
   const { user, logout } = useAuth();
+  const theme = useTheme(); // ✅ Access global theme
 
   const getInitials = () => {
     if (!user?.name) return 'G';
@@ -33,29 +52,56 @@ export default function ProfileScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       {/* ✅ Header with Title and Notification Bell */}
-      <Appbar.Header style={styles.appbarHeader}>
-        <Appbar.Content title="Profile" titleStyle={styles.appbarTitle} />
-        <Appbar.Action icon="bell-outline" color="black" onPress={() => { /* Navigate to notifications */ }} />
+      <Appbar.Header
+        style={[
+          styles.appbarHeader,
+          { backgroundColor: theme.colors.card, borderBottomColor: theme.dark ? '#333' : '#eee' },
+        ]}
+      >
+        <Appbar.Content
+          title="Profile"
+          titleStyle={[styles.appbarTitle, { color: theme.colors.text }]}
+        />
+        <Appbar.Action icon="bell-outline" color={theme.colors.text} onPress={() => {}} />
       </Appbar.Header>
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
         {/* ✅ Profile Info Section */}
-        <View style={styles.profileSection}>
-          <View style={styles.avatarCircle}>
+        <View
+          style={[
+            styles.profileSection,
+            { backgroundColor: theme.colors.background },
+          ]}
+        >
+          <View
+            style={[
+              styles.avatarCircle,
+              { backgroundColor: theme.colors.primary },
+            ]}
+          >
             {user?.image ? (
               <Image source={{ uri: user.image }} style={styles.profileImage} />
             ) : (
               <Text style={styles.initialsText}>{getInitials()}</Text>
             )}
           </View>
-          <Text style={styles.name}>{user?.name || 'Guest User'}</Text>
-          <Text style={styles.email}>{user?.email || 'No email provided'}</Text>
+          <Text style={[styles.name, { color: theme.colors.text }]}>
+            {user?.name || 'Guest User'}
+          </Text>
+          <Text
+            style={[
+              styles.email,
+              { color: theme.dark ? '#bbb' : '#666' },
+            ]}
+          >
+            {user?.email || 'No email provided'}
+          </Text>
           <Button
             mode="contained"
             onPress={() => navigation.navigate('EditProfile')}
-            style={styles.editButton}
+            style={[styles.editButton, { backgroundColor: theme.colors.primary }]}
             labelStyle={styles.editButtonLabel}
             icon={() => <MaterialIcons name="edit" size={16} color="white" />}
           >
@@ -65,32 +111,38 @@ export default function ProfileScreen() {
 
         {/* ✅ Settings List Section */}
         <View style={styles.settingsSection}>
-          <Text style={styles.settingsTitle}>Settings</Text>
-          <SettingsItem
-            icon="notifications"
-            name="Notification Preferences"
-            onPress={() => navigation.navigate('NotificationPreferences')}
-          />
-          <SettingsItem
-            icon="account-circle"
-            name="Account Settings"
-            onPress={() => { /* Navigate to Account Settings */ }}
-          />
+          <Text
+            style={[
+              styles.settingsTitle,
+              { color: theme.colors.primary },
+            ]}
+          >
+            Settings
+          </Text>
+
+
+
+
           <SettingsItem
             icon="palette"
             name="Appearance"
-            onPress={() => { /* Navigate to Appearance */ }}
+            onPress={() => navigation.navigate('Appearance')}
+            theme={theme}
           />
+
           <SettingsItem
             icon="bookmark"
             name="Tracked Trees"
             onPress={() => navigation.navigate('TrackedTrees', { trackedBy: user.uid })}
+            theme={theme}
           />
+
           <SettingsItem
             icon="logout"
             name="Logout"
             onPress={handleLogout}
             isLogout={true}
+            theme={theme}
           />
         </View>
       </ScrollView>
@@ -101,17 +153,13 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f7f8fa', // Light gray background
   },
   appbarHeader: {
-    backgroundColor: '#fff',
     elevation: 0,
     shadowOpacity: 0,
     borderBottomWidth: 1,
-    borderBottomColor: '#eee',
   },
   appbarTitle: {
-    color: '#000',
     fontWeight: 'bold',
     fontSize: 20,
   },
@@ -121,13 +169,11 @@ const styles = StyleSheet.create({
   profileSection: {
     paddingVertical: 30,
     alignItems: 'center',
-    backgroundColor: '#f7f8fa',
   },
   avatarCircle: {
     width: 100,
     height: 100,
     borderRadius: 50,
-    backgroundColor: '#2ecc71',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 15,
@@ -145,17 +191,14 @@ const styles = StyleSheet.create({
   name: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#333',
     marginBottom: 4,
   },
   email: {
     fontSize: 14,
-    color: '#666',
     marginBottom: 20,
   },
   editButton: {
     borderRadius: 30,
-    backgroundColor: '#2ecc71',
     paddingHorizontal: 20,
   },
   editButtonLabel: {
@@ -170,7 +213,6 @@ const styles = StyleSheet.create({
   settingsTitle: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#2ecc71',
     marginBottom: 10,
     marginLeft: 10,
   },
@@ -179,7 +221,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 15,
     paddingHorizontal: 10,
-    backgroundColor: '#fff',
     borderRadius: 10,
     marginBottom: 10,
     elevation: 1,
@@ -188,6 +229,5 @@ const styles = StyleSheet.create({
     flex: 1,
     marginLeft: 15,
     fontSize: 16,
-    color: '#333',
   },
 });

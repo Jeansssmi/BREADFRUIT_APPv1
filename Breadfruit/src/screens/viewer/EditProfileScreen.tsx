@@ -11,7 +11,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { Button, TextInput } from 'react-native-paper';
+import { Button, TextInput, useTheme } from 'react-native-paper'; // ✅ useTheme added
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { launchCamera, launchImageLibrary } from 'react-native-image-picker';
 import auth from '@react-native-firebase/auth';
@@ -21,6 +21,7 @@ import storage from '@react-native-firebase/storage';
 export default function EditProfileScreen() {
   const navigation = useNavigation();
   const { user, fetchUserData, updateLocalUser } = useAuth();
+  const theme = useTheme(); // ✅ theme from React Native Paper
 
   const [name, setName] = useState('');
   const [loading, setLoading] = useState(false);
@@ -126,15 +127,26 @@ export default function EditProfileScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <ScrollView contentContainerStyle={styles.formContainer}>
-        <TouchableOpacity style={styles.imageBox} onPress={handleImagePick}>
+        <TouchableOpacity
+          style={[
+            styles.imageBox,
+            {
+              backgroundColor: theme.colors.card,
+              borderColor: theme.dark ? '#444' : '#e0e0e0',
+            },
+          ]}
+          onPress={handleImagePick}
+        >
           {profileImageUri ? (
             <Image source={{ uri: profileImageUri }} style={styles.profileImage} />
           ) : (
             <View style={styles.placeholderContainer}>
-              <MaterialIcons name="person" size={60} color="#777" />
-              <Text style={styles.imageLabel}>Add Profile Picture</Text>
+              <MaterialIcons name="person" size={60} color={theme.dark ? '#aaa' : '#777'} />
+              <Text style={[styles.imageLabel, { color: theme.colors.primary }]}>
+                Add Profile Picture
+              </Text>
             </View>
           )}
           {profileImageUri && (
@@ -144,18 +156,66 @@ export default function EditProfileScreen() {
           )}
         </TouchableOpacity>
 
-        <TextInput label="User ID" value={user?.uid || ''} editable={false} style={styles.inputDisabled} />
-        <TextInput label="Full Name" value={name} onChangeText={setName} style={styles.input} />
-        <TextInput label="Email Address" value={user?.email || ''} editable={false} style={styles.inputDisabled} />
-        <TextInput label="Role" value={user?.role || ''} editable={false} style={styles.inputDisabled} />
-        <TextInput label="Date Joined" value={getJoinDate()} editable={false} style={styles.inputDisabled} />
+        <TextInput
+          label="User ID"
+          value={user?.uid || ''}
+          editable={false}
+          style={[
+            styles.inputDisabled,
+            {
+              backgroundColor: theme.dark ? '#1f1f1f' : '#f0f0f0',
+              color: theme.colors.text,
+            },
+          ]}
+        />
+        <TextInput
+          label="Full Name"
+          value={name}
+          onChangeText={setName}
+          style={[
+            styles.input,
+            { backgroundColor: theme.dark ? '#1f1f1f' : '#ffffff', color: theme.colors.text },
+          ]}
+        />
+        <TextInput
+          label="Email Address"
+          value={user?.email || ''}
+          editable={false}
+          style={[
+            styles.inputDisabled,
+            { backgroundColor: theme.dark ? '#1f1f1f' : '#f0f0f0', color: theme.colors.text },
+          ]}
+        />
+        <TextInput
+          label="Role"
+          value={user?.role || ''}
+          editable={false}
+          style={[
+            styles.inputDisabled,
+            { backgroundColor: theme.dark ? '#1f1f1f' : '#f0f0f0', color: theme.colors.text },
+          ]}
+        />
+        <TextInput
+          label="Date Joined"
+          value={getJoinDate()}
+          editable={false}
+          style={[
+            styles.inputDisabled,
+            { backgroundColor: theme.dark ? '#1f1f1f' : '#f0f0f0', color: theme.colors.text },
+          ]}
+        />
       </ScrollView>
 
-      <View style={styles.buttonContainer}>
+      <View
+        style={[
+          styles.buttonContainer,
+          { backgroundColor: theme.dark ? '#1e1e1e' : '#f7f8fa' },
+        ]}
+      >
         <Button
           mode="contained"
           onPress={handleSaveChanges}
-          style={styles.button}
+          style={[styles.button, { backgroundColor: theme.colors.primary }]}
           labelStyle={styles.buttonLabel}
           disabled={loading}
         >
@@ -167,17 +227,13 @@ export default function EditProfileScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f7f8fa' },
+  container: { flex: 1 },
   formContainer: { paddingHorizontal: 20, paddingBottom: 100, paddingTop: 20 },
-
-  // ✅ Image box matches Add Tree design
   imageBox: {
     height: 200,
     borderRadius: 12,
-    backgroundColor: '#fff',
     marginBottom: 30,
     borderWidth: 1.5,
-    borderColor: '#e0e0e0',
     overflow: 'hidden',
     justifyContent: 'center',
     alignItems: 'center',
@@ -188,22 +244,9 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     elevation: 2,
   },
-
   profileImage: { width: '100%', height: '100%' },
-
-  placeholderContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 10,
-  },
-
-  imageLabel: {
-    color: '#2ecc71',
-    fontSize: 16,
-    fontWeight: '500',
-  },
-
+  placeholderContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 10 },
+  imageLabel: { fontSize: 16, fontWeight: '500' },
   changeButton: {
     position: 'absolute',
     top: 10,
@@ -213,30 +256,10 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 8,
   },
-
-  changeButtonText: {
-    color: '#fff',
-    fontWeight: '500',
-    fontSize: 12,
-  },
-
-  input: { marginBottom: 15, backgroundColor: '#ffffff' },
-  inputDisabled: { marginBottom: 15, backgroundColor: '#f0f0f0' },
-
-  buttonContainer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    padding: 25,
-    backgroundColor: '#f7f8fa',
-  },
-
-  button: {
-    backgroundColor: '#2ecc71',
-    borderRadius: 30,
-    paddingVertical: 2,
-  },
-
+  changeButtonText: { color: '#fff', fontWeight: '500', fontSize: 12 },
+  input: { marginBottom: 15 },
+  inputDisabled: { marginBottom: 15 },
+  buttonContainer: { position: 'absolute', bottom: 0, left: 0, right: 0, padding: 25 },
+  button: { borderRadius: 30, paddingVertical: 2 },
   buttonLabel: { fontSize: 17, fontWeight: 'bold' },
 });

@@ -6,13 +6,15 @@ import {
   StyleSheet,
   View,
 } from 'react-native';
-import { Card, FAB, Text, Appbar } from 'react-native-paper';
+import { Card, FAB, Text, Appbar, useTheme } from 'react-native-paper'; // ✅ useTheme added
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import firestore from '@react-native-firebase/firestore';
 
 export default function TreeManagementScreen() {
   const navigation = useNavigation();
+  const theme = useTheme(); // ✅ global theme hook
+
   const [trackedTrees, setTrackedTrees] = useState(0);
   const [pendings, setPendings] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
@@ -20,7 +22,6 @@ export default function TreeManagementScreen() {
   const fetchAllCounts = async () => {
     setRefreshing(true);
     try {
-      // Count all verified, harvest-ready, harvested, and not-ready trees
       const verifiedSnap = await firestore()
         .collection('trees')
         .where('status', '==', 'verified')
@@ -49,7 +50,6 @@ export default function TreeManagementScreen() {
 
       setTrackedTrees(totalTracked);
 
-      // Count pending trees
       const pendingSnap = await firestore()
         .collection('trees')
         .where('status', '==', 'pending')
@@ -90,11 +90,23 @@ export default function TreeManagementScreen() {
   ];
 
   return (
-    <View style={styles.screen}>
-      <Appbar.Header style={styles.appbarHeader}>
-        <Appbar.Content title="Trees" titleStyle={styles.appbarTitle} />
+    <View style={[styles.screen, { backgroundColor: theme.colors.background }]}>
+      <Appbar.Header
+        style={[
+          styles.appbarHeader,
+          {
+            backgroundColor: theme.colors.card,
+            borderBottomColor: theme.dark ? '#333' : '#eee',
+          },
+        ]}
+      >
+        <Appbar.Content
+          title="Trees"
+          titleStyle={[styles.appbarTitle, { color: theme.colors.text }]}
+        />
         <Appbar.Action
           icon="magnify"
+          color={theme.colors.text}
           onPress={() => navigation.navigate('Search')}
         />
       </Appbar.Header>
@@ -103,9 +115,19 @@ export default function TreeManagementScreen() {
         contentContainerStyle={styles.container}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={fetchAllCounts} />
-        }>
-        <Text style={styles.sectionTitle}>
-          <MaterialCommunityIcons name="forest" size={22} color="#2ecc71" />{'  '}
+        }
+      >
+        <Text
+          style={[
+            styles.sectionTitle,
+            { color: theme.colors.text },
+          ]}
+        >
+          <MaterialCommunityIcons
+            name="forest"
+            size={22}
+            color={theme.colors.primary}
+          />{'  '}
           Tree Management
         </Text>
 
@@ -114,26 +136,49 @@ export default function TreeManagementScreen() {
             <Pressable
               key={card.title}
               onPress={card.onPress}
-              style={({ pressed, hovered }) => [
+              style={({ pressed }) => [
                 styles.cardWrapper,
-                (pressed || hovered) && {
+                pressed && {
                   transform: [{ scale: 0.97 }],
                   shadowOpacity: 0.25,
                   elevation: 6,
                 },
               ]}
-              android_ripple={{ color: 'rgba(0,0,0,0.1)' }}>
-              <Card style={[styles.card, card.highlight && styles.highlightCard]}>
+              android_ripple={{
+                color: theme.dark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)',
+              }}
+            >
+              <Card
+                style={[
+                  styles.card,
+                  { backgroundColor: theme.colors.card },
+                  card.highlight && { borderLeftColor: theme.colors.primary },
+                ]}
+              >
                 <Card.Content style={styles.cardContent}>
                   <View style={styles.iconRow}>
                     <MaterialCommunityIcons
                       name={card.icon}
                       size={24}
-                      color="#2ecc71"
+                      color={theme.colors.primary}
                     />
-                    <Text style={styles.cardTitle}>{card.title}</Text>
+                    <Text
+                      style={[
+                        styles.cardTitle,
+                        { color: theme.colors.primary },
+                      ]}
+                    >
+                      {card.title}
+                    </Text>
                   </View>
-                  <Text style={styles.cardNumber}>{card.value}</Text>
+                  <Text
+                    style={[
+                      styles.cardNumber,
+                      { color: theme.colors.text },
+                    ]}
+                  >
+                    {card.value}
+                  </Text>
                 </Card.Content>
               </Card>
             </Pressable>
@@ -144,7 +189,7 @@ export default function TreeManagementScreen() {
       <FAB
         icon="plus"
         color="white"
-        style={styles.fab}
+        style={[styles.fab, { backgroundColor: theme.colors.primary }]}
         onPress={() => navigation.navigate('AddTree')}
       />
     </View>
@@ -152,12 +197,11 @@ export default function TreeManagementScreen() {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#ffffff' },
+  screen: { flex: 1 },
   container: { paddingHorizontal: 16, paddingTop: 30, paddingBottom: 100 },
   sectionTitle: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#333',
     marginBottom: 20,
   },
   cardRow: { flexDirection: 'row', justifyContent: 'space-between' },
@@ -165,13 +209,12 @@ const styles = StyleSheet.create({
   card: {
     borderRadius: 12,
     elevation: 3,
-    backgroundColor: '#fff',
     shadowColor: '#000',
     shadowOpacity: 0.1,
     shadowRadius: 2,
     shadowOffset: { width: 0, height: 1 },
+    borderLeftWidth: 3,
   },
-  highlightCard: { borderLeftWidth: 3, borderLeftColor: '#2ecc71' },
   cardContent: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -181,13 +224,11 @@ const styles = StyleSheet.create({
   cardTitle: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#2ecc71',
     marginLeft: 8,
   },
   cardNumber: {
     fontSize: 40,
     fontWeight: 'bold',
-    color: '#333',
     textAlign: 'center',
     marginTop: 8,
   },
@@ -196,15 +237,12 @@ const styles = StyleSheet.create({
     margin: 16,
     right: 0,
     bottom: 0,
-    backgroundColor: '#2ecc71',
     borderRadius: 28,
   },
   appbarHeader: {
-    backgroundColor: '#fff',
     elevation: 0,
     shadowOpacity: 0,
     borderBottomWidth: 1,
-    borderBottomColor: '#eee',
   },
-  appbarTitle: { color: '#000', fontWeight: 'bold', fontSize: 20 },
+  appbarTitle: { fontWeight: 'bold', fontSize: 20 },
 });

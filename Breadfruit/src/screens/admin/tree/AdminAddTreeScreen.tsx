@@ -51,7 +51,7 @@ export default function AddTreeScreen() {
     }
   }, [route.params?.diameter]);
 
-  const handleNavigateToScanner = () => { if (!image) { Alert.alert("Image Required", "Please select an image first."); return; } navigation.navigate("EditDiameterScanner", { imageUri: image }); };
+  const handleNavigateToScanner = () => { if (!image) { Alert.alert("Image Required", "Please select an image first."); return; } navigation.navigate("DiameterScannerScreen", { imageUri: image }); };
 
   // 📸 Select Image
   const handleImageSelection = () => {

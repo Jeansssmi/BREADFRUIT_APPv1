@@ -1,6 +1,6 @@
 import { User } from '@/types';
 import { Pressable, StyleSheet, View, Animated } from 'react-native';
-import { Card, Text } from 'react-native-paper';
+import { Card, Text, useTheme } from 'react-native-paper';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useRef } from 'react';
 
@@ -10,6 +10,7 @@ type UserCardProps = {
 };
 
 export default function UserCard({ user, onPress }: UserCardProps) {
+  const theme = useTheme(); // ✅ Access current theme
   const scaleAnim = useRef(new Animated.Value(1)).current;
 
   const handlePressIn = () => {
@@ -26,24 +27,58 @@ export default function UserCard({ user, onPress }: UserCardProps) {
       : 'N/A';
 
   return (
-    <Pressable
-      onPress={onPress}
-      onPressIn={handlePressIn}
-      onPressOut={handlePressOut}
-    >
+    <Pressable onPress={onPress} onPressIn={handlePressIn} onPressOut={handlePressOut}>
       <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
-        <Card style={styles.card}>
+        <Card
+          style={[
+            styles.card,
+            { backgroundColor: theme.colors.card, shadowColor: theme.dark ? '#000' : '#000' },
+          ]}
+        >
           <Card.Content style={styles.cardContent}>
             <View style={styles.userHeader}>
-              <MaterialCommunityIcons name={'account'} size={24} color="#2ecc71" />
-              <Text variant="titleMedium" style={styles.userName}>{user.name}</Text>
+              <MaterialCommunityIcons name="account" size={24} color={theme.colors.primary} />
+              <Text
+                variant="titleMedium"
+                style={[styles.userName, { color: theme.colors.text }]}
+              >
+                {user.name}
+              </Text>
             </View>
-            <Text style={styles.userDetail}>
-              <MaterialCommunityIcons name="email" size={14} color="#666" />{'  '}{user.email}
+
+            <Text
+              style={[
+                styles.userDetail,
+                { color: theme.dark ? '#aaa' : '#666' },
+              ]}
+            >
+              <MaterialCommunityIcons
+                name="email"
+                size={14}
+                color={theme.dark ? '#bbb' : '#666'}
+              />{'  '}
+              {user.email}
             </Text>
+
             <View style={styles.userMeta}>
-              <Text style={styles.userRole}>{user.role}</Text>
-              <Text style={styles.userJoined}>
+              <Text
+                style={[
+                  styles.userRole,
+                  {
+                    color: theme.colors.primary,
+                    backgroundColor: theme.dark ? '#1f1f1f' : '#f0faf3',
+                  },
+                ]}
+              >
+                {user.role}
+              </Text>
+
+              <Text
+                style={[
+                  styles.userJoined,
+                  { color: theme.dark ? '#aaa' : '#888' },
+                ]}
+              >
                 {user.status === 'pending' ? 'Requested:' : 'Joined:'} {formattedJoined}
               </Text>
             </View>
@@ -58,7 +93,6 @@ const styles = StyleSheet.create({
   card: {
     marginBottom: 12,
     borderRadius: 12,
-    backgroundColor: '#ffffff',
     elevation: 2,
   },
   cardContent: {
@@ -72,13 +106,11 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   userName: {
-    color: '#333',
     fontWeight: '600',
     fontSize: 16,
   },
   userDetail: {
     fontSize: 14,
-    color: '#666',
     marginBottom: 8,
   },
   userMeta: {
@@ -87,16 +119,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   userRole: {
-    color: '#2ecc71',
     fontWeight: '500',
     fontSize: 14,
-    backgroundColor: '#f0faf3',
     paddingVertical: 4,
     paddingHorizontal: 8,
     borderRadius: 4,
   },
   userJoined: {
-    color: '#888',
     fontSize: 12,
   },
 });

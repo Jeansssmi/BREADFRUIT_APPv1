@@ -1,9 +1,9 @@
 import React, { useEffect } from 'react';
-import { NavigationContainer } from '@react-navigation/native';
-import { PaperProvider } from 'react-native-paper';
+import { NavigationContainer, DefaultTheme as NavigationDefaultTheme, DarkTheme as NavigationDarkTheme } from '@react-navigation/native';
+import { PaperProvider, MD3LightTheme, MD3DarkTheme } from 'react-native-paper';
 import { AuthProvider } from './src/context/AuthContext';
 import RootNavigator from './src/navigators/RootNavigator';
-import { ThemeProvider } from './src/context/ThemeContext';
+import { ThemeProvider, useTheme } from './src/context/ThemeContext';
 
 import { firebase } from '@react-native-firebase/app';
 import 'react-native-gesture-handler';
@@ -11,12 +11,54 @@ import 'react-native-reanimated';
 import { Buffer } from 'buffer';
 global.Buffer = global.Buffer || Buffer;
 
-// ✅ 1. Import the Geocoder library
+// ✅ Geocoder initialization
 import Geocoder from 'react-native-geocoding';
-
-// ✅ 2. Initialize Geocoder here with your API key
-// This should only be done once in your entire application.
 Geocoder.init("AIzaSyDkaDuJ4kRUpUJiXZrj7MHczYUFIcCIZNk");
+
+// ✅ Internal wrapper that applies global theme from ThemeContext
+function ThemedApp() {
+  const { isDarkMode } = useTheme();
+
+  const CombinedLightTheme = {
+    ...MD3LightTheme,
+    ...NavigationDefaultTheme,
+    colors: {
+      ...MD3LightTheme.colors,
+      ...NavigationDefaultTheme.colors,
+      primary: '#2ecc71',
+      accent: '#27ae60',
+      background: '#f7f8fa',
+      card: '#ffffff',
+      text: '#000000',
+    },
+  };
+
+  const CombinedDarkTheme = {
+    ...MD3DarkTheme,
+    ...NavigationDarkTheme,
+    colors: {
+      ...MD3DarkTheme.colors,
+      ...NavigationDarkTheme.colors,
+      primary: '#2ecc71',
+      accent: '#27ae60',
+      background: '#121212',
+      card: '#1e1e1e',
+      text: '#ffffff',
+    },
+  };
+
+  const theme = isDarkMode ? CombinedDarkTheme : CombinedLightTheme;
+
+  return (
+    <AuthProvider>
+      <PaperProvider theme={theme}>
+        <NavigationContainer theme={theme}>
+          <RootNavigator />
+        </NavigationContainer>
+      </PaperProvider>
+    </AuthProvider>
+  );
+}
 
 export default function App() {
   useEffect(() => {
@@ -25,14 +67,8 @@ export default function App() {
   }, []);
 
   return (
-          <ThemeProvider>
-    <AuthProvider>
-      <PaperProvider>
-        <NavigationContainer>
-          <RootNavigator />
-        </NavigationContainer>
-      </PaperProvider>
-    </AuthProvider>
-      </ThemeProvider>
+    <ThemeProvider>
+      <ThemedApp />
+    </ThemeProvider>
   );
 }

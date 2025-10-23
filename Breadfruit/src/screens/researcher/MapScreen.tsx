@@ -18,18 +18,19 @@ import Geolocation from 'react-native-geolocation-service';
 import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import firestore from '@react-native-firebase/firestore';
-import { Snackbar } from 'react-native-paper';
+import { Snackbar, useTheme } from 'react-native-paper'; // ✅ useTheme added
 
 // ✅ Initialize Geocoder
 Geocoder.init("AIzaSyDkaDuJ4kRUpUJiXZrj7MHczYUFIcCIZNk", { language: "en" });
 
-let lastRegion: any = null;
+let lastRegion = null;
 
 export default function MapScreen() {
   const route = useRoute();
   const navigation = useNavigation();
   const mapRef = useRef<MapView>(null);
   const { width, height } = Dimensions.get('window');
+  const theme = useTheme(); // ✅ Access global theme
 
   const [region, setRegion] = useState({
     latitude: 9.8833,
@@ -38,32 +39,30 @@ export default function MapScreen() {
     longitudeDelta: 0.03 * (width / height),
   });
 
-  const [trees, setTrees] = useState<any[]>([]);
+  const [trees, setTrees] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-  const [highlightedTreeID, setHighlightedTreeID] = useState<string | null>(null);
+  const [highlightedTreeID, setHighlightedTreeID] = useState(null);
   const highlightAnim = useRef(new Animated.Value(1)).current;
 
   const [snackbarVisible, setSnackbarVisible] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState('');
-  const [previousCount, setPreviousCount] = useState(0);
-  const [selectedFilter, setSelectedFilter] = useState<'All' | 'verified' | 'harvest-ready' | 'unripe'>('All');
+  const [selectedFilter, setSelectedFilter] = useState('All');
 
   // ✅ Pin colors per fruit status
-  const getPinColor = (fruitStatus: string) => {
+  const getPinColor = (fruitStatus) => {
     switch (fruitStatus) {
       case 'none':
-        return '#00BFFF'; // Sky blue for verified
+        return '#00BFFF'; // verified
       case 'ripe':
-        return '#FFD700'; // Yellow for harvest-ready
+        return '#FFD700'; // harvest-ready
       case 'unripe':
-        return '#2ecc71'; // Green for unripe
+        return '#2ecc71'; // unripe
       default:
-        return '#95a5a6'; // Gray fallback
+        return '#95a5a6';
     }
   };
 
-  // ✅ Save last region
   useEffect(() => {
     lastRegion = region;
   }, [region]);
@@ -74,14 +73,14 @@ export default function MapScreen() {
     }, [])
   );
 
-  // ✅ Fetch trees (listen in real time)
+  // ✅ Firestore listener
   useEffect(() => {
     setLoading(true);
     const unsubscribe = firestore()
       .collection('trees')
       .where('status', 'in', ['verified', 'harvest-ready', 'not-ready'])
       .onSnapshot(snapshot => {
-        const data: any[] = [];
+        const data = [];
         snapshot.forEach(doc => data.push({ treeID: doc.id, ...doc.data() }));
         setTrees(data);
         setLoading(false);
@@ -104,7 +103,6 @@ export default function MapScreen() {
     }, 5000);
   };
 
-  // ✅ New tree highlight
   useEffect(() => {
     if (route.params?.lat && route.params?.lng) {
       const newRegion = {
@@ -171,7 +169,7 @@ export default function MapScreen() {
     );
   };
 
-  // ✅ Filter trees by fruit status
+  // ✅ Filtered trees
   const filteredTrees = trees.filter(tree => {
     if (selectedFilter === 'All') return true;
     if (selectedFilter === 'verified') return tree.fruitStatus === 'none';
@@ -182,39 +180,47 @@ export default function MapScreen() {
 
   if (loading) {
     return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color="#2ecc71" />
+      <View style={[styles.center, { backgroundColor: theme.colors.background }]}>
+        <ActivityIndicator size="large" color={theme.colors.primary} />
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       {/* 🔍 Search Bar */}
-      <View style={styles.searchBar}>
+      <View
+        style={[
+          styles.searchBar,
+          { backgroundColor: theme.dark ? '#2a2a2a' : '#f8f8f8', shadowColor: theme.dark ? '#000' : '#ccc' },
+        ]}
+      >
         <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10 }}>
-          <MaterialIcons name="search" size={24} color="#2ecc71" />
+          <MaterialIcons name="search" size={24} color={theme.colors.primary} />
           <TextInput
             placeholder="Search barangay, city, or location..."
+            placeholderTextColor={theme.dark ? '#aaa' : '#666'}
             value={searchQuery}
             onChangeText={setSearchQuery}
-            style={styles.searchInput}
-            onSubmitEditing={() => {}}
-            returnKeyType="search"
+            style={[styles.searchInput, { color: theme.colors.text }]}
           />
         </View>
       </View>
 
-      {/* 🌈 Legend (Filter Buttons) */}
+      {/* 🌈 Legend */}
       <View style={styles.legendContainer}>
         {['All', 'verified', 'harvest-ready', 'unripe'].map((filter) => (
           <TouchableOpacity
             key={filter}
             style={[
               styles.legendItem,
-              selectedFilter === filter && { backgroundColor: 'rgba(46,204,113,0.15)', borderRadius: 6, padding: 2 },
+              selectedFilter === filter && {
+                backgroundColor: theme.dark
+                  ? 'rgba(46,204,113,0.3)'
+                  : 'rgba(46,204,113,0.15)',
+              },
             ]}
-            onPress={() => setSelectedFilter(filter as any)}
+            onPress={() => setSelectedFilter(filter)}
           >
             <View
               style={[
@@ -231,7 +237,7 @@ export default function MapScreen() {
                 },
               ]}
             />
-            <Text style={styles.legendText}>
+            <Text style={[styles.legendText, { color: theme.colors.text }]}>
               {filter === 'unripe'
                 ? 'Unripe'
                 : filter === 'harvest-ready'
@@ -268,7 +274,10 @@ export default function MapScreen() {
       </MapView>
 
       {/* 📍 My Location */}
-      <TouchableOpacity style={styles.myLocationButton} onPress={handleMyLocation}>
+      <TouchableOpacity
+        style={[styles.myLocationButton, { backgroundColor: theme.colors.primary }]}
+        onPress={handleMyLocation}
+      >
         <MaterialIcons name="my-location" size={28} color="#fff" />
       </TouchableOpacity>
 
@@ -277,7 +286,9 @@ export default function MapScreen() {
         visible={snackbarVisible}
         onDismiss={() => setSnackbarVisible(false)}
         duration={2500}
-        style={{ backgroundColor: '#2ecc71' }}
+        style={{
+          backgroundColor: theme.colors.primary,
+        }}
       >
         {snackbarMessage}
       </Snackbar>
@@ -286,7 +297,7 @@ export default function MapScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#ffffff' },
+  container: { flex: 1 },
   searchBar: {
     position: 'absolute',
     top: 16,
@@ -295,8 +306,6 @@ const styles = StyleSheet.create({
     zIndex: 1,
     elevation: 3,
     borderRadius: 25,
-    backgroundColor: '#f8f8f8',
-    shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
     shadowRadius: 3.84,
@@ -314,7 +323,6 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 25,
     right: 20,
-    backgroundColor: '#2ecc71',
     padding: 14,
     borderRadius: 50,
     elevation: 4,
@@ -334,9 +342,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginRight: 10,
-    paddingHorizontal: 2,
+    paddingHorizontal: 4,
     paddingVertical: 4,
-    marginHorizontal: 2,
+    borderRadius: 6,
   },
   legendColor: {
     width: 16,

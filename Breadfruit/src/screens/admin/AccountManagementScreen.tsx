@@ -1,32 +1,34 @@
 import React, { useEffect, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
-import { Card, FAB, Text, ActivityIndicator } from 'react-native-paper';
+import { Card, FAB, Text, ActivityIndicator, useTheme } from 'react-native-paper';
 import { useNavigation } from '@react-navigation/native';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import firestore from '@react-native-firebase/firestore';
 
 export default function AccountManagementScreen() {
   const navigation = useNavigation<any>();
+  const theme = useTheme(); // ✅ use global theme
+
   const [allUsers, setAllUsers] = useState(0);
   const [researchers, setResearchers] = useState(0);
   const [pendings, setPendings] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
 
-  // --- LOGIC (UNCHANGED) ---
+  // --- LOGIC (unchanged) ---
   const fetchAllCounts = async () => {
     setRefreshing(true);
     try {
-      const usersCollection = firestore().collection("users");
+      const usersCollection = firestore().collection('users');
       const allUsersSnap = await usersCollection.get();
       setAllUsers(allUsersSnap.size);
 
-      const researcherSnap = await usersCollection.where("role", "==", "researcher").get();
+      const researcherSnap = await usersCollection.where('role', '==', 'researcher').get();
       setResearchers(researcherSnap.size);
 
-      const pendingSnap = await usersCollection.where("status", "==", "pending").get();
+      const pendingSnap = await usersCollection.where('status', '==', 'pending').get();
       setPendings(pendingSnap.size);
     } catch (error) {
-      console.error("Error fetching user counts:", error);
+      console.error('Error fetching user counts:', error);
     } finally {
       setRefreshing(false);
     }
@@ -41,24 +43,28 @@ export default function AccountManagementScreen() {
 
   if (refreshing && allUsers === 0) {
     return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color="#2ecc71" />
+      <View style={[styles.center, { backgroundColor: theme.colors.background }]}>
+        <ActivityIndicator size="large" color={theme.colors.primary} />
       </View>
     );
   }
 
   const cards = [
-    { title: "Researchers", value: researchers, icon: "account-tie", onPress: () => navigation.navigate('UserList', { filter: 'researcher' }) },
-    { title: "All Users", value: allUsers, icon: "account-group", onPress: () => navigation.navigate('UserList') },
-    { title: "Pending Approvals", value: pendings, icon: "account-clock", onPress: () => navigation.navigate('PendingUsers') },
+    {
+      title: 'Researchers',
+      value: researchers,
+      icon: 'account-tie',
+      onPress: () => navigation.navigate('UserList', { filter: 'researcher' }),
+    },
+    { title: 'All Users', value: allUsers, icon: 'account-group', onPress: () => navigation.navigate('UserList') },
+    { title: 'Pending Approvals', value: pendings, icon: 'account-clock', onPress: () => navigation.navigate('PendingUsers') },
   ];
 
   return (
-    <View style={styles.screen}>
-      <View style={styles.headerContainer}>
-        <Text style={styles.title}>
-          <MaterialCommunityIcons name="account-group" size={24} color="#2c3e50" />{' '}
-          Account Management
+    <View style={[styles.screen, { backgroundColor: theme.colors.background }]}>
+      <View style={[styles.headerContainer, { backgroundColor: theme.colors.card, borderBottomColor: theme.dark ? '#333' : '#eee' }]}>
+        <Text style={[styles.title, { color: theme.colors.text }]}>
+          <MaterialCommunityIcons name="account-group" size={24} color={theme.colors.primary} /> Account Management
         </Text>
       </View>
 
@@ -80,24 +86,29 @@ export default function AccountManagementScreen() {
                 },
               ]}
             >
-              <Card style={[styles.card, index === 0 && styles.primaryCard]}>
+              <Card
+                style={[
+                  styles.card,
+                  { backgroundColor: theme.colors.card },
+                  index === 0 && styles.primaryCard,
+                ]}
+              >
                 <Card.Content>
                   <View style={styles.cardHeader}>
-                    <MaterialCommunityIcons name={card.icon} size={24} color="#2ecc71" />
-                    <Text style={styles.cardTitle}>{card.title}</Text>
+                    <MaterialCommunityIcons name={card.icon} size={24} color={theme.colors.primary} />
+                    <Text style={[styles.cardTitle, { color: theme.colors.primary }]}>{card.title}</Text>
                   </View>
-                  <Text style={styles.statNumber}>{card.value}</Text>
+                  <Text style={[styles.statNumber, { color: theme.colors.text }]}>{card.value}</Text>
                 </Card.Content>
               </Card>
             </Pressable>
           ))}
-
         </View>
       </ScrollView>
 
       <FAB
         icon="plus"
-        style={styles.fab}
+        style={[styles.fab, { backgroundColor: theme.colors.primary }]}
         color="white"
         onPress={() => navigation.navigate('AddUser')}
       />
@@ -105,23 +116,19 @@ export default function AccountManagementScreen() {
   );
 }
 
-// --- DESIGN (UPDATED TO MATCH IMAGE) ---
+// --- DESIGN ---
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: '#f7f8fa',
   },
   headerContainer: {
-    backgroundColor: '#ffffff',
     paddingHorizontal: 20,
     paddingVertical: 20,
     borderBottomWidth: 1,
-    borderBottomColor: '#eee',
   },
   title: {
     fontSize: 22,
     fontWeight: 'bold',
-    color: '#2c3e50',
   },
   container: {
     padding: 20,
@@ -136,13 +143,12 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   card: {
-     borderRadius: 12,
-         elevation: 3,
-         backgroundColor: '#fff',
-         shadowColor: '#000',
-         shadowOpacity: 0.1,
-         shadowRadius: 2,
-         shadowOffset: { width: 0, height: 1 },
+    borderRadius: 12,
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    shadowOffset: { width: 0, height: 1 },
   },
   primaryCard: {
     borderLeftWidth: 5,
@@ -155,14 +161,12 @@ const styles = StyleSheet.create({
   },
   cardTitle: {
     fontSize: 14,
-    color: '#2ecc71',
     marginLeft: 8,
     fontWeight: '600',
   },
   statNumber: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '333',
     textAlign: 'center',
     marginTop: 8,
   },
@@ -171,7 +175,6 @@ const styles = StyleSheet.create({
     margin: 20,
     right: 0,
     bottom: 0,
-    backgroundColor: '#2ecc71',
     borderRadius: 28,
   },
   center: {

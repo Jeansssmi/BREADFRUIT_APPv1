@@ -6,7 +6,7 @@ import WelcomeScreen from '../screens/auth/WelcomeScreen'; // 🟢 NEW: Import W
 import LoginScreen from '../screens/auth/LoginScreen';
 import RegisterFormScreen from '../screens/auth/Register/RegisterFormScreen';
 import UserTypeSelectionScreen from '../screens/auth/Register/UserTypeSelectionScreen';
-
+import AboutHelpScreen from '../screens/auth/AboutHelpScreen';
 // --- Type Definitions for Navigation ---
 // This defines the screens in the nested registration stack
 export type RegisterStackParamList = {
@@ -48,6 +48,8 @@ export default function AuthNavigator() {
 
       {/* Register Stack */}
       <Stack.Screen name="Register" component={RegisterNavigator} options={{ headerShown: false }} />
+<Stack.Screen name="AboutHelp" component={AboutHelpScreen} />
+
     </Stack.Navigator>
   );
 }

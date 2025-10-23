@@ -12,9 +12,9 @@ import ProfileScreen from '../screens/shared/ProfileScreen';
 import EditProfileScreen from '../screens/shared/EditProfileScreen';
 import HarvestListScreen from '../screens/shared/HarvestListScreen';
 import HarvestedListScreen from '../screens/shared/HarvestedListScreen';
-import NotificationPreferencesScreen from '../screens/shared/NotificationPreferencesScreen';
+//import NotificationPreferencesScreen from '../screens/shared/NotificationPreferencesScreen';
 import AboutHelpScreen from '../screens/shared/AboutHelpScreen';
-
+import AppearanceScreen from '../screens/shared/AppearanceScreen';
 // Import nested tree screens
 import ActivityLogsScreen from '../screens/researcher/tree/ActivityLogsScreen';
 import AddTreeScreen from '../screens/researcher/tree/AddTreeScreen';
@@ -56,8 +56,14 @@ function ProfileStack() {
         <ProfileStackNav.Navigator>
            <ProfileStackNav.Screen name="ProfileScreen" component={ProfileScreen} options={{ headerShown: false }} />
 
-           <ProfileStackNav.Screen name="NotificationPreferences" component={NotificationPreferencesScreen} options={{ headerTitle: 'Notifications' }} />
+
            <ProfileStackNav.Screen name="AboutHelp" component={AboutHelpScreen} options={{ headerTitle: 'About & Help' }} />
+       {/* ✅ Add Appearance Screen here */}
+                   <ProfileStackNav.Screen
+                     name="Appearance"
+                     component={AppearanceScreen}
+                     options={{ headerTitle: "Appearance" }}
+                   />
         </ProfileStackNav.Navigator>
     )
 }

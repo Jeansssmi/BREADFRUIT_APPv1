@@ -18,17 +18,19 @@ import Geolocation from 'react-native-geolocation-service';
 import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import firestore from '@react-native-firebase/firestore';
-import { Snackbar } from 'react-native-paper';
+import { Snackbar, useTheme } from 'react-native-paper'; // ✅ useTheme added
 
 // ✅ Initialize Geocoder
-Geocoder.init("AIzaSyDkaDuJ4kRUpUJiXZrj7MHczYUFIcCIZNk", { language: "en" });
+Geocoder.init('AIzaSyDkaDuJ4kRUpUJiXZrj7MHczYUFIcCIZNk', { language: 'en' });
 
-let lastRegion: any = null;
+let lastRegion = null;
 
 export default function MapScreen() {
   const route = useRoute();
   const navigation = useNavigation();
   const mapRef = useRef<MapView>(null);
+  const theme = useTheme(); // ✅ access theme (dark/light)
+
   const { width, height } = Dimensions.get('window');
 
   const [region, setRegion] = useState({
@@ -38,16 +40,15 @@ export default function MapScreen() {
     longitudeDelta: 0.03 * (width / height),
   });
 
-  const [trees, setTrees] = useState<any[]>([]);
+  const [trees, setTrees] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-  const [highlightedTreeID, setHighlightedTreeID] = useState<string | null>(null);
+  const [highlightedTreeID, setHighlightedTreeID] = useState(null);
   const highlightAnim = useRef(new Animated.Value(1)).current;
   const [snackbarVisible, setSnackbarVisible] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState('');
 
-  // ✅ All pins will be green
-  const pinColor = '#2ecc71';
+  const pinColor = theme.colors.primary; // ✅ color follows theme
 
   // ✅ Save last region
   useEffect(() => {
@@ -60,14 +61,14 @@ export default function MapScreen() {
     }, [])
   );
 
-  // ✅ Fetch all verified / visible trees
+  // ✅ Fetch verified and visible trees
   useEffect(() => {
     setLoading(true);
     const unsubscribe = firestore()
       .collection('trees')
       .where('status', 'in', ['verified', 'harvest-ready', 'not-ready'])
       .onSnapshot(snapshot => {
-        const data: any[] = [];
+        const data = [];
         snapshot.forEach(doc => data.push({ treeID: doc.id, ...doc.data() }));
         setTrees(data);
         setLoading(false);
@@ -138,7 +139,7 @@ export default function MapScreen() {
     }
 
     Geolocation.getCurrentPosition(
-      (position) => {
+      position => {
         const { latitude, longitude } = position.coords;
         const newRegion = {
           latitude,
@@ -149,7 +150,7 @@ export default function MapScreen() {
         mapRef.current?.animateToRegion(newRegion, 1500);
         setRegion(newRegion);
       },
-      (error) => {
+      error => {
         console.error('Location error:', error);
         Alert.alert('Error', 'Unable to get your location. Please check GPS.');
       },
@@ -159,23 +160,29 @@ export default function MapScreen() {
 
   if (loading) {
     return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color="#2ecc71" />
+      <View style={[styles.center, { backgroundColor: theme.colors.background }]}>
+        <ActivityIndicator size="large" color={theme.colors.primary} />
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       {/* 🔍 Search Bar */}
-      <View style={styles.searchBar}>
+      <View
+        style={[
+          styles.searchBar,
+          { backgroundColor: theme.dark ? '#2a2a2a' : '#f8f8f8', shadowColor: theme.dark ? '#000' : '#ccc' },
+        ]}
+      >
         <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10 }}>
-          <MaterialIcons name="search" size={24} color="#2ecc71" />
+          <MaterialIcons name="search" size={24} color={theme.colors.primary} />
           <TextInput
             placeholder="Search barangay, city, or location..."
+            placeholderTextColor={theme.dark ? '#aaa' : '#666'}
             value={searchQuery}
             onChangeText={setSearchQuery}
-            style={styles.searchInput}
+            style={[styles.searchInput, { color: theme.colors.text }]}
             returnKeyType="search"
           />
         </View>
@@ -190,14 +197,14 @@ export default function MapScreen() {
         onRegionChangeComplete={setRegion}
         showsUserLocation={true}
       >
-        {trees.map((tree) => (
+        {trees.map(tree => (
           <Marker
             key={tree.treeID}
             coordinate={{
               latitude: tree.coordinates?.latitude ?? 0,
               longitude: tree.coordinates?.longitude ?? 0,
             }}
-            pinColor={pinColor} // ✅ all markers green
+            pinColor={pinColor}
             title={tree.treeID || 'Tree'}
             description={`Tracked by: ${tree.trackedBy || 'N/A'}`}
             onPress={() =>
@@ -210,7 +217,13 @@ export default function MapScreen() {
       </MapView>
 
       {/* 📍 My Location Button */}
-      <TouchableOpacity style={styles.myLocationButton} onPress={handleMyLocation}>
+      <TouchableOpacity
+        style={[
+          styles.myLocationButton,
+          { backgroundColor: theme.colors.primary, shadowColor: theme.dark ? '#000' : '#222' },
+        ]}
+        onPress={handleMyLocation}
+      >
         <MaterialIcons name="my-location" size={28} color="#fff" />
       </TouchableOpacity>
 
@@ -219,7 +232,7 @@ export default function MapScreen() {
         visible={snackbarVisible}
         onDismiss={() => setSnackbarVisible(false)}
         duration={2500}
-        style={{ backgroundColor: '#2ecc71' }}
+        style={{ backgroundColor: theme.colors.primary }}
       >
         {snackbarMessage}
       </Snackbar>
@@ -228,7 +241,7 @@ export default function MapScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#ffffff' },
+  container: { flex: 1 },
   searchBar: {
     position: 'absolute',
     top: 16,
@@ -237,8 +250,6 @@ const styles = StyleSheet.create({
     zIndex: 1,
     elevation: 3,
     borderRadius: 25,
-    backgroundColor: '#f8f8f8',
-    shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
     shadowRadius: 3.84,
@@ -256,11 +267,9 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 25,
     right: 20,
-    backgroundColor: '#2ecc71',
     padding: 14,
     borderRadius: 50,
     elevation: 4,
-    shadowColor: '#000',
     shadowOpacity: 0.3,
     shadowOffset: { width: 0, height: 2 },
   },

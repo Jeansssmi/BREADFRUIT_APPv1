@@ -10,9 +10,9 @@ import TreeDetailsScreen from '../screens/viewer/TreeDetailsScreen';
 import TreeListScreen from '../screens/viewer/TreeListScreen';
 import ProfileScreen from '../screens/viewer/ProfileScreen';
 import EditProfileScreen from '../screens/viewer/EditProfileScreen';
-import NotificationPreferencesScreen from '../screens/shared/NotificationPreferencesScreen';
+//import NotificationPreferencesScreen from '../screens/shared/NotificationPreferencesScreen';
 import AboutHelpScreen from '../screens/shared/AboutHelpScreen';
-
+import AppearanceScreen from '../screens/viewer/AppearanceScreen';
 const Tab = createBottomTabNavigator();
 const RootStack = createNativeStackNavigator();
 const TreeStackNav = createNativeStackNavigator();
@@ -45,16 +45,18 @@ function ProfileStack() {
         component={EditProfileScreen}
         options={{ headerTitle: 'Edit Profile' }}
       />
-      <ProfileStackNav.Screen
-        name="NotificationPreferences"
-        component={NotificationPreferencesScreen}
-        options={{ headerTitle: 'Notifications' }}
-      />
+
       <ProfileStackNav.Screen
         name="AboutHelp"
         component={AboutHelpScreen}
         options={{ headerTitle: 'About & Help' }}
       />
+       {/* ✅ Add Appearance Screen here */}
+                  <ProfileStackNav.Screen
+                    name="Appearance"
+                    component={AppearanceScreen}
+                    options={{ headerTitle: "Appearance" }}
+                  />
     </ProfileStackNav.Navigator>
   );
 }
