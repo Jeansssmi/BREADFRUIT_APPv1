@@ -1,49 +1,53 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState } from "react";
 import {
   FlatList,
   Image,
-  RefreshControl,
   StyleSheet,
   View,
+  Pressable,
 } from "react-native";
 import { ActivityIndicator, Card, Text } from "react-native-paper";
 import firestore from "@react-native-firebase/firestore";
 import { useAuth } from "@/context/AuthContext";
 import MaterialCommunityIcons from "react-native-vector-icons/MaterialCommunityIcons";
+import { useNavigation } from "@react-navigation/native";
 
 export default function HarvestedListScreen() {
   const { user: currentUser } = useAuth();
+  const navigation = useNavigation<any>();
+
   const [trees, setTrees] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-
-  const fetchTrees = useCallback(async () => {
-    try {
-      setLoading(true);
-      let query = firestore().collection("trees").where("status", "==", "harvested");
-
-      // ✅ Researchers only see their own harvested trees
-      if (currentUser?.role === "researcher") {
-        query = query.where("trackedById", "==", currentUser.uid);
-      }
-
-      const snapshot = await query.get();
-      const data = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
-      setTrees(data);
-    } catch (error) {
-      console.error("Error fetching harvested trees:", error);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, [currentUser]);
 
   useEffect(() => {
-    fetchTrees();
-  }, [fetchTrees]);
+    if (!currentUser) return;
+
+    // ✅ Real-time listener (no need to refresh)
+    let query = firestore().collection("trees").where("status", "==", "harvested");
+
+    // ✅ Researchers only see their own harvested trees
+    if (currentUser?.role === "researcher") {
+      query = query.where("trackedById", "==", currentUser.uid);
+    }
+
+    const unsubscribe = query.onSnapshot(
+      (snapshot) => {
+        const data = snapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        }));
+        setTrees(data);
+        setLoading(false);
+      },
+      (error) => {
+        console.error("Error fetching harvested trees:", error);
+        setLoading(false);
+      }
+    );
+
+    // ✅ Cleanup listener on unmount
+    return () => unsubscribe();
+  }, [currentUser]);
 
   if (loading) {
     return (
@@ -67,41 +71,45 @@ export default function HarvestedListScreen() {
       <FlatList
         data={trees}
         keyExtractor={(item) => item.id}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={fetchTrees} />
-        }
         renderItem={({ item }) => (
-          <Card style={styles.card}>
-            {item.image ? (
-              <Image source={{ uri: item.image }} style={styles.image} />
-            ) : (
-              <View style={[styles.image, styles.imagePlaceholder]}>
-                <MaterialCommunityIcons
-                  name="image-off"
-                  size={40}
-                  color="#888"
-                />
-              </View>
-            )}
-            <Card.Content>
-              <Text style={styles.treeId}>{item.treeID || "Unknown ID"}</Text>
-              {item.city && item.barangay && (
-                <Text style={styles.treeLocation}>
-                  {item.barangay}, {item.city}
-                </Text>
-              )}
-              <Text style={styles.statusLabel}>Status: {item.status}</Text>
-
-
-              {item.harvestedAt && item.harvestedAt.toDate ? (
-                <Text style={styles.harvestedDate}>
-                  Date: {item.harvestedAt.toDate().toLocaleString()}
-                </Text>
+          <Pressable
+            onPress={() =>
+              navigation.navigate("TreeList", {
+                treeID: item.treeID, // ✅ Pass only this treeID
+              })
+            }
+          >
+            <Card style={styles.card}>
+              {item.image ? (
+                <Image source={{ uri: item.image }} style={styles.image} />
               ) : (
-                <Text style={styles.harvestedDate}>Date: N/A</Text>
+                <View style={[styles.image, styles.imagePlaceholder]}>
+                  <MaterialCommunityIcons
+                    name="image-off"
+                    size={40}
+                    color="#888"
+                  />
+                </View>
               )}
-            </Card.Content>
-          </Card>
+              <Card.Content>
+                <Text style={styles.treeId}>{item.treeID || "Unknown ID"}</Text>
+                {item.city && item.barangay && (
+                  <Text style={styles.treeLocation}>
+                    {item.barangay}, {item.city}
+                  </Text>
+                )}
+                <Text style={styles.statusLabel}>Status: {item.status}</Text>
+
+                {item.harvestedAt && item.harvestedAt.toDate ? (
+                  <Text style={styles.harvestedDate}>
+                    Date: {item.harvestedAt.toDate().toLocaleString()}
+                  </Text>
+                ) : (
+                  <Text style={styles.harvestedDate}>Date: N/A</Text>
+                )}
+              </Card.Content>
+            </Card>
+          </Pressable>
         )}
         contentContainerStyle={{ paddingBottom: 80 }}
       />
@@ -138,6 +146,5 @@ const styles = StyleSheet.create({
   },
   treeLocation: { color: "#555", fontSize: 14, marginTop: 4 },
   statusLabel: { color: "#999", marginTop: 4 },
-  harvestedBy: { color: "#2ecc71", marginTop: 4, fontWeight: "bold" },
   harvestedDate: { color: "#555", marginTop: 2, fontStyle: "italic" },
 });

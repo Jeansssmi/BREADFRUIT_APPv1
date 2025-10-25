@@ -1,12 +1,13 @@
 import { useAuth } from '@/context/AuthContext';
-import { useNavigation } from '@react-navigation/native';
-import React from 'react';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import React, { useState, useCallback, useEffect } from 'react';
 import { Alert, StyleSheet, View, Image, ScrollView, TouchableOpacity } from 'react-native';
-import { Text, Button, Appbar, useTheme } from 'react-native-paper'; // ✅ Added useTheme
+import { Text, Button, Appbar, useTheme } from 'react-native-paper';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
+import firestore from '@react-native-firebase/firestore';
 
-// ✅ Custom component for each setting item
+// ✅ Reusable settings item component
 const SettingsItem = ({ icon, name, onPress, isLogout = false, theme }) => (
   <TouchableOpacity
     onPress={onPress}
@@ -37,11 +38,51 @@ const SettingsItem = ({ icon, name, onPress, isLogout = false, theme }) => (
 export default function ProfileScreen() {
   const navigation = useNavigation<any>();
   const { user, logout } = useAuth();
-  const theme = useTheme(); // ✅ Access global theme
+  const theme = useTheme();
+
+  // ✅ Live-updating user data state
+  const [userData, setUserData] = useState(user);
+  const [unseenCount, setUnseenCount] = useState(0);
+
+  // ✅ Real-time Firestore listener for user profile
+  useFocusEffect(
+    useCallback(() => {
+      if (user?.uid) {
+        const unsubscribe = firestore()
+          .collection('users')
+          .doc(user.uid)
+          .onSnapshot(
+            (doc) => {
+              if (doc.exists) {
+                setUserData({ uid: user.uid, ...doc.data() });
+              }
+            },
+            (error) => console.error('Error fetching user profile:', error)
+          );
+        return () => unsubscribe();
+      }
+    }, [user?.uid])
+  );
+
+    // ✅ Real-time notification badge listener
+    useEffect(() => {
+      if (!user?.uid) return;
+
+      const unsubscribe = firestore()
+        .collection('notification')
+        .where('recipientUid', '==', user.uid)
+        .where('seen', '==', false)
+        .onSnapshot(
+          (snapshot) => setUnseenCount(snapshot.size),
+          (error) => console.error('Error fetching notifications:', error)
+        );
+
+      return () => unsubscribe();
+    }, [user?.uid]);
 
   const getInitials = () => {
-    if (!user?.name) return 'G';
-    return user.name.split(' ')[0][0].toUpperCase();
+    if (!userData?.name) return 'G';
+    return userData.name.split(' ')[0][0].toUpperCase();
   };
 
   const handleLogout = () => {
@@ -53,51 +94,46 @@ export default function ProfileScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      {/* ✅ Header with Title and Notification Bell */}
+      {/* ✅ Header */}
       <Appbar.Header
         style={[
           styles.appbarHeader,
-          { backgroundColor: theme.colors.card, borderBottomColor: theme.dark ? '#333' : '#eee' },
+          {
+            backgroundColor: theme.colors.card,
+            borderBottomColor: theme.dark ? '#333' : '#eee',
+          },
         ]}
       >
         <Appbar.Content
           title="Profile"
           titleStyle={[styles.appbarTitle, { color: theme.colors.text }]}
         />
-        <Appbar.Action icon="bell-outline" color={theme.colors.text} onPress={() => {}} />
+        <Appbar.Action
+          icon="bell-outline"
+          color={theme.colors.text}
+          onPress={() => navigation.navigate('NotificationsScreen')}
+        />
       </Appbar.Header>
 
+      {/* ✅ Scrollable content */}
       <ScrollView contentContainerStyle={styles.scrollContent}>
-        {/* ✅ Profile Info Section */}
-        <View
-          style={[
-            styles.profileSection,
-            { backgroundColor: theme.colors.background },
-          ]}
-        >
-          <View
-            style={[
-              styles.avatarCircle,
-              { backgroundColor: theme.colors.primary },
-            ]}
-          >
-            {user?.image ? (
-              <Image source={{ uri: user.image }} style={styles.profileImage} />
+        {/* ✅ Profile Info */}
+        <View style={[styles.profileSection, { backgroundColor: theme.colors.background }]}>
+          <View style={[styles.avatarCircle, { backgroundColor: theme.colors.primary }]}>
+            {userData?.image ? (
+              <Image source={{ uri: userData.image }} style={styles.profileImage} />
             ) : (
               <Text style={styles.initialsText}>{getInitials()}</Text>
             )}
           </View>
+
           <Text style={[styles.name, { color: theme.colors.text }]}>
-            {user?.name || 'Guest User'}
+            {userData?.name || 'Guest User'}
           </Text>
-          <Text
-            style={[
-              styles.email,
-              { color: theme.dark ? '#bbb' : '#666' },
-            ]}
-          >
-            {user?.email || 'No email provided'}
+          <Text style={[styles.email, { color: theme.dark ? '#bbb' : '#666' }]}>
+            {userData?.email || 'No email provided'}
           </Text>
+
           <Button
             mode="contained"
             onPress={() => navigation.navigate('EditProfile')}
@@ -109,19 +145,18 @@ export default function ProfileScreen() {
           </Button>
         </View>
 
-        {/* ✅ Settings List Section */}
+        {/* ✅ Settings Section */}
         <View style={styles.settingsSection}>
-          <Text
-            style={[
-              styles.settingsTitle,
-              { color: theme.colors.primary },
-            ]}
-          >
+          <Text style={[styles.settingsTitle, { color: theme.colors.primary }]}>
             Settings
           </Text>
 
-
-
+          <SettingsItem
+            icon="help-outline"
+            name="About App"
+            onPress={() => navigation.navigate('AboutHelp')}
+            theme={theme}
+          />
 
           <SettingsItem
             icon="palette"
@@ -133,7 +168,9 @@ export default function ProfileScreen() {
           <SettingsItem
             icon="bookmark"
             name="Tracked Trees"
-            onPress={() => navigation.navigate('TrackedTrees', { trackedBy: user.uid })}
+            onPress={() =>
+              navigation.navigate('TrackedTrees', { trackedBy: userData?.uid })
+            }
             theme={theme}
           />
 
@@ -151,9 +188,7 @@ export default function ProfileScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
+  container: { flex: 1 },
   appbarHeader: {
     elevation: 0,
     shadowOpacity: 0,

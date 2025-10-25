@@ -18,18 +18,17 @@ import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import firestore from '@react-native-firebase/firestore';
 import storage from '@react-native-firebase/storage';
 import { LoadingAlert, NotificationAlert } from '@/components/NotificationModal';
-import { useUserData } from '@/hooks/useUserData';
 
 export default function EditUserScreen() {
-  const theme = useTheme(); // ✅ Theme hook
+  const theme = useTheme();
   const navigation = useNavigation();
   const route = useRoute();
   // @ts-ignore
   const { userID } = route.params;
 
-  const { users, isLoading } = useUserData({ mode: 'single', uid: userID.toString() });
-  const user = users[0];
-
+  // ✅ Local states
+  const [user, setUser] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const [name, setName] = useState('');
   const [role, setRole] = useState('');
   const [image, setImage] = useState('');
@@ -39,20 +38,47 @@ export default function EditUserScreen() {
   const [notificationMessage, setNotificationMessage] = useState('');
   const [notificationType, setNotificationType] = useState<'success' | 'info' | 'error'>('info');
 
+  // ✅ Real-time Firestore listener for user data
   useEffect(() => {
-    if (user) {
-      setName(user.name);
-      setRole(user.role);
-      setImage(user.image || '');
+    if (!userID) {
+      console.error('❌ userID not found in route params');
+      setIsLoading(false);
+      return;
     }
-  }, [user]);
 
+    const unsubscribe = firestore()
+      .collection('users')
+      .doc(userID.toString())
+      .onSnapshot(
+        (doc) => {
+          if (doc.exists) {
+            const userData = doc.data();
+            setUser({ uid: doc.id, ...userData });
+            setName(userData?.name || '');
+            setRole(userData?.role || '');
+            setImage(userData?.image || '');
+          } else {
+            setUser(null);
+          }
+          setIsLoading(false);
+        },
+        (error) => {
+          console.error('Error fetching user:', error);
+          setIsLoading(false);
+        }
+      );
+
+    return () => unsubscribe();
+  }, [userID]);
+
+  // ✅ Pick image from gallery
   const pickImage = async () => {
     const result = await launchImageLibrary({ mediaType: 'photo', quality: 0.8 });
     if (result.didCancel || !result.assets) return;
     setImage(result.assets[0].uri || '');
   };
 
+  // ✅ Save changes to Firestore
   const handleSubmit = (uid: string) => {
     Alert.alert('Confirm Changes', 'Save changes for this user?', [
       { text: 'Cancel', style: 'cancel' },
@@ -64,6 +90,7 @@ export default function EditUserScreen() {
             const docRef = firestore().collection('users').doc(uid);
             let newImageURL = user.image;
 
+            // Upload new image if updated
             if (image && image.startsWith('file://')) {
               if (user.image) {
                 try {
@@ -131,13 +158,24 @@ export default function EditUserScreen() {
           />
 
           {/* 🖼️ Profile Image */}
-          <TouchableOpacity onPress={pickImage} style={[styles.imageContainer, { backgroundColor: theme.colors.surface, borderColor: theme.dark ? '#333' : '#ddd' }]}>
+          <TouchableOpacity
+            onPress={pickImage}
+            style={[
+              styles.imageContainer,
+              {
+                backgroundColor: theme.colors.surface,
+                borderColor: theme.dark ? '#333' : '#ddd',
+              },
+            ]}
+          >
             {image ? (
               <Image source={{ uri: image }} style={styles.image} />
             ) : (
               <View style={styles.imagePlaceholder}>
                 <MaterialIcons name="add-a-photo" size={40} color={theme.colors.primary} />
-                <Text style={[styles.imageLabel, { color: theme.colors.primary }]}>Update Profile Picture</Text>
+                <Text style={[styles.imageLabel, { color: theme.colors.primary }]}>
+                  Update Profile Picture
+                </Text>
               </View>
             )}
           </TouchableOpacity>

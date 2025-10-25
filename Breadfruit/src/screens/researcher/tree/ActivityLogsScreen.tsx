@@ -1,196 +1,305 @@
 import React, { useEffect, useState } from "react";
 import {
-  View,
-  ScrollView,
-  StyleSheet,
-  Modal,
-  Pressable,
-  TextInput,
-} from "react-native";
-import {
-  Appbar,
-  Card,
-  Text,
   ActivityIndicator,
-  Button,
-} from "react-native-paper";
+  FlatList,
+  StyleSheet,
+  View,
+  Alert,
+  Pressable,
+} from "react-native";
+import { Appbar, Card, Chip, Text, Button } from "react-native-paper";
+import { useRoute, useNavigation } from "@react-navigation/native";
 import firestore from "@react-native-firebase/firestore";
-import auth from "@react-native-firebase/auth";
 import MaterialCommunityIcons from "react-native-vector-icons/MaterialCommunityIcons";
+import auth from "@react-native-firebase/auth";
 
-export default function ResearcherActivityLogsScreen({ navigation }: any) {
-  const [activities, setActivities] = useState<any[]>([]);
-  const [filtered, setFiltered] = useState<any[]>([]);
+export default function ActivityLogsScreen() {
+  const route = useRoute();
+  const navigation = useNavigation();
+  const highlightId = route.params?.highlightId || null;
+
+  const [activityLogs, setActivityLogs] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [modalVisible, setModalVisible] = useState(false);
-  const [selectedActivity, setSelectedActivity] = useState<any | null>(null);
-  const [searchQuery, setSearchQuery] = useState("");
+  const [filter, setFilter] = useState("today");
+  const [userRole, setUserRole] = useState(null);
+  const [currentUID, setCurrentUID] = useState(null);
 
+  // 🔹 Fetch current user & role
   useEffect(() => {
-    const unsubscribe = firestore()
-      .collection("activityLog")
-      .where("userId", "==", auth().currentUser?.uid)
-      .orderBy("timestamp", "desc")
-      .onSnapshot(
-        (snapshot) => {
-          const data = snapshot.docs.map((doc) => {
-            const raw = doc.data();
-            const tsDate = raw.timestamp?.toDate
-              ? raw.timestamp.toDate()
-              : new Date(raw.timestamp);
-            return { id: doc.id, ...raw, timestampDate: tsDate };
-          });
-          setActivities(data);
-          setFiltered(data);
-          setLoading(false);
-        },
-        (error) => {
-          console.error("Error fetching logs:", error);
-          setLoading(false);
-        }
-      );
-    return () => unsubscribe();
+    const user = auth().currentUser;
+    if (!user) return;
+
+    setCurrentUID(user.uid);
+
+    const unsubscribeUser = firestore()
+      .collection("users")
+      .doc(user.uid)
+      .onSnapshot((doc) => {
+        if (doc.exists) setUserRole(doc.data().role);
+      });
+
+    return () => unsubscribeUser();
   }, []);
 
+  // 🔹 Fetch Activity Logs (Safe, No Index Required)
   useEffect(() => {
-    if (searchQuery.trim()) {
-      const lower = searchQuery.toLowerCase();
-      setFiltered(
-        activities.filter((a) =>
-          a.description?.toLowerCase().includes(lower)
-        )
-      );
-    } else {
-      setFiltered(activities);
-    }
-  }, [searchQuery, activities]);
+    if (!currentUID || !userRole) return;
+    setLoading(true);
+
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date();
+    endOfDay.setHours(23, 59, 59, 999);
+
+    let query = firestore()
+      .collection("activityLog")
+      .where("uid", "==", currentUID);
+
+    query
+      .get()
+      .then((snapshot) => {
+        let data = snapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        }));
+
+        if (filter === "today") {
+          data = data.filter((item) => {
+            const t = item.timestamp?.toDate
+              ? item.timestamp.toDate()
+              : new Date(item.timestamp);
+            return t >= startOfDay && t <= endOfDay;
+          });
+        }
+
+        data.sort(
+          (a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0)
+        );
+
+        setActivityLogs(data);
+        setLoading(false);
+      })
+      .catch((error) => {
+        console.error("Error loading activity logs:", error);
+        setLoading(false);
+      });
+  }, [filter, currentUID, userRole]);
+
+  // 🗑️ Delete a specific log
+  const handleDeleteLog = (id: string) => {
+    Alert.alert(
+      "Delete Activity",
+      "Are you sure you want to delete this activity?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await firestore().collection("activityLog").doc(id).delete();
+              setActivityLogs((prev) => prev.filter((item) => item.id !== id));
+            } catch (error) {
+              console.error("Error deleting log:", error);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  // 🧹 Delete all logs
+  const handleDeleteAllLogs = () => {
+    Alert.alert(
+      "Delete All Activities",
+      "Are you sure you want to delete all your activity logs?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete All",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              const snapshot = await firestore()
+                .collection("activityLog")
+                .where("uid", "==", currentUID)
+                .get();
+
+              const batch = firestore().batch();
+              snapshot.forEach((doc) => batch.delete(doc.ref));
+              await batch.commit();
+
+              setActivityLogs([]);
+            } catch (error) {
+              console.error("Error deleting all logs:", error);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  if (loading) {
+    return (
+      <View style={styles.center}>
+        <ActivityIndicator size="large" color="#2ecc71" />
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
-      <Appbar.Header style={styles.header}>
-        <Appbar.BackAction onPress={() => navigation.goBack()} />
-        <Appbar.Content title="My Activity Logs" titleStyle={styles.headerTitle} />
+      {/* 🔹 Header */}
+      <Appbar.Header style={{ backgroundColor: "#2ecc71" }}>
+        <Appbar.BackAction onPress={() => navigation.goBack()} color="#fff" />
+        <Appbar.Content title="Activity Logs" color="#fff" />
+        {activityLogs.length > 0 && (
+          <Appbar.Action
+            icon="delete-sweep"
+            color="#fff"
+            onPress={handleDeleteAllLogs}
+          />
+        )}
       </Appbar.Header>
 
-      <View style={styles.searchContainer}>
-        <MaterialCommunityIcons name="magnify" size={20} color="#888" />
-        <TextInput
-          placeholder="Search activity..."
-          placeholderTextColor="#aaa"
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-          style={styles.searchInput}
-        />
+      {/* 🔹 Filters */}
+      <View style={styles.filterContainer}>
+        <Chip
+          selected={filter === "today"}
+          onPress={() => setFilter("today")}
+          style={[
+            styles.chip,
+            filter === "today" && { backgroundColor: "#2ecc71" },
+          ]}
+          textStyle={{
+            color: filter === "today" ? "#fff" : "#2ecc71",
+            fontWeight: "bold",
+          }}
+        >
+          Today
+        </Chip>
+        <Chip
+          selected={filter === "all"}
+          onPress={() => setFilter("all")}
+          style={[
+            styles.chip,
+            filter === "all" && { backgroundColor: "#2ecc71" },
+          ]}
+          textStyle={{
+            color: filter === "all" ? "#fff" : "#2ecc71",
+            fontWeight: "bold",
+          }}
+        >
+          All
+        </Chip>
       </View>
 
-      <ScrollView style={styles.scroll}>
-        {loading ? (
-          <ActivityIndicator animating={true} color="#2ecc71" />
-        ) : filtered.length === 0 ? (
-          <Text style={{ textAlign: "center", color: "#888", marginTop: 30 }}>
-            No activity found.
-          </Text>
-        ) : (
-          filtered.map((item: any) => (
-            <Pressable
-              key={item.id}
-              onPress={() => {
-                setSelectedActivity(item);
-                setModalVisible(true);
-              }}
+      {/* 🔹 Activity List */}
+      {activityLogs.length > 0 ? (
+        <FlatList
+          data={activityLogs}
+          keyExtractor={(item) => item.id}
+          renderItem={({ item }) => (
+            <Card
+              style={[
+                styles.activityCard,
+                item.id === highlightId && {
+                  borderLeftColor: "#2ecc71",
+                  borderLeftWidth: 5,
+                  backgroundColor: "#eafaf1",
+                },
+              ]}
             >
-              <Card style={styles.activityCard}>
-                <Card.Content style={styles.activityRow}>
-                  <MaterialCommunityIcons
-                    name="clock-outline"
-                    size={22}
-                    color="#2ecc71"
-                  />
-                  <View style={{ flex: 1, marginLeft: 10 }}>
-                    <Text style={styles.activityDescription}>
-                      {item.description}
-                    </Text>
-                    <Text style={styles.activitySub}>
-                      {item.timestampDate.toLocaleString()}
+              <Card.Content>
+                <View style={styles.logRow}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.activityText}>{item.description}</Text>
+                    <Text style={styles.timestamp}>
+                      {item.timestamp?.toDate?.()
+                        ? new Date(item.timestamp.toDate()).toLocaleString()
+                        : ""}
                     </Text>
                   </View>
-                </Card.Content>
-              </Card>
-            </Pressable>
-          ))
-        )}
-      </ScrollView>
 
-      {/* ✅ Modal */}
-      <Modal visible={modalVisible} transparent animationType="fade">
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalBox}>
-            <Text style={styles.modalTitle}>
-              {selectedActivity?.description || "Activity Details"}
-            </Text>
-            <Text style={styles.modalText}>
-              {selectedActivity?.timestampDate?.toLocaleString()}
-            </Text>
-            <Pressable
-              style={styles.closeButton}
-              onPress={() => setModalVisible(false)}
-            >
-              <Text style={{ color: "#fff", fontWeight: "bold" }}>Close</Text>
-            </Pressable>
-          </View>
+                  {/* 🗑️ Individual Delete Button */}
+                  <Pressable onPress={() => handleDeleteLog(item.id)}>
+                    <MaterialCommunityIcons
+                      name="delete-outline"
+                      size={24}
+                      color="#e74c3c"
+                    />
+                  </Pressable>
+                </View>
+              </Card.Content>
+            </Card>
+          )}
+          contentContainerStyle={{ paddingBottom: 24, paddingHorizontal: 10 }}
+        />
+      ) : (
+        <View style={styles.emptyState}>
+          <MaterialCommunityIcons
+            name="calendar-blank-outline"
+            size={50}
+            color="#aaa"
+          />
+          <Text style={styles.emptyText}>
+            {filter === "today"
+              ? "No activity recorded today."
+              : "No activity logs found."}
+          </Text>
         </View>
-      </Modal>
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#fff" },
-  header: {
-    backgroundColor: "#fff",
-    borderBottomWidth: 1,
-    borderBottomColor: "#eee",
-  },
-  headerTitle: { fontWeight: "bold", color: "#2ecc71", fontSize: 20 },
-  searchContainer: {
+  center: { flex: 1, justifyContent: "center", alignItems: "center" },
+  filterContainer: {
     flexDirection: "row",
-    alignItems: "center",
-    margin: 10,
-    paddingHorizontal: 12,
+    justifyContent: "center",
+    marginVertical: 10,
+    gap: 10,
+  },
+  chip: {
+    borderColor: "#2ecc71",
     borderWidth: 1,
-    borderColor: "#ccc",
-    borderRadius: 10,
   },
-  searchInput: { flex: 1, paddingVertical: 8, marginLeft: 8, color: "#333" },
-  scroll: { paddingHorizontal: 12 },
   activityCard: {
+    marginVertical: 6,
     borderRadius: 10,
-    marginBottom: 8,
     backgroundColor: "#fff",
-    elevation: 1,
+    elevation: 2,
+    shadowColor: "#000",
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
   },
-  activityRow: { flexDirection: "row", alignItems: "center" },
-  activityDescription: { fontWeight: "500", color: "#333" },
-  activitySub: { color: "#888", fontSize: 12, marginTop: 2 },
-  modalOverlay: {
+  logRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  activityText: {
+    fontSize: 15,
+    fontWeight: "500",
+    color: "#333",
+  },
+  timestamp: {
+    fontSize: 12,
+    color: "#777",
+    marginTop: 4,
+  },
+  emptyState: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.5)",
     justifyContent: "center",
     alignItems: "center",
+    padding: 40,
   },
-  modalBox: {
-    backgroundColor: "#fff",
-    borderRadius: 10,
-    padding: 20,
-    width: "85%",
-  },
-  modalTitle: { fontWeight: "bold", fontSize: 16, marginBottom: 8 },
-  modalText: { color: "#555" },
-  closeButton: {
-    backgroundColor: "#2ecc71",
-    paddingVertical: 10,
-    borderRadius: 8,
-    alignItems: "center",
-    marginTop: 16,
+  emptyText: {
+    fontSize: 15,
+    color: "#888",
+    marginTop: 10,
+    fontStyle: "italic",
   },
 });

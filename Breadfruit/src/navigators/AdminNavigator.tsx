@@ -13,11 +13,11 @@ import TreeManagementScreen from "../screens/admin/TreeManagementScreen";
 import ProfileScreen from "../screens/shared/ProfileScreen";
 import HarvestedListScreen from "../screens/shared/HarvestedListScreen";
 import EditProfileScreen from "../screens/shared/EditProfileScreen";
-//import AboutHelpScreen from "../screens/shared/AboutHelpScreenScreen";
+import AboutHelpScreen from "../screens/shared/AboutHelpScreen";
 //import NotificationPreferencesScreen from "../screens/shared/NotificationPreferencesScreen";
 import AppearanceScreen from '../screens/shared/AppearanceScreen'; // relative path example
 
-import AboutHelpScreen from "../screens/shared/AboutHelpScreen";
+//import AboutHelpScreen from "../screens/shared/AboutHelpScreen";
 import AdminAddTreeScreen from "../screens/admin/tree/AdminAddTreeScreen";
 import SearchScreen from "../screens/admin/tree/SearchScreen";
 import TreeListToMap from "../screens/admin/tree/TreeListToMap";
@@ -114,15 +114,15 @@ function ProfileStack() {
       />
 
       <ProfileStackNav.Screen
-        name="AboutHelp"
+        name="AboutApp"
         component={AboutHelpScreen}
-        options={{ headerTitle: "About & Help" }}
+        options={{ headerShown: false }}
       />
       {/* ✅ Add Appearance Screen here */}
             <ProfileStackNav.Screen
               name="Appearance"
               component={AppearanceScreen}
-              options={{ headerTitle: "Appearance" }}
+              options={{ headerShown: false }}
             />
     </ProfileStackNav.Navigator>
   );

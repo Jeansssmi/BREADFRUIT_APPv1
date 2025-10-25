@@ -7,6 +7,7 @@ import {
   Modal,
   SectionList,
   ScrollView,
+  ActivityIndicator,
 } from 'react-native';
 import { Appbar, Card, Text, Button, useTheme, Divider } from 'react-native-paper';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
@@ -17,17 +18,20 @@ import auth from '@react-native-firebase/auth';
 export default function ResearcherDashboardScreen() {
   const navigation = useNavigation<any>();
   const theme = useTheme();
-  const [allTrees, setAllTrees] = useState(0);
-  const [showOlder, setShowOlder] = useState(false);
-  const [modalVisible, setModalVisible] = useState(false);
+
+  const [user, setUser] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
   const [recentActivity, setRecentActivity] = useState<any[]>([]);
   const [refreshing, setRefreshing] = useState(false);
-  const [selectedActivity, setSelectedActivity] = useState<any | null>(null);
-  const [showActivity, setShowActivity] = useState(false); // ✅ toggle button
+  const [allTrees, setAllTrees] = useState(0);
+  const [showActivity, setShowActivity] = useState(true);
+  const [modalVisible, setModalVisible] = useState(false);
+  const [selectedActivity, setSelectedActivity] = useState<any>(null);
 
   const currentUser = auth().currentUser;
   const trackedStatuses = ['verified', 'harvest-ready', 'not-ready', 'harvested'];
 
+  // 🔹 Fetch tree count
   const fetchAllCounts = async () => {
     if (!currentUser) return;
     setRefreshing(true);
@@ -55,76 +59,87 @@ export default function ResearcherDashboardScreen() {
     }, [])
   );
 
+  // 🔹 Get current user info
   useEffect(() => {
     if (!currentUser) return;
     const unsubscribe = firestore()
+      .collection('users')
+      .doc(currentUser.uid)
+      .onSnapshot((doc) => {
+        if (doc.exists) {
+          setUser({ uid: doc.id, ...doc.data() });
+          setLoading(false);
+        }
+      });
+    return () => unsubscribe();
+  }, []);
+
+  // ✅ Fetch today's recent activities — index-free version
+  useEffect(() => {
+    if (!currentUser) return;
+
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date();
+    endOfDay.setHours(23, 59, 59, 999);
+
+    const unsubscribe = firestore()
       .collection('activityLog')
       .where('uid', '==', currentUser.uid)
-      .where('userRole', '==', 'researcher')
-      .limit(30)
-      .onSnapshot((snapshot) => {
-        const data = snapshot.docs
-          .map((doc) => {
+      .onSnapshot(
+        (snapshot) => {
+          let data = snapshot.docs.map((doc) => {
             const raw = doc.data();
             const tsDate = raw.timestamp?.toDate
               ? raw.timestamp.toDate()
               : new Date(raw.timestamp);
             return { id: doc.id, ...raw, timestampDate: tsDate };
-          })
-          .sort((a, b) => b.timestampDate - a.timestampDate);
-        setRecentActivity(data);
-      });
+          });
+
+          // ✅ Filter only today’s logs (locally)
+          data = data.filter(
+            (a) => a.timestampDate >= startOfDay && a.timestampDate <= endOfDay
+          );
+
+          // ✅ Sort newest first
+          data.sort((a, b) => b.timestampDate - a.timestampDate);
+
+          setRecentActivity(data.slice(0, 30)); // Limit display to 30 items max
+        },
+        (error) => console.error('Error fetching activities:', error)
+      );
+
     return () => unsubscribe();
   }, [currentUser]);
 
-  const groupActivitiesByDate = (activities: any[]) => {
-    const groups: any = { today: [], yesterday: [], earlier: [], older: [] };
-    const now = new Date();
-    const todayStr = now.toDateString();
-    const yesterday = new Date();
-    yesterday.setDate(now.getDate() - 1);
-    const yesterdayStr = yesterday.toDateString();
-
-    activities.forEach((act) => {
-      const actDate = act.timestampDate?.toDateString();
-      const diffInDays = Math.floor(
-        (now.getTime() - act.timestampDate.getTime()) / (1000 * 60 * 60 * 24)
-      );
-      if (actDate === todayStr) groups.today.push(act);
-      else if (actDate === yesterdayStr) groups.yesterday.push(act);
-      else if (diffInDays <= 7) groups.earlier.push(act);
-      else groups.older.push(act);
-    });
-
-    return groups;
-  };
-
   const getActivityIcon = (type: string) => {
     switch (type) {
-      case 'tree_added':
-        return { icon: 'tree-outline', color: '#27ae60', label: 'Tree Added' };
-      case 'harvest_ready':
-        return { icon: 'fruit-grapes-outline', color: '#f39c12', label: 'Harvest Ready' };
-      case 'harvested':
-        return { icon: 'fruit-pineapple', color: '#2ecc71', label: 'Harvested' };
-      case 'collected':
-        return { icon: 'basket-outline', color: '#3498db', label: 'Collected' };
-      case 'verified':
-        return { icon: 'check-decagram', color: '#16a085', label: 'Verified' };
-      case 'deleted':
-        return { icon: 'delete-outline', color: '#e74c3c', label: 'Deleted' };
+      case 'add':
+        return { icon: 'plus-circle', color: '#2ecc71', label: 'Tree Added' };
+      case 'update':
+        return { icon: 'pencil-circle', color: '#f1c40f', label: 'Tree Updated' };
+      case 'delete':
+        return { icon: 'delete-circle', color: '#e74c3c', label: 'Tree Deleted' };
       default:
-        return { icon: 'file-document-outline', color: '#7f8c8d', label: 'General Activity' };
+        return { icon: 'information-outline', color: '#3498db', label: 'Activity' };
     }
   };
 
-  const groupedActivities = groupActivitiesByDate(recentActivity);
+  if (loading) {
+    return (
+      <View style={styles.center}>
+        <ActivityIndicator size="large" color="#2ecc71" />
+      </View>
+    );
+  }
+
+  // ✅ Section for “Today”
   const sections = [
-    { title: 'Today', data: groupedActivities.today },
-    { title: 'Yesterday', data: groupedActivities.yesterday },
-    { title: 'Earlier This Week', data: groupedActivities.earlier },
-    ...(showOlder ? [{ title: 'Older', data: groupedActivities.older }] : []),
-  ].filter((s) => s.data.length > 0);
+    {
+      title: 'Today',
+      data: recentActivity,
+    },
+  ];
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
@@ -208,7 +223,7 @@ export default function ResearcherDashboardScreen() {
           </Card>
         </View>
 
-        {/* ✅ Show/Hide Button for Recent Activity */}
+        {/* ✅ Recent Activity */}
         <Card style={[styles.card, { backgroundColor: theme.colors.card, marginHorizontal: 20 }]}>
           <Card.Content>
             <View
@@ -232,135 +247,63 @@ export default function ResearcherDashboardScreen() {
               <Button
                 mode="text"
                 compact
-                onPress={() => setShowActivity((prev) => !prev)}
+                onPress={() => navigation.navigate('ActivityLogsScreen')}
                 labelStyle={{ color: theme.colors.primary, fontWeight: 'bold' }}
               >
-                {showActivity ? 'Hide' : 'Show'}
+                View All
               </Button>
             </View>
 
-            {showActivity && (
-              <>
-                <Divider style={{ marginVertical: 10 }} />
-                <SectionList
-                  sections={sections}
-                  keyExtractor={(item) => item.id}
-                  scrollEnabled={false}  // ✅ Fix nested list error
-                  renderItem={({ item, section }) => {
-                    const faded = section.title === 'Older';
-                    return (
-                      <Pressable
-                        onPress={() => {
-                          setSelectedActivity(item);
-                          setModalVisible(true);
+            <Divider style={{ marginVertical: 10 }} />
+            <SectionList
+              sections={sections}
+              keyExtractor={(item) => item.id}
+              scrollEnabled={false}
+              renderItem={({ item }) => (
+                <Pressable
+                  onPress={() =>
+                    navigation.navigate('ActivityLogsScreen', { highlightId: item.id })
+                  }
+                >
+                  <View
+                    style={[
+                      styles.activityItem,
+                      { borderBottomColor: theme.dark ? '#333' : '#eee' },
+                    ]}
+                  >
+                    <Text style={{ color: theme.colors.text }}>• {item.description}</Text>
+                    {item.timestampDate && (
+                      <Text
+                        style={{
+                          color: theme.dark ? '#ccc' : '#666',
+                          fontSize: 12,
                         }}
                       >
-                        <View
-                          style={[
-                            styles.activityItem,
-                            { borderBottomColor: theme.dark ? '#333' : '#eee' },
-                          ]}
-                        >
-                          <Text style={{ color: faded ? '#999' : theme.colors.text }}>
-                            • {item.description}
-                          </Text>
-                          {item.timestampDate && (
-                            <Text
-                              style={{
-                                color: faded ? '#aaa' : theme.dark ? '#ccc' : '#666',
-                                fontSize: 12,
-                              }}
-                            >
-                              {item.timestampDate.toLocaleString()}
-                            </Text>
-                          )}
-                        </View>
-                      </Pressable>
-                    );
-                  }}
-                  renderSectionHeader={({ section: { title } }) => (
-                    <View
-                      style={[
-                        styles.sectionHeader,
-                        { backgroundColor: theme.dark ? '#1c1c1c' : '#f9f9f9' },
-                      ]}
-                    >
-                      <Text style={{ fontWeight: 'bold', color: theme.colors.text }}>{title}</Text>
-                    </View>
-                  )}
-                  stickySectionHeadersEnabled
-                  ListEmptyComponent={
-                    <Text style={[styles.activityItem, { color: theme.colors.text }]}>
-                      No recent activity to show.
-                    </Text>
-                  }
-                />
-              </>
-            )}
+                        {item.timestampDate.toLocaleString()}
+                      </Text>
+                    )}
+                  </View>
+                </Pressable>
+              )}
+              renderSectionHeader={({ section: { title } }) => (
+                <View
+                  style={[
+                    styles.sectionHeader,
+                    { backgroundColor: theme.dark ? '#1c1c1c' : '#f9f9f9' },
+                  ]}
+                >
+                  <Text style={{ fontWeight: 'bold', color: theme.colors.text }}>{title}</Text>
+                </View>
+              )}
+              ListEmptyComponent={
+                <Text style={[styles.activityItem, { color: theme.colors.text }]}>
+                  No recent activity to show.
+                </Text>
+              }
+            />
           </Card.Content>
         </Card>
       </ScrollView>
-
-      {/* Modal unchanged */}
-      <Modal
-        visible={modalVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setModalVisible(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContainer, { backgroundColor: theme.colors.card }]}>
-            {selectedActivity && (() => {
-              const info = getActivityIcon(selectedActivity.type);
-              return (
-                <>
-                  <MaterialCommunityIcons
-                    name={info.icon}
-                    size={40}
-                    color={info.color}
-                    style={{ alignSelf: 'center', marginBottom: 10 }}
-                  />
-                  <Text
-                    style={{
-                      textAlign: 'center',
-                      fontWeight: 'bold',
-                      color: info.color,
-                      marginBottom: 10,
-                      fontSize: 16,
-                    }}
-                  >
-                    {info.label}
-                  </Text>
-                </>
-              );
-            })()}
-            <Text style={[styles.modalLabel, { color: theme.colors.text }]}>Description:</Text>
-            <Text style={[styles.modalText, { color: theme.colors.text }]}>
-              {selectedActivity?.description || 'No description available'}
-            </Text>
-            <Text style={[styles.modalLabel, { color: theme.colors.text }]}>Date & Time:</Text>
-            <Text style={[styles.modalText, { color: theme.colors.text }]}>
-              {selectedActivity?.timestampDate
-                ? selectedActivity.timestampDate.toLocaleString()
-                : 'N/A'}
-            </Text>
-            {selectedActivity?.userName && (
-              <>
-                <Text style={[styles.modalLabel, { color: theme.colors.text }]}>Performed By:</Text>
-                <Text style={[styles.modalText, { color: theme.colors.text }]}>
-                  {selectedActivity.userName}
-                </Text>
-              </>
-            )}
-            <Pressable
-              style={[styles.closeButton, { backgroundColor: theme.colors.primary }]}
-              onPress={() => setModalVisible(false)}
-            >
-              <Text style={{ color: '#fff', fontWeight: 'bold' }}>Close</Text>
-            </Pressable>
-          </View>
-        </View>
-      </Modal>
     </View>
   );
 }
@@ -381,9 +324,4 @@ const styles = StyleSheet.create({
   harvestedButton: { flex: 1, marginLeft: 5, borderRadius: 20 },
   sectionHeader: { paddingVertical: 4, paddingHorizontal: 8, borderRadius: 6, marginTop: 10 },
   activityItem: { marginTop: 6, borderBottomWidth: 0.5, paddingBottom: 4 },
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
-  modalContainer: { width: '85%', borderRadius: 12, padding: 20, elevation: 5 },
-  modalLabel: { fontWeight: '600', marginTop: 8 },
-  modalText: { fontSize: 14 },
-  closeButton: { paddingVertical: 10, borderRadius: 8, alignItems: 'center', marginTop: 16 },
 });

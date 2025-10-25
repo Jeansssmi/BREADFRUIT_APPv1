@@ -204,6 +204,23 @@ function EditTreeForm({ treeID }) {
 
            await docRef.update(treeData);
 
+           // 🔹 Log researcher edit activity
+           const currentUser = firestore().collection('users').doc(tree.trackedById);
+           const userSnapshot = await currentUser.get();
+           const userData = userSnapshot.exists ? userSnapshot.data() : null;
+
+           await firestore().collection("activityLog").add({
+             actionType: "update",
+             description: `${userData?.name || "Researcher"} updated tree (${tree.treeID}) in ${tree.barangay}, ${tree.city}.`,
+             treeID: tree.treeID,
+             uid: tree.trackedById,
+             userRole: userData?.role || "researcher",
+             timestamp: firestore.FieldValue.serverTimestamp(),
+           });
+
+
+
+
            setNotificationMessage(
              `Tree updated successfully${
                fruit === 'ripe'

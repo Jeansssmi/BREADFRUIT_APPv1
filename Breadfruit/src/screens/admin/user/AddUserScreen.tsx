@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   Image,
   KeyboardAvoidingView,
@@ -9,7 +9,7 @@ import {
   View,
 } from 'react-native';
 import { Button, Menu, Text, TextInput, useTheme } from 'react-native-paper';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { launchImageLibrary } from 'react-native-image-picker';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 
@@ -33,6 +33,20 @@ export default function AddUserScreen() {
   const [notificationVisible, setNotificationVisible] = useState(false);
   const [notificationMessage, setNotificationMessage] = useState('');
   const [notificationType, setNotificationType] = useState<'success' | 'info' | 'error'>('info');
+
+  useFocusEffect(
+    useCallback(() => {
+      // Reset form and ensure everything ready when the screen opens
+      setImage(null);
+      setName('');
+      setEmail('');
+      setRole('');
+      setPassword('');
+      setConfirmPassword('');
+      console.log('✅ AddUserScreen initialized and ready');
+    }, [])
+  );
+
 
   const pickImage = async () => {
     const result = await launchImageLibrary({ mediaType: 'photo', quality: 0.8 });

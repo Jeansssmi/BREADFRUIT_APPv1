@@ -67,43 +67,79 @@ export default function EditProfileScreen() {
     }
   };
 
-  const syncChangesToFirebase = async (newName: string, localImageUri: string | null) => {
-    if (!user || !user.uid) {
-      console.warn('⚠️ Cannot sync: no authenticated user found.');
-      return;
-    }
 
-    let finalImageURL = user.image;
-    const imageChanged = localImageUri !== user.image;
+ const syncChangesToFirebase = async (newName: string, localImageUri: string | null) => {
+   if (!user || !user.uid) {
+     console.warn("⚠️ Cannot sync: no authenticated user found.");
+     return;
+   }
 
-    try {
-      if (imageChanged) {
-        if (user.image && !localImageUri) {
-          finalImageURL = null;
-          storage().refFromURL(user.image).delete().catch((e) => console.warn(e));
-        } else if (localImageUri && localImageUri.startsWith('file://')) {
-          if (user.image) {
-            storage().refFromURL(user.image).delete().catch((e) => console.warn(e));
-          }
-          const fileName = `images/user-profile/${user.uid}/${Date.now()}.jpg`;
-          const reference = storage().ref(fileName);
-          await reference.putFile(localImageUri.replace('file://', ''));
-          finalImageURL = await reference.getDownloadURL();
-        }
-      }
+   let finalImageURL = user.image;
+   const imageChanged = localImageUri !== user.image;
 
-      await auth().currentUser?.updateProfile({ displayName: newName, photoURL: finalImageURL });
-      await firestore().collection('users').doc(user.uid).update({
-        name: newName,
-        image: finalImageURL,
-      });
+   try {
+     // 🖼️ Handle image change logic
+     if (imageChanged) {
+       // 🧹 Case 1: User removed photo
+       if (user.image && !localImageUri) {
+         finalImageURL = null;
 
-      await fetchUserData(auth().currentUser);
-      console.log('✅ Profile synced to Firebase.');
-    } catch (error) {
-      console.error('❌ Firebase sync failed:', error);
-    }
-  };
+         // ✅ Delete only if it's a valid Firebase URL
+         if (
+           typeof user.image === "string" &&
+           (user.image.startsWith("https://") || user.image.startsWith("gs://"))
+         ) {
+           try {
+             await storage().refFromURL(user.image).delete();
+           } catch (err) {
+             console.warn("⚠️ Error deleting old image:", err);
+           }
+         }
+       }
+
+       // 📤 Case 2: User selected a new photo from local device
+       else if (localImageUri && localImageUri.startsWith("file://")) {
+         // Delete previous Firebase image if valid
+         if (
+           typeof user.image === "string" &&
+           (user.image.startsWith("https://") || user.image.startsWith("gs://"))
+         ) {
+           try {
+             await storage().refFromURL(user.image).delete();
+           } catch (err) {
+             console.warn("⚠️ Error deleting previous image:", err);
+           }
+         }
+
+         // Upload the new one
+         const fileName = `images/user-profile/${user.uid}/${Date.now()}.jpg`;
+         const reference = storage().ref(fileName);
+         await reference.putFile(localImageUri.replace("file://", ""));
+         finalImageURL = await reference.getDownloadURL();
+       }
+     }
+
+     // 🔄 Update Firebase Authentication profile
+     await auth().currentUser?.updateProfile({
+       displayName: newName,
+       photoURL: finalImageURL || null,
+     });
+
+     // 🔥 Update Firestore user document
+     await firestore().collection("users").doc(user.uid).update({
+       name: newName,
+       image: finalImageURL || null,
+     });
+
+     await fetchUserData(auth().currentUser);
+     console.log("✅ Profile synced to Firebase.");
+   } catch (error) {
+     console.error("❌ Firebase sync failed:", error);
+     Alert.alert("Error", "Failed to sync changes to Firebase.");
+   }
+ };
+
+
 
   const handleSaveChanges = async () => {
     if (!user || !name.trim()) {

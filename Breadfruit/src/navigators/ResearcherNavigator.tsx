@@ -60,9 +60,9 @@ function ProfileStack() {
            <ProfileStackNav.Screen name="AboutHelp" component={AboutHelpScreen} options={{ headerTitle: 'About & Help' }} />
        {/* ✅ Add Appearance Screen here */}
                    <ProfileStackNav.Screen
-                     name="Appearance"
-                     component={AppearanceScreen}
-                     options={{ headerTitle: "Appearance" }}
+                      name="Appearance"
+                       component={AppearanceScreen}
+                        options={{ headerShown: false }}
                    />
         </ProfileStackNav.Navigator>
     )

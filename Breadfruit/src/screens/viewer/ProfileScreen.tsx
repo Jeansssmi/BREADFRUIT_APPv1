@@ -120,12 +120,7 @@ export default function ProfileScreen() {
             onPress={() => navigation.navigate('Appearance')}
             theme={theme}
           />
-          <SettingsItem
-            icon="bookmark"
-            name="Tracked Trees"
-            onPress={() => navigation.navigate('TrackedTrees', { trackedBy: user.uid })}
-            theme={theme}
-          />
+
           <SettingsItem
             icon="logout"
             name="Logout"

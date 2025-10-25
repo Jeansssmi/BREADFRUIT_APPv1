@@ -55,7 +55,7 @@ function ProfileStack() {
                   <ProfileStackNav.Screen
                     name="Appearance"
                     component={AppearanceScreen}
-                    options={{ headerTitle: "Appearance" }}
+                    options={{ headerShown: false }}
                   />
     </ProfileStackNav.Navigator>
   );

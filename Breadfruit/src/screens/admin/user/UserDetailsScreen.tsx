@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Alert, Image, ScrollView, StyleSheet, View, TouchableOpacity } from "react-native";
 import { ActivityIndicator, Appbar, Card, Text, Chip, useTheme } from "react-native-paper";
 import { useNavigation, useRoute } from "@react-navigation/native";
@@ -14,15 +14,39 @@ export default function UserDetailsScreen() {
   const route = useRoute();
   const theme = useTheme(); // ✅ added theme
   // @ts-ignore
-  const { userID } = route.params;
-  const { users, isLoading } = useUserData({ mode: "single", uid: userID.toString() });
-  const [loading, setLoading] = useState(false);
-  const user = users[0];
+
+     const { userID } = route.params || {};
+
+     const [user, setUser] = useState<any>(null);
+     const [isLoading, setIsLoading] = useState(true);
+     const [loading, setLoading] = useState(false);
 
   const [notificationVisible, setNotificationVisible] = useState(false);
   const [notificationMessage, setNotificationMessage] = useState("");
   const [notificationType, setNotificationType] = useState<"success" | "info" | "error">("info");
 
+ // ✅ Real-time listener (auto-loads + updates instantly)
+  useEffect(() => {
+    const unsubscribe = firestore()
+      .collection("users")
+      .doc(userID.toString())
+      .onSnapshot(
+        (doc) => {
+          if (doc.exists) {
+            setUser({ uid: doc.id, ...doc.data() });
+          } else {
+            setUser(null);
+          }
+          setIsLoading(false);
+        },
+        (error) => {
+          console.error("Error fetching user:", error);
+          setIsLoading(false);
+        }
+      );
+
+    return () => unsubscribe();
+  }, [userID]);
   const handleDelete = (uid: string) => {
     Alert.alert("Confirm Reject/Delete", "Are you sure you want to reject and delete this user?", [
       { text: "Cancel", style: "cancel" },

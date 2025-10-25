@@ -1,19 +1,20 @@
-import React, { useMemo, useState, useCallback } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, FlatList, StyleSheet, TouchableOpacity, View } from 'react-native';
-import { Appbar, Chip, Text, useTheme } from 'react-native-paper';
-import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import { Chip, Text, useTheme } from 'react-native-paper';
+import { useNavigation } from '@react-navigation/native';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
-import { useUserData } from '@/hooks/useUserData';
+import firestore from '@react-native-firebase/firestore';
 
 // ✅ Role Filter Component (theme-aware)
-const RoleFilter = ({ selected, onSelect }) => {
+const RoleFilter = React.memo(({ selected, onSelect }) => {
   const theme = useTheme();
   const roles = ['All', 'Admin', 'Researcher'];
+
   return (
     <View style={[styles.filterContainer, { backgroundColor: theme.colors.background }]}>
       {roles.map(role => (
         <Chip
-          key={role}
+          key={role} // ✅ Unique key (prevents duplicate parent error)
           mode="flat"
           selected={selected === role}
           onPress={() => onSelect(role)}
@@ -35,13 +36,14 @@ const RoleFilter = ({ selected, onSelect }) => {
       ))}
     </View>
   );
-};
+});
 
 // ✅ Pending User Item (theme-aware)
-const PendingUserItem = ({ user, onPress }) => {
+const PendingUserItem = React.memo(({ user, onPress }) => {
   const theme = useTheme();
   return (
     <TouchableOpacity
+      key={user.uid}
       onPress={onPress}
       style={[styles.itemContainer, { backgroundColor: theme.colors.card }]}
       activeOpacity={0.8}
@@ -52,7 +54,9 @@ const PendingUserItem = ({ user, onPress }) => {
           size={20}
           color={theme.dark ? '#ccc' : '#555'}
         />
-        <Text style={[styles.userName, { color: theme.colors.text }]}>{user.name}</Text>
+        <Text style={[styles.userName, { color: theme.colors.text }]} numberOfLines={1}>
+          {user.name}
+        </Text>
       </View>
 
       <View style={[styles.row, { marginTop: 4 }]}>
@@ -61,11 +65,14 @@ const PendingUserItem = ({ user, onPress }) => {
           size={20}
           color={theme.dark ? '#aaa' : '#555'}
         />
-        <Text style={[styles.userEmail, { color: theme.colors.text }]}>{user.email}</Text>
+        <Text style={[styles.userEmail, { color: theme.colors.text }]} numberOfLines={1}>
+          {user.email}
+        </Text>
       </View>
 
       <View style={styles.footerRow}>
         <Chip
+          key={`${user.uid}-role`}
           style={[
             styles.roleChip,
             { backgroundColor: theme.dark ? '#1e1e1e' : '#eafaf1' },
@@ -83,31 +90,42 @@ const PendingUserItem = ({ user, onPress }) => {
       </View>
     </TouchableOpacity>
   );
-};
+});
 
 export default function PendingUsersScreen() {
   const theme = useTheme();
   const navigation = useNavigation();
+  const [users, setUsers] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [selectedRole, setSelectedRole] = useState('All');
-  const [refreshKey, setRefreshKey] = useState(0);
-  const { users, isLoading } = useUserData({
-    mode: 'criteria',
-    field: 'status',
-    operator: '==',
-    value: 'pending',
-  });
 
-  // Re-fetch when screen refocuses
-  useFocusEffect(
-    useCallback(() => {
-      setRefreshKey(prev => prev + 1);
-    }, [])
-  );
+  // ✅ Real-time Firestore listener
+  useEffect(() => {
+    const unsubscribe = firestore()
+      .collection('users')
+      .where('status', '==', 'pending')
+      .onSnapshot(
+        snapshot => {
+          const data = snapshot.docs.map(doc => ({
+            uid: doc.id,
+            ...doc.data(),
+          }));
+          setUsers(data);
+          setIsLoading(false);
+        },
+        error => {
+          console.error('Error fetching pending users:', error);
+          setIsLoading(false);
+        }
+      );
 
-  // ✅ Filter by role
+    return () => unsubscribe();
+  }, []);
+
+  // ✅ Filter users by role
   const filteredUsers = useMemo(() => {
     if (selectedRole === 'All') return users;
-    return users.filter(user => user.role.toLowerCase() === selectedRole.toLowerCase());
+    return users.filter(user => user.role?.toLowerCase() === selectedRole.toLowerCase());
   }, [users, selectedRole]);
 
   if (isLoading) {
@@ -120,10 +138,8 @@ export default function PendingUsersScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      {/* 🔹 Role Filter */}
       <RoleFilter selected={selectedRole} onSelect={setSelectedRole} />
 
-      {/* 🔹 Pending Users List */}
       <FlatList
         data={filteredUsers}
         keyExtractor={item => item.uid}
@@ -133,6 +149,7 @@ export default function PendingUsersScreen() {
             onPress={() => navigation.navigate('UserDetails', { userID: item.uid })}
           />
         )}
+        removeClippedSubviews={true} // ✅ Helps avoid duplicate parent error in nested lists
         contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 24 }}
         ListEmptyComponent={
           <View style={styles.emptyState}>
@@ -154,18 +171,14 @@ export default function PendingUsersScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-
   filterContainer: {
     flexDirection: 'row',
     paddingVertical: 12,
     paddingHorizontal: 16,
+    flexWrap: 'wrap',
     gap: 10,
   },
-  filterChip: {
-    borderWidth: 1,
-  },
-
-  // ✅ List Item
+  filterChip: { borderWidth: 1 },
   itemContainer: {
     paddingVertical: 20,
     paddingHorizontal: 16,
@@ -182,13 +195,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 10,
   },
-  userName: {
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  userEmail: {
-    fontSize: 14,
-  },
+  userName: { fontSize: 16, fontWeight: 'bold' },
+  userEmail: { fontSize: 14 },
   footerRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -200,13 +208,8 @@ const styles = StyleSheet.create({
     height: 'auto',
     paddingVertical: 2,
   },
-  roleChipText: {
-    fontSize: 12,
-    fontWeight: 'bold',
-  },
-  dateText: {
-    fontSize: 12,
-  },
+  roleChipText: { fontSize: 12, fontWeight: 'bold' },
+  dateText: { fontSize: 12 },
   emptyState: {
     flex: 1,
     justifyContent: 'center',
@@ -214,8 +217,5 @@ const styles = StyleSheet.create({
     padding: 40,
     marginTop: 50,
   },
-  emptyText: {
-    fontSize: 16,
-    marginTop: 16,
-  },
+  emptyText: { fontSize: 16, marginTop: 16 },
 });

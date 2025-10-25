@@ -15,9 +15,11 @@ import {
   Button, // ✅ added for toggle
   Divider,
 } from "react-native-paper";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation , useFocusEffect} from "@react-navigation/native";
 import MaterialCommunityIcons from "react-native-vector-icons/MaterialCommunityIcons";
 import firestore from "@react-native-firebase/firestore";
+
+
 
 export default function AdminDashboardScreen() {
   const navigation = useNavigation();
@@ -117,6 +119,36 @@ export default function AdminDashboardScreen() {
         return "clock-outline";
     }
   };
+useEffect(() => {
+  // ✅ Live total trees count
+  const unsubTrees = firestore()
+    .collection("trees")
+    .onSnapshot((snapshot) => setAllTrees(snapshot.size));
+
+  // ✅ Live users count
+  const unsubUsers = firestore()
+    .collection("users")
+    .onSnapshot((snapshot) => setAllUsers(snapshot.size));
+
+  // ✅ Live researchers count
+  const unsubResearchers = firestore()
+    .collection("users")
+    .where("role", "==", "researcher")
+    .onSnapshot((snapshot) => setResearchers(snapshot.size));
+
+  // ✅ Live pending users count
+  const unsubPending = firestore()
+    .collection("users")
+    .where("status", "==", "pending")
+    .onSnapshot((snapshot) => setPendingUsers(snapshot.size));
+
+  return () => {
+    unsubTrees();
+    unsubUsers();
+    unsubResearchers();
+    unsubPending();
+  };
+}, []);
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
@@ -255,13 +287,37 @@ export default function AdminDashboardScreen() {
               </Button>
             </View>
 
+
             {showActivity && (
               <>
                 <Divider style={{ marginVertical: 10 }} />
                 {recentActivity.length > 0 ? (
                   recentActivity.map((activity) => (
-                    <View key={activity.id} style={styles.activityItem}>
-                      <Text style={{ color: theme.colors.text }}>
+                    <Pressable
+                      key={activity.id}
+                      style={({ pressed }) => [
+                        styles.activityItem,
+                        {
+                          backgroundColor: pressed
+                            ? theme.dark
+                              ? "#333"
+                              : "#f0f0f0"
+                            : "transparent",
+                          borderRadius: 6,
+                          paddingVertical: 6,
+                          paddingHorizontal: 4,
+                        },
+                      ]}
+                      onPress={() =>
+                        navigation.navigate("ActivityLogsScreen", {
+                          highlightId: activity.id,
+                        })
+                      }
+                    >
+                      <Text
+                        style={{ color: theme.colors.text, fontWeight: "500" }}
+                        numberOfLines={1}
+                      >
                         • {activity.description}
                       </Text>
                       {activity.timestampDate && (
@@ -274,7 +330,7 @@ export default function AdminDashboardScreen() {
                           {activity.timestampDate.toLocaleString()}
                         </Text>
                       )}
-                    </View>
+                    </Pressable>
                   ))
                 ) : (
                   <Text
@@ -285,6 +341,9 @@ export default function AdminDashboardScreen() {
                 )}
               </>
             )}
+
+
+
           </Card.Content>
         </Card>
       </ScrollView>

@@ -17,42 +17,40 @@ export default function UserListScreen() {
   const [selectedRole, setSelectedRole] = useState(filter || 'All');
   const [searchQuery, setSearchQuery] = useState('');
 
-  // ✅ Fetch all VERIFIED users from Firestore
-  useEffect(() => {
-    const fetchVerifiedUsers = async () => {
-      try {
-        setIsLoading(true);
-        const snapshot = await firestore()
-          .collection('users')
-          .where('status', '==', 'verified')
-          .get();
+   // ✅ Real-time Firestore listener for VERIFIED users
+   useEffect(() => {
+     const unsubscribe = firestore()
+       .collection('users')
+       .where('status', '==', 'verified')
+       .onSnapshot(
+         (snapshot) => {
+           const verifiedUsers = snapshot.docs.map((doc) => {
+             const data = doc.data();
+             return {
+               uid: doc.id,
+               ...data,
+               joined: data.joined
+                 ? data.joined.toDate
+                   ? data.joined.toDate()
+                   : new Date(data.joined)
+                 : null,
+               role: data.role || 'viewer',
+               name: data.name || 'Unknown',
+               email: data.email || 'N/A',
+             };
+           });
+           setUsers(verifiedUsers);
+           setIsLoading(false);
+         },
+         (error) => {
+           console.error('Error fetching users:', error);
+           setIsLoading(false);
+         }
+       );
 
-        const verifiedUsers = snapshot.docs.map((doc) => {
-          const data = doc.data();
-          return {
-            uid: doc.id,
-            ...data,
-            joined: data.joined
-              ? data.joined.toDate
-                ? data.joined.toDate()
-                : new Date(data.joined)
-              : null,
-            role: data.role || 'viewer',
-            name: data.name || 'Unknown',
-            email: data.email || 'N/A',
-          };
-        });
+     return () => unsubscribe(); // ✅ cleanup listener when screen unmounts
+   }, []);
 
-        setUsers(verifiedUsers);
-      } catch (error) {
-        console.error('Error fetching verified users:', error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchVerifiedUsers();
-  }, []);
 
   // ✅ Filter users by role and search
   const filteredUsers = useMemo(() => {
@@ -69,6 +67,7 @@ export default function UserListScreen() {
       return matchesSearch && matchesRole;
     });
   }, [users, searchQuery, selectedRole]);
+
 
   // ✅ Loading state
   if (isLoading) {

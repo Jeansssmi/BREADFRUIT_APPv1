@@ -5,6 +5,7 @@ import { useNavigation } from '@react-navigation/native';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import firestore from '@react-native-firebase/firestore';
 import { useAuth } from '@/context/AuthContext';
+import { useRoute } from '@react-navigation/native';
 
 const TreeListItem = ({ tree, onEdit, onViewMap }: { tree: any; onEdit: () => void; onViewMap: () => void }) => {
   const theme = useTheme(); // ✅ make card react to theme
@@ -89,6 +90,7 @@ function getStatusStyle(status: string) {
 }
 
 export default function TreeListScreen() {
+   const route = useRoute<any>();
   const navigation = useNavigation<any>();
   const { user: currentUser } = useAuth();
   const theme = useTheme(); // ✅ theme context
@@ -99,28 +101,37 @@ export default function TreeListScreen() {
   const [filter, setFilter] = useState<
     'All' | 'Verified' | 'Harvest-ready' | 'Not-ready' | 'Harvested'
   >('All');
+ const treeIDParam = route.params?.treeID || null;
 
-  useEffect(() => {
-    if (!currentUser) return;
-    const allowedStatuses = ['verified', 'harvest-ready', 'not-ready', 'harvested'];
-    const unsubscribe = firestore()
-      .collection('trees')
-      .where('trackedById', '==', currentUser.uid)
-      .where('status', 'in', allowedStatuses)
-      .onSnapshot(
-        (snapshot) => {
-          const fetchedTrees = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-          setTrees(fetchedTrees);
-          setIsLoading(false);
-        },
-        (err) => {
-          console.error(err);
-          setError('Failed to load trees');
-          setIsLoading(false);
-        }
-      );
-    return () => unsubscribe();
-  }, [currentUser]);
+ useEffect(() => {
+   if (!currentUser) return;
+   const allowedStatuses = ['verified', 'harvest-ready', 'not-ready', 'harvested'];
+
+   let query = firestore()
+     .collection('trees')
+     .where('trackedById', '==', currentUser.uid)
+     .where('status', 'in', allowedStatuses);
+
+   // ✅ If a specific treeID was passed, only fetch that one
+   if (treeIDParam) {
+     query = firestore().collection('trees').where('treeID', '==', treeIDParam);
+   }
+
+   const unsubscribe = query.onSnapshot(
+     (snapshot) => {
+       const fetchedTrees = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+       setTrees(fetchedTrees);
+       setIsLoading(false);
+     },
+     (err) => {
+       console.error(err);
+       setError('Failed to load trees');
+       setIsLoading(false);
+     }
+   );
+   return () => unsubscribe();
+ }, [currentUser, treeIDParam]);
+
 
   const filteredTrees = useMemo(() => {
     if (filter === 'All') return trees;

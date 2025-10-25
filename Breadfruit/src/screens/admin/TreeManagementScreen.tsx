@@ -62,16 +62,30 @@ export default function TreeManagementScreen() {
     }
   };
 
+
   useEffect(() => {
-    fetchAllCounts();
+    // ✅ Live total tracked trees (excluding pending)
+    const unsubTracked = firestore()
+      .collection('trees')
+      .where('status', 'in', ['verified', 'harvest-ready', 'harvested', 'not-ready'])
+      .onSnapshot((snapshot) => {
+        setTrackedTrees(snapshot.size);
+      });
+
+    // ✅ Live pending trees
+    const unsubPending = firestore()
+      .collection('trees')
+      .where('status', '==', 'pending')
+      .onSnapshot((snapshot) => {
+        setPendings(snapshot.size);
+      });
+
+    // Cleanup listeners when leaving screen
+    return () => {
+      unsubTracked();
+      unsubPending();
+    };
   }, []);
-
-  useFocusEffect(
-    useCallback(() => {
-      fetchAllCounts();
-    }, [])
-  );
-
   const cards = [
     {
       title: 'Trees Tracked',
