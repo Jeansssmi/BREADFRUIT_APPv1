@@ -27,6 +27,7 @@ import PendingTreesScreen from '../screens/researcher/tree/PendingTreesScreen';
 import ProcessFruitScreen from '../screens/researcher/tree/ProcessFruitScreen';
 import TreeDetailsScreen from '../screens/researcher/tree/TreeDetailsScreen';
 import TreeListScreen from '../screens/researcher/tree/TreeListScreen';
+import NotificationsScreen from '../screens/researcher/tree/NotificationsScreen';
 import TrackedTreesScreen from '../screens/researcher/tree/TrackedTreesScreen';
 import EditUserScreen from '../screens/researcher/user/EditUserScreen';
 
@@ -128,8 +129,9 @@ export default function ResearcherNavigator() {
       <MainStack.Screen name="EditTree" component={EditTree} options={{ headerTitle: 'Update Your Tree' }} />
       <MainStack.Screen name="HarvestList" component={HarvestListScreen} />
       <MainStack.Screen name="HarvestedList" component={HarvestedListScreen} />
-      <MainStack.Screen name="ActivityLogsScreen" component={ActivityLogsScreen} options={{ headerTitle: 'Activity Logs' }} />
+      <MainStack.Screen name="ActivityLogsScreen" component={ActivityLogsScreen} options={{ headerShown: false }} />
       <MainStack.Screen name="Search" component={SearchScreen} options={{ headerShown: false }} />
+      <MainStack.Screen name="NotificationsScreen" component={NotificationsScreen} options={{ headerShown: false }} />
     </MainStack.Navigator>
   );
 }

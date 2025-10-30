@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, {useCallback, useEffect, useState } from 'react';
 import {
   FlatList,
   RefreshControl,
@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import { ActivityIndicator, Card, Text, Chip } from 'react-native-paper';
 import firestore from '@react-native-firebase/firestore';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 
 export default function AdminPendingTreesScreen() {
@@ -63,6 +63,13 @@ export default function AdminPendingTreesScreen() {
   useEffect(() => {
     fetchPendingTrees();
   }, []);
+
+    // ✅ Auto refresh when coming back to screen
+    useFocusEffect(
+      useCallback(() => {
+        fetchPendingTrees();
+      }, [])
+    );
 
   const onRefresh = async () => {
     setRefreshing(true);

@@ -16,7 +16,7 @@ import { Button, Text, TextInput, Menu } from "react-native-paper";
 import MaterialIcons from "react-native-vector-icons/MaterialIcons";
 import Geolocation from "react-native-geolocation-service";
 import { useNavigation, useRoute } from "@react-navigation/native";
-import { launchCamera, launchImageLibrary } from "react-native-image-picker";
+import { launchCamera } from "react-native-image-picker";
 import auth from "@react-native-firebase/auth";
 import firestore from "@react-native-firebase/firestore";
 import storage from "@react-native-firebase/storage";
@@ -52,14 +52,27 @@ export default function AddTreeScreen() {
   }, [route.params?.diameter]);
 const handleNavigateToScanner = () => { if (!image) { Alert.alert("Image Required", "Please select an image first."); return; } navigation.navigate("DiameterScannerScreen", { imageUri: image }); };
   // 📸 Select Image
-  const handleImageSelection = () => {
-    const options = { mediaType: "photo" as const, quality: 0.8 };
-    Alert.alert("Select Image", "Choose an option", [
-      { text: "Take Photo", onPress: () => launchCamera(options, handleImageResponse) },
-      { text: "Choose from Gallery", onPress: () => launchImageLibrary(options, handleImageResponse) },
-      { text: "Cancel", style: "cancel" },
-    ]);
-  };
+
+ // 📸 Capture Image Only (no gallery)
+ const handleImageSelection = async () => {
+   try {
+     const granted = await PermissionsAndroid.request(
+       PermissionsAndroid.PERMISSIONS.CAMERA
+     );
+     if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
+       Alert.alert("Permission Required", "Camera access is required to capture a photo.");
+       return;
+     }
+
+     launchCamera(
+       { mediaType: "photo", quality: 0.9 },
+       handleImageResponse
+     );
+   } catch (err) {
+     console.log("Camera error:", err);
+   }
+ };
+
 
   const handleImageResponse = (response: any) => {
     if (response.didCancel) return;
@@ -112,122 +125,153 @@ const handleNavigateToScanner = () => { if (!image) { Alert.alert("Image Require
   };
 
 const handleSaveTree = async () => {
-    try {
-      setSaving(true);
-      if (!currentUser) {
-        Alert.alert("Authentication Error", "You must be logged in.");
-        setSaving(false);
-        return;
-      }
+  try {
+    setSaving(true);
 
-      // 🔹 Get user role (admin or researcher)
-      const userRole = currentUser.role?.toLowerCase() || "researcher";
+    if (!currentUser) {
+      Alert.alert("Authentication Error", "You must be logged in.");
+      setSaving(false);
+      return;
+    }
 
-      // 🔹 Determine tree status based on role
-      let treeStatus = "";
+    const userRole = currentUser.role?.toLowerCase() || "researcher";
 
-      if (userRole === "admin") {
-        // Admin-created trees are auto-categorized
-        if (fruitStatus === "ripe") treeStatus = "harvest-ready";
-        else if (fruitStatus === "unripe") treeStatus = "not-ready";
-        else treeStatus = "verified";
-      } else {
-        // Researcher trees always start as pending
-        treeStatus = "pending";
-      }
+    // 🌳 Set tree status
+    let treeStatus = userRole === "admin" ? "verified" : "pending";
 
-      // 📸 Upload image if available
-      let imageUrl = "";
-      if (image) {
-        const fileName = `images/trees/${currentUser.uid}_${Date.now()}.jpg`;
-        const reference = storage().ref(fileName);
-        const filePath = image.startsWith("file://") ? image.replace("file://", "") : image;
-        await reference.putFile(filePath);
-        imageUrl = await reference.getDownloadURL();
-      }
+    // 📸 Upload image (if any)
+    let imageUrl = "";
+    if (image) {
+      const fileName = `images/trees/${currentUser.uid}_${Date.now()}.jpg`;
+      const reference = storage().ref(fileName);
+      const filePath = image.startsWith("file://") ? image.replace("file://", "") : image;
+      await reference.putFile(filePath);
+      imageUrl = await reference.getDownloadURL();
+    }
 
-      // 🆔 Generate Tree ID
-      const year = new Date().getFullYear();
-      const treesRef = firestore().collection("trees");
-      const lastDoc = await treesRef
-        .where("treeID", ">=", `BFT-${year}-000000`)
-        .where("treeID", "<=", `BFT-${year}-999999`)
-        .orderBy("treeID", "desc")
-        .limit(1)
-        .get();
+    // 🆔 Generate new Tree ID
+    const year = new Date().getFullYear();
+    const treesRef = firestore().collection("trees");
+    const lastDoc = await treesRef
+      .where("treeID", ">=", `BFT-${year}-000000`)
+      .where("treeID", "<=", `BFT-${year}-999999`)
+      .orderBy("treeID", "desc")
+      .limit(1)
+      .get();
 
-      let newNumber = 1;
-      if (!lastDoc.empty) {
-        const lastTreeID = lastDoc.docs[0].data().treeID;
-        const lastNum = parseInt(lastTreeID.split("-")[2], 10);
-        if (!isNaN(lastNum)) newNumber = lastNum + 1;
-      }
+    let newNumber = 1;
+    if (!lastDoc.empty) {
+      const lastTreeID = lastDoc.docs[0].data().treeID;
+      const lastNum = parseInt(lastTreeID.split("-")[2], 10);
+      if (!isNaN(lastNum)) newNumber = lastNum + 1;
+    }
 
-      const newTreeID = `BFT-${year}-${String(newNumber).padStart(6, "0")}`;
-      const formattedDate = new Date().toISOString().split("T")[0];
+    const newTreeID = `BFT-${year}-${String(newNumber).padStart(6, "0")}`;
+    const formattedDate = new Date().toISOString().split("T")[0];
 
-      const newTree = {
-        barangay: barangay.trim().toLowerCase(),
-        city: city.trim().toLowerCase(),
-        coordinates: {
-          latitude: parseFloat(latitudeInput) || 0,
-          longitude: parseFloat(longitudeInput) || 0,
-        },
-        dateTracked: formattedDate,
-        diameter: parseFloat(diameterInput) || 0,
-        fruitStatus,
-        image: imageUrl,
-        status: treeStatus,
-        trackedById: currentUser.uid,
-        trackedBy: currentUser.name || currentUser.displayName || "Unknown",
-        treeID: newTreeID,
-        createdAt: firestore.FieldValue.serverTimestamp(),
-      };
+    // 🌳 Create tree object
+    const newTree = {
+      barangay: barangay.trim().toLowerCase(),
+      city: city.trim().toLowerCase(),
+      coordinates: {
+        latitude: parseFloat(latitudeInput) || 0,
+        longitude: parseFloat(longitudeInput) || 0,
+      },
+      dateTracked: formattedDate,
+      diameter: parseFloat(diameterInput) || 0,
+      fruitStatus,
+      image: imageUrl,
+      status: treeStatus,
+      trackedById: currentUser.uid,
+      trackedBy: currentUser.name || currentUser.displayName || "Unknown",
+      treeID: newTreeID,
+      createdAt: firestore.FieldValue.serverTimestamp(),
+    };
 
-      await treesRef.doc(newTreeID).set(newTree);
+    // ✅ Add to trees
+    await treesRef.doc(newTreeID).set(newTree);
 
-       // 🔹 Log activity
-          await firestore().collection("activityLog").add({
-            actionType: "create",
-            description: `${currentUser.displayName || "Researcher"} added a new tree (${newTreeID})`,
-            uid: currentUser.uid,
-            userRole,
-            timestamp: firestore.FieldValue.serverTimestamp(),
+    // 📝 Log activity
+    await firestore().collection("activityLog").add({
+      actionType: "create",
+      description: `${currentUser.displayName || "Researcher"} added a new tree (${newTreeID})`,
+      uid: currentUser.uid,
+      userRole,
+      timestamp: firestore.FieldValue.serverTimestamp(),
+    });
+
+    // ✅ Only send notification AFTER successful save + log
+    if (userRole === "researcher") {
+      try {
+        const adminSnap = await firestore()
+          .collection("users")
+          .where("role", "==", "admin")
+          .get();
+
+        if (!adminSnap.empty) {
+          const batch = firestore().batch();
+
+          adminSnap.forEach((adminDoc) => {
+            const notifRef = firestore().collection("notification").doc();
+            batch.set(notifRef, {
+              recipientID: adminDoc.id,
+              recipientRole: "Admin",
+              senderID: currentUser.uid,
+              type: "tree-added", // ✅ must match rule
+              treeId: newTreeID,
+              message: `A new tree (${newTreeID}) was added by ${
+                currentUser.displayName || "Researcher"
+              } and is waiting for your approval.`,
+              read: false,
+              seen: false,
+              timestamp: firestore.FieldValue.serverTimestamp(),
+            });
           });
 
-      Alert.alert(
-        "Success",
-        userRole === "researcher"
-          ? "Tree submitted! Waiting for admin approval."
-          : "Tree added successfully!"
-      );
-
-      // Reset
-      setImage(null);
-      setDiameterInput("");
-      setLatitudeInput("");
-      setLongitudeInput("");
-      setCity("");
-      setBarangay("");
-      setFruitStatus("none");
-
-      // Navigate
-      if (userRole === "researcher") {
-        navigation.navigate("PendingTrees");
-      } else {
-        navigation.navigate("Map", {
-          lat: parseFloat(latitudeInput),
-          lng: parseFloat(longitudeInput),
-          treeID: newTreeID,
-        });
+          await batch.commit();
+          console.log("✅ Admins notified successfully.");
+        } else {
+          console.warn("⚠️ No admins found to notify.");
+        }
+      } catch (notifErr) {
+        console.error("⚠️ Notification creation failed:", notifErr);
       }
-    } catch (error: any) {
-      console.error("Error saving tree:", error);
-      Alert.alert("Error", error.message || "Failed to save tree.");
-    } finally {
-      setSaving(false);
     }
-  };
+
+    // 🎉 Show success message only after all successful writes
+    Alert.alert(
+      "Success",
+      userRole === "researcher"
+        ? "Tree submitted successfully and awaiting admin approval!"
+        : "Tree added successfully!"
+    );
+
+    // ✅ Reset form fields
+    setImage(null);
+    setDiameterInput("");
+    setLatitudeInput("");
+    setLongitudeInput("");
+    setCity("");
+    setBarangay("");
+    setFruitStatus("none");
+
+    // ✅ Navigate after success
+    if (userRole === "researcher") {
+      navigation.navigate("PendingTrees");
+    } else {
+      navigation.navigate("Map", {
+        lat: parseFloat(latitudeInput),
+        lng: parseFloat(longitudeInput),
+        treeID: newTreeID,
+      });
+    }
+  } catch (error: any) {
+    console.error("Error saving tree:", error);
+    Alert.alert("Error", error.message || "Failed to save tree.");
+  } finally {
+    setSaving(false);
+  }
+};
 
 
   return (
@@ -245,7 +289,7 @@ const handleSaveTree = async () => {
             ) : (
               <View style={styles.imagePlaceholder}>
                 <MaterialIcons name="add-a-photo" size={40} color="#2ecc71" />
-                <Text style={styles.imageLabel}>Capture or Upload Picture</Text>
+                <Text style={styles.imageLabel}>Capture Picture</Text>
               </View>
             )}
           </TouchableOpacity>

@@ -18,6 +18,8 @@ import {
 import { useNavigation , useFocusEffect} from "@react-navigation/native";
 import MaterialCommunityIcons from "react-native-vector-icons/MaterialCommunityIcons";
 import firestore from "@react-native-firebase/firestore";
+import auth from "@react-native-firebase/auth";
+
 
 
 
@@ -73,17 +75,62 @@ export default function AdminDashboardScreen() {
   }, []);
 
   // ✅ Fetch unseen notifications count
-  useEffect(() => {
-    const unsubscribe = firestore()
-      .collection("notification")
-      .where("recipientRole", "==", "Admin")
-      .where("seen", "==", false)
-      .onSnapshot(
-        (snapshot) => setUnseenCount(snapshot.size),
-        (error) => console.error("Error fetching notifications:", error)
-      );
-    return unsubscribe;
-  }, []);
+ useEffect(() => {
+   let userUnsub: (() => void) | undefined;
+   let notifUnsub: (() => void) | undefined;
+
+   const init = async () => {
+     const user = auth().currentUser;
+     if (!user) return;
+
+     userUnsub = firestore()
+       .collection("users")
+       .doc(user.uid)
+       .onSnapshot((userDoc) => {
+         const role = userDoc.data()?.role;
+
+         // ✅ Reset badge each time role changes
+         setUnseenCount(0);
+
+         // ✅ Admin → fetch notifications from viewers
+         if (role === "admin") {
+           notifUnsub = firestore()
+             .collection("notification")
+             .where("recipientRole", "==", "Admin")
+             .where("seen", "==", false)
+             .onSnapshot(
+               (snap) => setUnseenCount(snap?.size ?? 0),
+               (err) => console.log("Admin notif fetch error:", err.code)
+             );
+           return;
+         }
+
+         // ✅ Researcher → fetch notifications from Admin
+         if (role === "researcher") {
+           notifUnsub = firestore()
+             .collection("notification")
+             .where("recipientID", "==", user.uid)
+             .where("read", "==", false)
+             .onSnapshot(
+               (snap) => setUnseenCount(snap?.size ?? 0),
+               (err) => console.log("Researcher notif fetch error:", err.code)
+             );
+           return;
+         }
+
+         // ❌ Viewer → no bell
+         setUnseenCount(null);
+       });
+   };
+
+   init();
+
+   return () => {
+     if (userUnsub) userUnsub();
+     if (notifUnsub) notifUnsub();
+   };
+ }, []);
+
 
   // ✅ Fetch recent activity
   useEffect(() => {

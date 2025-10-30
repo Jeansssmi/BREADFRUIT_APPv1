@@ -7,7 +7,7 @@ import {
   Alert,
   Pressable,
 } from "react-native";
-import { Appbar, Card, Chip, Text, Button } from "react-native-paper";
+import { Appbar, Card, Chip, Text } from "react-native-paper";
 import { useRoute, useNavigation } from "@react-navigation/native";
 import firestore from "@react-native-firebase/firestore";
 import MaterialCommunityIcons from "react-native-vector-icons/MaterialCommunityIcons";
@@ -19,6 +19,7 @@ export default function ActivityLogsScreen() {
   const highlightId = route.params?.highlightId || null;
 
   const [activityLogs, setActivityLogs] = useState([]);
+  const [hiddenLogs, setHiddenLogs] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("today");
   const [userRole, setUserRole] = useState(null);
@@ -41,9 +42,9 @@ export default function ActivityLogsScreen() {
     return () => unsubscribeUser();
   }, []);
 
-  // 🔹 Fetch Activity Logs (Safe, No Index Required)
+  // 🔹 Fetch only the current user's activity logs
   useEffect(() => {
-    if (!currentUID || !userRole) return;
+    if (!currentUID) return;
     setLoading(true);
 
     const startOfDay = new Date();
@@ -51,88 +52,71 @@ export default function ActivityLogsScreen() {
     const endOfDay = new Date();
     endOfDay.setHours(23, 59, 59, 999);
 
-    let query = firestore()
+    const unsubscribe = firestore()
       .collection("activityLog")
-      .where("uid", "==", currentUID);
+      .where("uid", "==", currentUID)
+      .onSnapshot(
+        (snapshot) => {
+          let data = snapshot.docs.map((doc) => ({
+            id: doc.id,
+            ...doc.data(),
+          }));
 
-    query
-      .get()
-      .then((snapshot) => {
-        let data = snapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        }));
+          // 🔸 Show only today’s logs if filter is “today”
+          if (filter === "today") {
+            data = data.filter((item) => {
+              const t = item.timestamp?.toDate
+                ? item.timestamp.toDate()
+                : new Date(item.timestamp);
+              return t >= startOfDay && t <= endOfDay;
+            });
+          }
 
-        if (filter === "today") {
-          data = data.filter((item) => {
-            const t = item.timestamp?.toDate
-              ? item.timestamp.toDate()
-              : new Date(item.timestamp);
-            return t >= startOfDay && t <= endOfDay;
-          });
-        }
+          // 🧹 Remove locally deleted logs
+          data = data.filter((item) => !hiddenLogs.includes(item.id));
 
-        data.sort(
-          (a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0)
-        );
+          // 🔽 Sort newest first
+          data.sort(
+            (a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0)
+          );
 
-        setActivityLogs(data);
-        setLoading(false);
-      })
-      .catch((error) => {
-        console.error("Error loading activity logs:", error);
-        setLoading(false);
-      });
-  }, [filter, currentUID, userRole]);
-
-  // 🗑️ Delete a specific log
-  const handleDeleteLog = (id: string) => {
-    Alert.alert(
-      "Delete Activity",
-      "Are you sure you want to delete this activity?",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              await firestore().collection("activityLog").doc(id).delete();
-              setActivityLogs((prev) => prev.filter((item) => item.id !== id));
-            } catch (error) {
-              console.error("Error deleting log:", error);
-            }
-          },
+          setActivityLogs(data);
+          setLoading(false);
         },
-      ]
-    );
+        (error) => {
+          console.error("Error loading activity logs:", error);
+          setLoading(false);
+        }
+      );
+
+    return () => unsubscribe();
+  }, [filter, currentUID, hiddenLogs]);
+
+  /** 🧹 Locally delete one log (not Firestore delete) **/
+  const handleDeleteLog = (id: string) => {
+    Alert.alert("Delete Activity", "Do you want to delete this activity log?", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Delete",
+        style: "destructive",
+        onPress: () => setHiddenLogs((prev) => [...prev, id]),
+      },
+    ]);
   };
 
-  // 🧹 Delete all logs
+  /** 🧹 Delete all logs locally **/
   const handleDeleteAllLogs = () => {
     Alert.alert(
       "Delete All Activities",
-      "Are you sure you want to delete all your activity logs?",
+      "Do you want to delete all activity logs? They won’t be deleted from Firestore.",
       [
         { text: "Cancel", style: "cancel" },
         {
           text: "Delete All",
           style: "destructive",
-          onPress: async () => {
-            try {
-              const snapshot = await firestore()
-                .collection("activityLog")
-                .where("uid", "==", currentUID)
-                .get();
-
-              const batch = firestore().batch();
-              snapshot.forEach((doc) => batch.delete(doc.ref));
-              await batch.commit();
-
-              setActivityLogs([]);
-            } catch (error) {
-              console.error("Error deleting all logs:", error);
-            }
+          onPress: () => {
+            const allIds = activityLogs.map((log) => log.id);
+            setHiddenLogs((prev) => [...prev, ...allIds]);
           },
         },
       ]
@@ -221,7 +205,7 @@ export default function ActivityLogsScreen() {
                     </Text>
                   </View>
 
-                  {/* 🗑️ Individual Delete Button */}
+                  {/* 🗑️ Local Delete Button (not Firestore delete) */}
                   <Pressable onPress={() => handleDeleteLog(item.id)}>
                     <MaterialCommunityIcons
                       name="delete-outline"

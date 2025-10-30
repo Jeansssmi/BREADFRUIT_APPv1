@@ -16,7 +16,7 @@ import { Button, Text, TextInput, Menu } from "react-native-paper";
 import MaterialIcons from "react-native-vector-icons/MaterialIcons";
 import Geolocation from "react-native-geolocation-service";
 import { useNavigation, useRoute } from "@react-navigation/native";
-import { launchCamera, launchImageLibrary } from "react-native-image-picker";
+import { launchCamera } from "react-native-image-picker";
 import auth from "@react-native-firebase/auth";
 import firestore from "@react-native-firebase/firestore";
 import storage from "@react-native-firebase/storage";
@@ -54,14 +54,26 @@ export default function AddTreeScreen() {
   const handleNavigateToScanner = () => { if (!image) { Alert.alert("Image Required", "Please select an image first."); return; } navigation.navigate("DiameterScannerScreen", { imageUri: image }); };
 
   // 📸 Select Image
-  const handleImageSelection = () => {
-    const options = { mediaType: "photo" as const, quality: 0.8 };
-    Alert.alert("Select Image", "Choose an option", [
-      { text: "Take Photo", onPress: () => launchCamera(options, handleImageResponse) },
-      { text: "Choose from Gallery", onPress: () => launchImageLibrary(options, handleImageResponse) },
-      { text: "Cancel", style: "cancel" },
-    ]);
+  // 📸 Capture Image Only (no gallery)
+  const handleImageSelection = async () => {
+    try {
+      const granted = await PermissionsAndroid.request(
+        PermissionsAndroid.PERMISSIONS.CAMERA
+      );
+      if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
+        Alert.alert("Permission Required", "Camera access is required to capture a photo.");
+        return;
+      }
+
+      launchCamera(
+        { mediaType: "photo", quality: 0.9 },
+        handleImageResponse
+      );
+    } catch (err) {
+      console.log("Camera error:", err);
+    }
   };
+
 
   const handleImageResponse = (response: any) => {
     if (response.didCancel) return;
@@ -239,7 +251,7 @@ const handleSaveTree = async () => {
             ) : (
               <View style={styles.imagePlaceholder}>
                 <MaterialIcons name="add-a-photo" size={40} color="#2ecc71" />
-                <Text style={styles.imageLabel}>Capture or Upload Picture</Text>
+                <Text style={styles.imageLabel}>Capture  Picture</Text>
               </View>
             )}
           </TouchableOpacity>

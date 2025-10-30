@@ -11,7 +11,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { Button, TextInput, useTheme } from 'react-native-paper'; // ✅ added useTheme
+import { Button, TextInput, useTheme } from 'react-native-paper';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { launchCamera, launchImageLibrary } from 'react-native-image-picker';
 import auth from '@react-native-firebase/auth';
@@ -20,140 +20,106 @@ import storage from '@react-native-firebase/storage';
 
 export default function EditProfileScreen() {
   const navigation = useNavigation();
-  const theme = useTheme(); // ✅ access global theme
+  const theme = useTheme();
   const { user, fetchUserData, updateLocalUser } = useAuth();
 
   const [name, setName] = useState('');
-  const [loading, setLoading] = useState(false);
   const [profileImageUri, setProfileImageUri] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (user) {
+    const loadUserInfo = async () => {
+      if (!user) return;
+      await fetchUserData(user);
       setName(user.name || '');
       setProfileImageUri(user.image || null);
-    }
-  }, [user]);
+      setLoading(false);
+    };
+
+    loadUserInfo();
+  }, []);
 
   const handleRemovePhoto = () => setProfileImageUri(null);
 
   const handleImagePick = () => {
-    let options = [
+    const options = [
       { text: 'Take Photo', onPress: () => selectImage('camera') },
       { text: 'Choose from Gallery', onPress: () => selectImage('gallery') },
     ];
-    if (profileImageUri) {
+    if (profileImageUri)
       options.push({ text: 'Remove Photo', onPress: handleRemovePhoto, style: 'destructive' });
-    }
     options.push({ text: 'Cancel', style: 'cancel' });
+
     Alert.alert('Update Profile Picture', 'Choose an option', options, { cancelable: true });
   };
 
   const selectImage = async (type: 'camera' | 'gallery') => {
-    const options = { mediaType: 'photo' as const, quality: 0.8 };
-    const action = type === 'camera' ? launchCamera : launchImageLibrary;
-
     try {
+      const action = type === 'camera' ? launchCamera : launchImageLibrary;
       const result = await action({
         mediaType: 'photo',
         quality: 0.7,
         maxWidth: 1024,
         maxHeight: 1024,
       });
-      if (result.didCancel || !result.assets) return;
-      setProfileImageUri(result.assets[0].uri || null);
-    } catch (error) {
-      console.error('Image selection error', error);
+      if (!result.didCancel && result.assets) {
+        setProfileImageUri(result.assets[0].uri || null);
+      }
+    } catch {
       Alert.alert('Error', 'Could not select image.');
     }
   };
 
+  const syncChangesToFirebase = async () => {
+    if (!user) return;
 
- const syncChangesToFirebase = async (newName: string, localImageUri: string | null) => {
-   if (!user || !user.uid) {
-     console.warn("⚠️ Cannot sync: no authenticated user found.");
-     return;
-   }
+    setLoading(true);
+    let finalImageURL = user.image;
 
-   let finalImageURL = user.image;
-   const imageChanged = localImageUri !== user.image;
+    try {
+      const imageChanged = profileImageUri !== user.image;
 
-   try {
-     // 🖼️ Handle image change logic
-     if (imageChanged) {
-       // 🧹 Case 1: User removed photo
-       if (user.image && !localImageUri) {
-         finalImageURL = null;
+      if (imageChanged) {
+        if (!profileImageUri && user.image) {
+          finalImageURL = null;
+          if (user.image.startsWith('https')) {
+            try {
+              await storage().refFromURL(user.image).delete();
+            } catch {}
+          }
+        } else if (profileImageUri?.startsWith('file://')) {
+          if (user.image?.startsWith('https')) {
+            try {
+              await storage().refFromURL(user.image).delete();
+            } catch {}
+          }
+          const filePath = `images/user-profile/${user.uid}/${Date.now()}.jpg`;
+          const ref = storage().ref(filePath);
+          await ref.putFile(profileImageUri.replace('file://', ''));
+          finalImageURL = await ref.getDownloadURL();
+        }
+      }
 
-         // ✅ Delete only if it's a valid Firebase URL
-         if (
-           typeof user.image === "string" &&
-           (user.image.startsWith("https://") || user.image.startsWith("gs://"))
-         ) {
-           try {
-             await storage().refFromURL(user.image).delete();
-           } catch (err) {
-             console.warn("⚠️ Error deleting old image:", err);
-           }
-         }
-       }
+      await auth().currentUser?.updateProfile({
+        displayName: name,
+        photoURL: finalImageURL || null,
+      });
 
-       // 📤 Case 2: User selected a new photo from local device
-       else if (localImageUri && localImageUri.startsWith("file://")) {
-         // Delete previous Firebase image if valid
-         if (
-           typeof user.image === "string" &&
-           (user.image.startsWith("https://") || user.image.startsWith("gs://"))
-         ) {
-           try {
-             await storage().refFromURL(user.image).delete();
-           } catch (err) {
-             console.warn("⚠️ Error deleting previous image:", err);
-           }
-         }
+      await firestore().collection('users').doc(user.uid).update({
+        name,
+        image: finalImageURL || null,
+      });
 
-         // Upload the new one
-         const fileName = `images/user-profile/${user.uid}/${Date.now()}.jpg`;
-         const reference = storage().ref(fileName);
-         await reference.putFile(localImageUri.replace("file://", ""));
-         finalImageURL = await reference.getDownloadURL();
-       }
-     }
+      await fetchUserData(auth().currentUser);
+      updateLocalUser({ name, image: finalImageURL });
 
-     // 🔄 Update Firebase Authentication profile
-     await auth().currentUser?.updateProfile({
-       displayName: newName,
-       photoURL: finalImageURL || null,
-     });
-
-     // 🔥 Update Firestore user document
-     await firestore().collection("users").doc(user.uid).update({
-       name: newName,
-       image: finalImageURL || null,
-     });
-
-     await fetchUserData(auth().currentUser);
-     console.log("✅ Profile synced to Firebase.");
-   } catch (error) {
-     console.error("❌ Firebase sync failed:", error);
-     Alert.alert("Error", "Failed to sync changes to Firebase.");
-   }
- };
-
-
-
-  const handleSaveChanges = async () => {
-    if (!user || !name.trim()) {
-      Alert.alert('Error', 'User not found or name is empty.');
-      return;
+      setLoading(false);
+      navigation.goBack();
+    } catch (error) {
+      console.error(error);
+      Alert.alert('Error', 'Profile update failed');
+      setLoading(false);
     }
-
-    updateLocalUser({
-      name: name,
-      image: profileImageUri,
-    });
-
-    navigation.goBack();
-    syncChangesToFirebase(name, profileImageUri);
   };
 
   const getJoinDate = () => {
@@ -162,16 +128,21 @@ export default function EditProfileScreen() {
     return 'N/A';
   };
 
+  if (loading) {
+    return (
+      <View style={styles.center}>
+        <ActivityIndicator size="large" color={theme.colors.primary} />
+      </View>
+    );
+  }
+
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <ScrollView contentContainerStyle={styles.formContainer}>
         <TouchableOpacity
           style={[
             styles.imageBox,
-            {
-              backgroundColor: theme.colors.card,
-              borderColor: theme.dark ? '#333' : '#e0e0e0',
-            },
+            { backgroundColor: theme.colors.card, borderColor: theme.dark ? '#333' : '#e0e0e0' },
           ]}
           onPress={handleImagePick}
         >
@@ -185,80 +156,18 @@ export default function EditProfileScreen() {
               </Text>
             </View>
           )}
-          {profileImageUri && (
-            <TouchableOpacity style={styles.changeButton} onPress={handleImagePick}>
-              <Text style={styles.changeButtonText}>Change</Text>
-            </TouchableOpacity>
-          )}
         </TouchableOpacity>
 
-        <TextInput
-          label="User ID"
-          value={user?.uid || ''}
-          editable={false}
-          style={[
-            styles.inputDisabled,
-            {
-              backgroundColor: theme.dark ? '#1f1f1f' : '#f0f0f0',
-              color: theme.colors.text,
-            },
-          ]}
-        />
-        <TextInput
-          label="Full Name"
-          value={name}
-          onChangeText={setName}
-          style={[
-            styles.input,
-            {
-              backgroundColor: theme.dark ? '#1f1f1f' : '#ffffff',
-              color: theme.colors.text,
-            },
-          ]}
-        />
-        <TextInput
-          label="Email Address"
-          value={user?.email || ''}
-          editable={false}
-          style={[
-            styles.inputDisabled,
-            { backgroundColor: theme.dark ? '#1f1f1f' : '#f0f0f0', color: theme.colors.text },
-          ]}
-        />
-        <TextInput
-          label="Role"
-          value={user?.role || ''}
-          editable={false}
-          style={[
-            styles.inputDisabled,
-            { backgroundColor: theme.dark ? '#1f1f1f' : '#f0f0f0', color: theme.colors.text },
-          ]}
-        />
-        <TextInput
-          label="Date Joined"
-          value={getJoinDate()}
-          editable={false}
-          style={[
-            styles.inputDisabled,
-            { backgroundColor: theme.dark ? '#1f1f1f' : '#f0f0f0', color: theme.colors.text },
-          ]}
-        />
+        <TextInput label="User ID" value={user?.uid || ''} editable={false} style={styles.inputDisabled} />
+        <TextInput label="Full Name" value={name} onChangeText={setName} style={styles.input} />
+        <TextInput label="Email Address" value={user?.email || ''} editable={false} style={styles.inputDisabled} />
+        <TextInput label="Role" value={user?.role || ''} editable={false} style={styles.inputDisabled} />
+        <TextInput label="Date Joined" value={getJoinDate()} editable={false} style={styles.inputDisabled} />
       </ScrollView>
 
-      <View
-        style={[
-          styles.buttonContainer,
-          { backgroundColor: theme.dark ? '#1e1e1e' : '#f7f8fa' },
-        ]}
-      >
-        <Button
-          mode="contained"
-          onPress={handleSaveChanges}
-          style={[styles.button, { backgroundColor: theme.colors.primary }]}
-          labelStyle={styles.buttonLabel}
-          disabled={loading}
-        >
-          {loading ? <ActivityIndicator color="white" /> : 'Save Changes'}
+      <View style={styles.buttonContainer}>
+        <Button mode="contained" onPress={syncChangesToFirebase} style={styles.button}>
+          Save Changes
         </Button>
       </View>
     </View>
@@ -269,36 +178,15 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   formContainer: { paddingHorizontal: 20, paddingBottom: 100, paddingTop: 20 },
   imageBox: {
-    height: 200,
-    borderRadius: 12,
-    marginBottom: 30,
-    borderWidth: 1.5,
-    overflow: 'hidden',
-    justifyContent: 'center',
-    alignItems: 'center',
-    position: 'relative',
-    shadowColor: '#000',
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
+    height: 200, borderRadius: 12, marginBottom: 30, borderWidth: 1.5, overflow: 'hidden',
+    justifyContent: 'center', alignItems: 'center', position: 'relative', elevation: 2,
   },
   profileImage: { width: '100%', height: '100%' },
-  placeholderContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 10 },
+  placeholderContainer: { justifyContent: 'center', alignItems: 'center', flex: 1, gap: 10 },
   imageLabel: { fontSize: 16, fontWeight: '500' },
-  changeButton: {
-    position: 'absolute',
-    top: 10,
-    right: 10,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 8,
-  },
-  changeButtonText: { color: '#fff', fontWeight: '500', fontSize: 12 },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   input: { marginBottom: 15 },
-  inputDisabled: { marginBottom: 15 },
-  buttonContainer: { position: 'absolute', bottom: 0, left: 0, right: 0, padding: 25 },
-  button: { borderRadius: 30, paddingVertical: 2 },
-  buttonLabel: { fontSize: 17, fontWeight: 'bold' },
+  inputDisabled: { marginBottom: 15, opacity: 0.7 },
+  buttonContainer: { padding: 25, position: 'absolute', bottom: 0, left: 0, right: 0 },
+  button: { borderRadius: 30 },
 });

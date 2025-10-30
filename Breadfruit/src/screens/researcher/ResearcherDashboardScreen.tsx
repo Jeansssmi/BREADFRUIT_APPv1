@@ -19,6 +19,8 @@ export default function ResearcherDashboardScreen() {
   const navigation = useNavigation<any>();
   const theme = useTheme();
 
+
+  const [unreadCount, setUnreadCount] = useState(0);
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [recentActivity, setRecentActivity] = useState<any[]>([]);
@@ -30,6 +32,35 @@ export default function ResearcherDashboardScreen() {
 
   const currentUser = auth().currentUser;
   const trackedStatuses = ['verified', 'harvest-ready', 'not-ready', 'harvested'];
+
+
+ useEffect(() => {
+   if (!currentUser) return;
+
+   const unsubscribe = firestore()
+     .collection("notification")
+     .where("recipientID", "==", currentUser.uid)
+     .where("read", "==", false)
+     .onSnapshot(
+       (snapshot) => {
+         // ✅ SAFETY CHECK FOR NULL SNAPSHOT
+         if (!snapshot || snapshot.empty) {
+           setUnreadCount(0);
+           return;
+         }
+
+         // ✅ number of unread notifications
+         setUnreadCount(snapshot.docs.length);
+       },
+       (error) => {
+         console.error("Notification listener error:", error);
+         setUnreadCount(0); // prevent crash ✅
+       }
+     );
+
+   return () => unsubscribe();
+ }, [currentUser]);
+
 
   // 🔹 Fetch tree count
   const fetchAllCounts = async () => {
@@ -48,6 +79,7 @@ export default function ResearcherDashboardScreen() {
       setRefreshing(false);
     }
   };
+
 
   useEffect(() => {
     fetchAllCounts();
@@ -140,110 +172,99 @@ export default function ResearcherDashboardScreen() {
       data: recentActivity,
     },
   ];
+return (
+  <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
 
-  return (
-    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      <Appbar.Header
-        style={[
-          styles.appbarHeader,
-          { backgroundColor: theme.colors.card, borderBottomColor: theme.dark ? '#333' : '#eee' },
-        ]}
-      >
-        <Appbar.Content
-          title="Dashboard"
-          titleStyle={[styles.appbarTitle, { color: theme.colors.text }]}
+    {/* ✅ App Bar with Bell */}
+    <Appbar.Header style={styles.appbarHeader}>
+      <Appbar.Content title="Dashboard" titleStyle={styles.appbarTitle} />
+
+      <View style={styles.bellWrapper}>
+        <Appbar.Action
+          icon="bell-outline"
+          color={theme.colors.primary}
+          onPress={() => navigation.navigate("NotificationsScreen")}
         />
-        <Appbar.Action icon="bell-outline" color={theme.colors.text} onPress={() => {}} />
-      </Appbar.Header>
-
-      <ScrollView
-        style={{ flex: 1 }}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={fetchAllCounts} />}
-      >
-        {/* Dashboard cards */}
-        <View style={styles.scrollContent}>
-          <View style={styles.titleContainer}>
-            <MaterialCommunityIcons name="chart-bar" size={20} color={theme.colors.primary} />
-            <Text style={[styles.mainTitle, { color: theme.colors.text }]}>
-              Breadfruit Analytics
+        {unreadCount > 0 && (
+          <View style={styles.badge}>
+            <Text style={styles.badgeText}>
+              {unreadCount > 9 ? "9+" : unreadCount}
             </Text>
           </View>
+        )}
+      </View>
+    </Appbar.Header>
 
-          <Pressable onPress={() => navigation.navigate('TreeList')}>
-            <Card
-              style={[
-                styles.card,
-                { backgroundColor: theme.colors.card, borderLeftColor: theme.colors.primary },
-              ]}
-            >
-              <Card.Content style={styles.cardContentRow}>
-                <MaterialCommunityIcons name="tree" size={18} color={theme.colors.primary} />
-                <Text style={[styles.cardTitle, { color: theme.colors.primary }]}>
-                  Total Trees Tracked
-                </Text>
-              </Card.Content>
-              <Card.Content>
-                <Text style={[styles.largeStat, { color: theme.colors.text }]}>{allTrees}</Text>
-              </Card.Content>
-            </Card>
-          </Pressable>
+    {/* ✅ Main ScrollView stays inside root View */}
+    <ScrollView
+      style={{ flex: 1 }}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={fetchAllCounts} />}
+    >
 
-          <Card style={[styles.card, { backgroundColor: theme.colors.card }]}>
-            <Card.Content style={styles.cardContentRow}>
-              <MaterialCommunityIcons
-                name="fruit-cherries"
-                size={18}
-                color={theme.colors.primary}
-              />
-              <Text style={[styles.cardTitle, { color: theme.colors.primary }]}>Harvest Ready</Text>
-            </Card.Content>
-            <Card.Content>
-              <View style={styles.buttonRow}>
-                <Button
-                  mode="contained"
-                  compact
-                  onPress={() => navigation.navigate('HarvestList', { filter: 'ripe' })}
-                  style={[styles.ripeButton, { backgroundColor: theme.colors.primary }]}
-                >
-                  View Ripe
-                </Button>
-                <Button
-                  mode="contained"
-                  compact
-                  onPress={() => navigation.navigate('HarvestedList', { filter: 'harvested' })}
-                  style={[
-                    styles.harvestedButton,
-                    { backgroundColor: theme.dark ? '#1e8e5f' : '#27ae60' },
-                  ]}
-                >
-                  View Harvested
-                </Button>
-              </View>
-            </Card.Content>
-          </Card>
+      {/* Dashboard cards */}
+      <View style={styles.scrollContent}>
+        <View style={styles.titleContainer}>
+          <MaterialCommunityIcons
+            name="chart-bar"
+            size={20}
+            color={theme.colors.primary}
+          />
+          <Text style={[styles.mainTitle, { color: theme.colors.text }]}>
+            Breadfruit Analytics
+          </Text>
         </View>
 
-        {/* ✅ Recent Activity */}
-        <Card style={[styles.card, { backgroundColor: theme.colors.card, marginHorizontal: 20 }]}>
-          <Card.Content>
-            <View
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-              }}
-            >
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <MaterialCommunityIcons
-                  name="clock-time-three-outline"
-                  size={20}
-                  color={theme.colors.primary}
-                />
-                <Text style={[styles.cardTitle, { color: theme.colors.primary }]}>
-                  Recent Activity
-                </Text>
-              </View>
+        <Pressable onPress={() => navigation.navigate('TreeList')}>
+          <Card
+            style={[
+              styles.card,
+              { backgroundColor: theme.colors.card, borderLeftColor: theme.colors.primary },
+            ]}
+          >
+            <Card.Content style={styles.cardContentRow}>
+              <MaterialCommunityIcons name="tree" size={18} color={theme.colors.primary} />
+              <Text style={[styles.cardTitle, { color: theme.colors.primary }]}>
+                Total Trees Tracked
+              </Text>
+            </Card.Content>
+            <Card.Content>
+              <Text style={[styles.largeStat, { color: theme.colors.text }]}>
+                {allTrees}
+              </Text>
+            </Card.Content>
+          </Card>
+        </Pressable>
+      </View>
 
+      {/* ✅ Recent Activity Section */}
+      <Card style={[styles.card, { backgroundColor: theme.colors.card, marginHorizontal: 20 }]}>
+        <Card.Content>
+
+
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <MaterialCommunityIcons
+                name="clock-time-three-outline"
+                size={20}
+                color={theme.colors.primary}
+              />
+              <Text style={[styles.cardTitle, { color: theme.colors.primary }]}>
+                Recent Activity
+              </Text>
+            </View>
+
+            <View style={{ flexDirection: 'row' }}>
+              {/* ✅ New Show/Hide Button */}
+              <Button
+                mode="text"
+                compact
+                onPress={() => setShowActivity(!showActivity)}
+                labelStyle={{ color: theme.colors.primary, fontWeight: 'bold' }}
+              >
+                {showActivity ? 'Hide' : 'Show'}
+              </Button>
+
+              {/* Existing View All Button (unchanged) */}
               <Button
                 mode="text"
                 compact
@@ -253,60 +274,37 @@ export default function ResearcherDashboardScreen() {
                 View All
               </Button>
             </View>
+          </View>
 
-            <Divider style={{ marginVertical: 10 }} />
-            <SectionList
-              sections={sections}
-              keyExtractor={(item) => item.id}
-              scrollEnabled={false}
-              renderItem={({ item }) => (
-                <Pressable
-                  onPress={() =>
-                    navigation.navigate('ActivityLogsScreen', { highlightId: item.id })
-                  }
-                >
-                  <View
-                    style={[
-                      styles.activityItem,
-                      { borderBottomColor: theme.dark ? '#333' : '#eee' },
-                    ]}
-                  >
-                    <Text style={{ color: theme.colors.text }}>• {item.description}</Text>
-                    {item.timestampDate && (
-                      <Text
-                        style={{
-                          color: theme.dark ? '#ccc' : '#666',
-                          fontSize: 12,
-                        }}
-                      >
-                        {item.timestampDate.toLocaleString()}
-                      </Text>
-                    )}
-                  </View>
-                </Pressable>
-              )}
-              renderSectionHeader={({ section: { title } }) => (
-                <View
-                  style={[
-                    styles.sectionHeader,
-                    { backgroundColor: theme.dark ? '#1c1c1c' : '#f9f9f9' },
-                  ]}
-                >
-                  <Text style={{ fontWeight: 'bold', color: theme.colors.text }}>{title}</Text>
-                </View>
-              )}
-              ListEmptyComponent={
-                <Text style={[styles.activityItem, { color: theme.colors.text }]}>
-                  No recent activity to show.
-                </Text>
-              }
-            />
-          </Card.Content>
-        </Card>
-      </ScrollView>
-    </View>
-  );
+
+
+
+          <Divider style={{ marginVertical: 10 }} />
+
+         {showActivity && (
+           <SectionList
+             sections={[{ title: 'Today', data: recentActivity }]}
+             keyExtractor={(item) => item.id}
+             scrollEnabled={false}
+             renderItem={({ item }) => (
+               <Pressable onPress={() => navigation.navigate('ActivityLogsScreen')}>
+                 <View style={[styles.activityItem, { borderBottomColor: theme.dark ? '#333' : '#eee' }]}>
+                   <Text style={{ color: theme.colors.text }}>• {item.description}</Text>
+                 </View>
+               </Pressable>
+             )}
+           />
+         )}
+
+
+        </Card.Content>
+      </Card>
+
+    </ScrollView>
+  </View>
+);
 }
+
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
@@ -324,4 +322,31 @@ const styles = StyleSheet.create({
   harvestedButton: { flex: 1, marginLeft: 5, borderRadius: 20 },
   sectionHeader: { paddingVertical: 4, paddingHorizontal: 8, borderRadius: 6, marginTop: 10 },
   activityItem: { marginTop: 6, borderBottomWidth: 0.5, paddingBottom: 4 },
+
+bellWrapper: {
+  position: "absolute",
+  right: 10,
+  top: 8,
+},
+
+badge: {
+  position: "absolute",
+  right: -4,
+  top: -4,
+  backgroundColor: "#e74c3c",
+  borderRadius: 10,
+  minWidth: 18,
+  height: 18,
+  justifyContent: "center",
+  alignItems: "center",
+  paddingHorizontal: 2,
+  zIndex: 999,
+},
+
+badgeText: {
+  color: "#fff",
+  fontSize: 10,
+  fontWeight: "bold",
+  textAlign: "center",
+},
 });
