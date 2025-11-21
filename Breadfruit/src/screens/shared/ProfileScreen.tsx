@@ -14,29 +14,52 @@ import { Text, Button, Appbar, useTheme } from 'react-native-paper';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import firestore from '@react-native-firebase/firestore';
 
-const SettingsItem = ({ icon, name, onPress, isLogout = false, theme }) => (
-  <TouchableOpacity
-    onPress={onPress}
-    style={[styles.settingsItem, { backgroundColor: theme.colors.card }]}
-  >
-    <MaterialIcons
-      name={icon}
-      size={24}
-      color={isLogout ? '#D32F2F' : theme.colors.text}
-    />
-    <Text
+const SettingsItem = ({ icon, name, onPress, isLogout = false, theme }) => {
+  const glowStyle = theme.dark
+    ? {
+        shadowColor: '#2ecc71',
+        shadowOpacity: 0.35,
+        shadowRadius: 8,
+        shadowOffset: { width: 0, height: 0 },
+        borderColor: '#2ecc71',
+        borderWidth: 0.6,
+      }
+    : {};
+
+  return (
+    <TouchableOpacity
+      onPress={onPress}
       style={[
-        styles.settingsItemText,
-        { color: isLogout ? '#D32F2F' : theme.colors.text },
+        styles.settingsItem,
+        { backgroundColor: theme.colors.card },
+        glowStyle,
       ]}
     >
-      {name}
-    </Text>
-    {!isLogout && (
-      <MaterialIcons name="chevron-right" size={24} color={theme.colors.text} />
-    )}
-  </TouchableOpacity>
-);
+      <MaterialIcons
+        name={icon}
+        size={24}
+        color={isLogout ? '#D32F2F' : theme.colors.text}
+      />
+
+      <Text
+        style={[
+          styles.settingsItemText,
+          { color: isLogout ? '#D32F2F' : theme.colors.text },
+        ]}
+      >
+        {name}
+      </Text>
+
+      {!isLogout && (
+        <MaterialIcons
+          name="chevron-right"
+          size={24}
+          color={theme.colors.text}
+        />
+      )}
+    </TouchableOpacity>
+  );
+};
 
 export default function ProfileScreen() {
   const navigation = useNavigation();
@@ -47,21 +70,23 @@ export default function ProfileScreen() {
   const [loading, setLoading] = useState(true);
   const [unseenCount, setUnseenCount] = useState(0);
 
+  // Initial fetch
   useEffect(() => {
-    const loadInitialData = async () => {
+    const load = async () => {
       if (!user) return;
       await fetchUserData(user);
       setUserData(user);
       setLoading(false);
     };
-    loadInitialData();
+    load();
   }, [user]);
 
+  // Live user updates
   useFocusEffect(
     useCallback(() => {
       if (!user?.uid) return;
 
-      const unsubscribe = firestore()
+      const unsub = firestore()
         .collection('users')
         .doc(user.uid)
         .onSnapshot((doc) => {
@@ -70,41 +95,36 @@ export default function ProfileScreen() {
           }
         });
 
-      return () => unsubscribe();
+      return () => unsub();
     }, [user?.uid])
   );
 
- useEffect(() => {
-   if (!user?.uid) return;
-   if (!userData?.role) return;
+  // Unseen notifications
+  useEffect(() => {
+    if (!user?.uid) return;
 
-   let unsub: any;
+    const unsub = firestore()
+      .collection('notification')
+      .where('recipientID', '==', user.uid)
+      .where('seen', '==', false)
+      .onSnapshot((snap) => setUnseenCount(snap?.size ?? 0));
 
-   unsub = firestore()
-     .collection("notification")
-     .where("recipientID", "==", user.uid)
-     .where("seen", "==", false)
-     .onSnapshot(
-       snap => setUnseenCount(snap?.size ?? 0),
-       () => setUnseenCount(0)
-     );
+    return () => unsub();
+  }, [user?.uid]);
 
-   return () => unsub && unsub();
- }, [user?.uid, userData?.role]);
-
-
+  // User initials
   const getInitials = () => {
     if (!userData?.name) return '?';
     return userData.name.split(' ')[0][0].toUpperCase();
   };
 
-  const handleLogout = () => {
-    Alert.alert('Confirm Logout', 'Are you sure you want to logout?', [
+  const handleLogout = () =>
+    Alert.alert('Confirm Logout', 'Are you sure?', [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Logout', style: 'destructive', onPress: async () => logout() },
+      { text: 'Logout', style: 'destructive', onPress: () => logout() },
     ]);
-  };
 
+  // Loading
   if (loading || !userData) {
     return (
       <View style={[styles.center, { backgroundColor: theme.colors.background }]}>
@@ -113,25 +133,57 @@ export default function ProfileScreen() {
     );
   }
 
+  // Avatar glow
+  const avatarGlow = theme.dark
+    ? {
+        shadowColor: '#2ecc71',
+        shadowOpacity: 0.4,
+        shadowRadius: 16,
+        shadowOffset: { width: 0, height: 0 },
+      }
+    : {};
+
+  // Appbar glow
+  const appbarGlow = theme.dark
+    ? {
+        shadowColor: '#2ecc71',
+        shadowOpacity: 0.25,
+        shadowRadius: 10,
+        shadowOffset: { width: 0, height: 0 },
+        borderBottomColor: '#2ecc71',
+        borderBottomWidth: 0.6,
+      }
+    : {};
+
+  // Edit button glow
+  const editButtonGlow = theme.dark
+    ? {
+        shadowColor: '#2ecc71',
+        shadowOpacity: 0.4,
+        shadowRadius: 10,
+        shadowOffset: { width: 0, height: 0 },
+      }
+    : {};
+
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <Appbar.Header
         style={[
           styles.appbarHeader,
-          { backgroundColor: theme.colors.card, borderBottomColor: theme.dark ? '#333' : '#eee' },
+          { backgroundColor: theme.colors.card },
+          appbarGlow,
         ]}
       >
-        <Appbar.Content title="Profile" titleStyle={[styles.appbarTitle, { color: theme.colors.text }]} />
-        <Appbar.Action
-          icon="bell-outline"
-          color={theme.colors.text}
-          onPress={() => navigation.navigate('NotificationsScreen')}
+        <Appbar.Content
+          title="Profile"
+          titleStyle={[styles.appbarTitle, { color: theme.colors.text }]}
         />
       </Appbar.Header>
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
+        {/* Avatar */}
         <View style={styles.profileSection}>
-          <View style={styles.avatarCircle}>
+          <View style={[styles.avatarCircle, avatarGlow]}>
             {userData.image ? (
               <Image source={{ uri: userData.image }} style={styles.profileImage} />
             ) : (
@@ -150,7 +202,11 @@ export default function ProfileScreen() {
           <Button
             mode="contained"
             onPress={() => navigation.navigate('EditProfile')}
-            style={[styles.editButton, { backgroundColor: theme.colors.primary }]}
+            style={[
+              styles.editButton,
+              { backgroundColor: theme.colors.primary },
+              editButtonGlow,
+            ]}
             labelStyle={styles.editButtonLabel}
             icon={() => <MaterialIcons name="edit" size={16} color="white" />}
           >
@@ -158,6 +214,7 @@ export default function ProfileScreen() {
           </Button>
         </View>
 
+        {/* Settings */}
         <View style={styles.settingsSection}>
           <Text style={[styles.settingsTitle, { color: theme.colors.primary }]}>
             Settings
@@ -180,7 +237,9 @@ export default function ProfileScreen() {
           <SettingsItem
             icon="bookmark"
             name="Tracked Trees"
-            onPress={() => navigation.navigate('TrackedTrees', { trackedBy: userData.uid })}
+            onPress={() =>
+              navigation.navigate('TrackedTrees', { trackedBy: userData.uid })
+            }
             theme={theme}
           />
 
@@ -197,16 +256,26 @@ export default function ProfileScreen() {
   );
 }
 
+/* ------------------------ STYLES ------------------------ */
 const styles = StyleSheet.create({
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+
   container: { flex: 1 },
+
   appbarHeader: {
     borderBottomWidth: 1,
     elevation: 0,
   },
-  appbarTitle: { fontSize: 20, fontWeight: 'bold' },
+
+  appbarTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+  },
+
   scrollContent: { paddingBottom: 40 },
+
   profileSection: { paddingVertical: 30, alignItems: 'center' },
+
   avatarCircle: {
     width: 100,
     height: 100,
@@ -216,14 +285,32 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 15,
   },
+
   profileImage: { width: '100%', height: '100%', borderRadius: 50 },
+
   initialsText: { fontSize: 40, fontWeight: 'bold', color: 'white' },
+
   name: { fontSize: 20, fontWeight: 'bold', marginBottom: 4 },
+
   email: { fontSize: 14, marginBottom: 20 },
-  editButton: { borderRadius: 30, paddingHorizontal: 18 },
+
+  editButton: {
+    borderRadius: 30,
+    paddingHorizontal: 18,
+    marginTop: 10,
+  },
+
   editButtonLabel: { fontSize: 14, fontWeight: 'bold' },
+
   settingsSection: { paddingHorizontal: 20, marginTop: 20 },
-  settingsTitle: { fontSize: 16, fontWeight: 'bold', marginBottom: 10, marginLeft: 10 },
+
+  settingsTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 10,
+    marginLeft: 10,
+  },
+
   settingsItem: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -233,5 +320,10 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     elevation: 1,
   },
-  settingsItemText: { flex: 1, marginLeft: 15, fontSize: 16 },
+
+  settingsItemText: {
+    flex: 1,
+    marginLeft: 15,
+    fontSize: 16,
+  },
 });

@@ -68,23 +68,38 @@ export default function PendingApprovalScreen() {
     return 'N/A';
   };
 
-   // 🔔 Send notification to researcher
-   const sendNotification = async (title: string, message: string) => {
+   // 🔔 Send notification to researcher (with type)
+   const sendNotification = async (title: string, message: string, status?: string) => {
      try {
        if (!tree?.trackedById) return;
-       await firestore().collection('notification').add({
+
+       // Automatically assign type based on status or title
+       let notifType = "info";
+       if (status === "rejected" || title.toLowerCase().includes("rejected")) {
+         notifType = "rejected";
+       } else if (status?.includes("approved") || title.toLowerCase().includes("approved")) {
+         notifType = "approval";
+       } else if (status === "harvest-ready") {
+         notifType = "approval";
+       }
+
+       await firestore().collection("notification").add({
+         type: notifType, // ✅ consistent type field
          title,
          message,
          recipientID: tree.trackedById,
-         recipientRole: 'Researcher',
+         recipientRole: "Researcher",
          relatedTreeID: tree.treeID,
-         timestamp: new Date().toISOString(),
          read: false,
+         seen: false,
+         timestamp: firestore.FieldValue.serverTimestamp(),
        });
      } catch (error) {
-       console.error('Error sending notification:', error);
+       console.error("Error sending notification:", error);
      }
    };
+
+
 
   // ✅ Approve Tree
   const handleApprove = async () => {
@@ -117,6 +132,16 @@ export default function PendingApprovalScreen() {
               userID: admin?.uid,
               timestamp: firestore.FieldValue.serverTimestamp(),
             });
+
+        // ✅ Add to treeApproval collection before notification
+                  await firestore().collection('treeApproval').add({
+                    treeID: tree.treeID,
+                    adminID: admin?.uid,
+                    researcherID: tree.trackedById,
+                    status: 'approved',
+                    approvedStatus: newStatus,
+                    timestamp: firestore.FieldValue.serverTimestamp(),
+                  });
 
             // Send notification to researcher
             await sendNotification(
@@ -167,9 +192,18 @@ export default function PendingApprovalScreen() {
               timestamp: firestore.FieldValue.serverTimestamp(),
             });
 
+            // ✅ Add to treeRejected collection before sending notification
+                  await firestore().collection('treeRejected').add({
+                    treeID: tree.treeID,
+                    adminID: admin?.uid,
+                    researcherID: tree.trackedById,
+                    status: 'rejected',
+                    timestamp: firestore.FieldValue.serverTimestamp(),
+                  });
+
             // Send notification to researcher
             await sendNotification(
-              'Tree Rejected ❌',
+              'Tree Rejected ',
               `Your submitted tree ${tree.treeID || ''} was rejected by the admin.`
             );
 

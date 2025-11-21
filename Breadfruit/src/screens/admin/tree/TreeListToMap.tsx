@@ -1,23 +1,43 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { ActivityIndicator, FlatList, StyleSheet, TouchableOpacity, View } from 'react-native';
-import { Card, Chip, FAB, Text, useTheme } from 'react-native-paper'; // ✅ Added useTheme
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import {
+  ActivityIndicator,
+  FlatList,
+  StyleSheet,
+  TouchableOpacity,
+  View,
+  Animated,
+  PanResponder,
+  ScrollView,
+} from 'react-native';
+import { Card, Chip, FAB, Text, useTheme } from 'react-native-paper';
 import { useNavigation } from '@react-navigation/native';
 import firestore from '@react-native-firebase/firestore';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 
 const TreeListItem = ({ tree, onPress }) => {
-  const theme = useTheme(); // ✅ use theme for card and text colors
+  const theme = useTheme();
 
   return (
     <TouchableOpacity onPress={onPress} activeOpacity={0.9}>
       <Card style={[styles.card, { backgroundColor: theme.colors.card }]}>
         <Card.Content style={styles.cardContent}>
-          <View style={[styles.iconWrapper, { backgroundColor: theme.dark ? '#1e1e1e' : '#eafaf1' }]}>
-            <MaterialCommunityIcons name="tree" size={28} color={theme.colors.primary} />
+          <View
+            style={[
+              styles.iconWrapper,
+              { backgroundColor: theme.dark ? '#1e1e1e' : '#eafaf1' },
+            ]}
+          >
+            <MaterialCommunityIcons
+              name="tree"
+              size={28}
+              color={theme.colors.primary}
+            />
           </View>
 
           <View style={styles.textContainer}>
-            <Text style={[styles.treeIdText, { color: theme.colors.text }]}>{tree.treeID}</Text>
+            <Text style={[styles.treeIdText, { color: theme.colors.text }]}>
+              {tree.treeID}
+            </Text>
 
             <View style={styles.locationContainer}>
               <MaterialCommunityIcons
@@ -31,7 +51,9 @@ const TreeListItem = ({ tree, onPress }) => {
             </View>
 
             <View style={styles.statusRow}>
-              <Text style={[styles.statusLabel, { color: theme.dark ? '#bbb' : '#555' }]}>
+              <Text
+                style={[styles.statusLabel, { color: theme.dark ? '#bbb' : '#555' }]}
+              >
                 Status:
               </Text>
               <Text
@@ -59,10 +81,28 @@ const TreeListItem = ({ tree, onPress }) => {
 
 export default function TreeListScreen() {
   const navigation = useNavigation();
-  const theme = useTheme(); // ✅ access global theme
+  const theme = useTheme();
   const [trees, setTrees] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('All');
+
+  // ✅ Horizontal drag setup
+  const panX = useRef(new Animated.Value(0)).current;
+  const panResponder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, gestureState) =>
+        Math.abs(gestureState.dx) > 5,
+      onPanResponderMove: Animated.event([null, { dx: panX }], {
+        useNativeDriver: false,
+      }),
+      onPanResponderRelease: () => {
+        Animated.spring(panX, {
+          toValue: 0,
+          useNativeDriver: false,
+        }).start();
+      },
+    })
+  ).current;
 
   useEffect(() => {
     const unsubscribe = firestore()
@@ -70,7 +110,10 @@ export default function TreeListScreen() {
       .where('status', 'in', ['verified', 'harvest-ready', 'harvested', 'not-ready'])
       .onSnapshot(
         (querySnapshot) => {
-          const data = querySnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+          const data = querySnapshot.docs.map((doc) => ({
+            id: doc.id,
+            ...doc.data(),
+          }));
           setTrees(data);
           setIsLoading(false);
         },
@@ -98,46 +141,54 @@ export default function TreeListScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      {/* 🔹 Status Filter */}
-      <View
+      {/* 🔹 Fixed & Horizontally Draggable Filter Bar */}
+      <Animated.View
+        {...panResponder.panHandlers}
         style={[
-          styles.filterContainer,
+          styles.draggableFilter,
           {
+            transform: [{ translateX: panX }],
             backgroundColor: theme.colors.card,
             borderBottomColor: theme.dark ? '#333' : '#e0e0e0',
           },
         ]}
       >
-        {['All', 'verified', 'harvest-ready', 'harvested', 'not-ready'].map((status) => (
-          <Chip
-            key={status}
-            mode="outlined"
-            selected={statusFilter === status}
-            onPress={() => setStatusFilter(status)}
-            style={[
-              styles.filterChip,
-              {
-                borderColor: theme.colors.primary,
-                backgroundColor:
-                  statusFilter === status
-                    ? theme.colors.primary
-                    : theme.colors.background,
-              },
-            ]}
-            textStyle={{
-              color:
-                statusFilter === status
-                  ? '#fff'
-                  : theme.colors.primary,
-              fontWeight: statusFilter === status ? 'bold' : 'normal',
-            }}
-          >
-            {status === 'All'
-              ? 'All'
-              : status.replace('-', ' ').replace(/\b\w/g, (l) => l.toUpperCase())}
-          </Chip>
-        ))}
-      </View>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.filterScroll}
+        >
+          {['All', 'verified', 'harvest-ready', 'harvested', 'not-ready'].map(
+            (status) => (
+              <Chip
+                key={status}
+                mode="outlined"
+                selected={statusFilter === status}
+                onPress={() => setStatusFilter(status)}
+                style={[
+                  styles.filterChip,
+                  {
+                    borderColor: theme.colors.primary,
+                    backgroundColor:
+                      statusFilter === status
+                        ? theme.colors.primary
+                        : theme.colors.background,
+                  },
+                ]}
+                textStyle={{
+                  color:
+                    statusFilter === status ? '#fff' : theme.colors.primary,
+                  fontWeight: statusFilter === status ? 'bold' : 'normal',
+                }}
+              >
+                {status === 'All'
+                  ? 'All'
+                  : status.replace('-', ' ').replace(/\b\w/g, (l) => l.toUpperCase())}
+              </Chip>
+            )
+          )}
+        </ScrollView>
+      </Animated.View>
 
       {/* 🔹 Tree List */}
       <FlatList
@@ -148,9 +199,13 @@ export default function TreeListScreen() {
             tree={item}
             onPress={() =>
               navigation.navigate('Map', {
-                treeID: item.id,
-                lat: item.coordinates?.latitude,
-                lng: item.coordinates?.longitude,
+                focusTree: {
+                  id: item.id,
+                  treeID: item.treeID,
+                  latitude: item.coordinates?.latitude,
+                  longitude: item.coordinates?.longitude,
+                  zoomIn: true,
+                },
               })
             }
           />
@@ -185,18 +240,37 @@ export default function TreeListScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  filterContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 8,
+  draggableFilter: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 10,
+    paddingVertical: 6,
     borderBottomWidth: 1,
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
   },
-  filterChip: { margin: 4, borderWidth: 1 },
-  listContent: { padding: 12 },
+  filterScroll: {
+    paddingHorizontal: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  filterChip: { marginRight: 8, borderWidth: 1 },
+  listContent: {
+    padding: 12,
+    paddingTop: 70, // ensures list doesn’t overlap filter bar
+  },
   divider: { height: 8 },
-  emptyState: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 40, marginTop: 50 },
+  emptyState: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 40,
+    marginTop: 50,
+  },
   emptyText: { fontSize: 16, marginTop: 16 },
   card: {
     borderRadius: 14,

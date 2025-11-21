@@ -1,6 +1,9 @@
+
 pluginManagement {
     includeBuild("../node_modules/@react-native/gradle-plugin")
 }
+
+
 
 plugins {
     id("com.facebook.react.settings")
@@ -9,7 +12,12 @@ plugins {
 extensions.configure(com.facebook.react.ReactSettingsExtension) { ex ->
     ex.autolinkLibrariesFromCommand()
 }
+gradle.ext.react = [
+        'version': '20.0.2',
+        'minor'  : 20
+]
 
 rootProject.name = "Breadfruit"
 include(":app")
 includeBuild("../node_modules/@react-native/gradle-plugin")
+

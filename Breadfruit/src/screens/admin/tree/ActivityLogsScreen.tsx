@@ -13,12 +13,12 @@ import {
   Appbar,
   Card,
   Text,
-  Menu,
-  Button,
   Searchbar,
   IconButton,
   Snackbar,
-  useTheme, // ✅ Import useTheme
+  Chip,
+  Badge,
+  useTheme,
 } from "react-native-paper";
 import firestore from "@react-native-firebase/firestore";
 import MaterialCommunityIcons from "react-native-vector-icons/MaterialCommunityIcons";
@@ -30,12 +30,12 @@ if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental
 }
 
 export default function ActivityLogsScreen({ navigation }) {
-  const theme = useTheme(); // ✅ Access theme
+  const theme = useTheme();
   const { user } = useAuth();
+ const [isLoading, setIsLoading] = useState(false);
 
   const [activityLogs, setActivityLogs] = useState<any[]>([]);
-  const [filter, setFilter] = useState("all");
-  const [menuVisible, setMenuVisible] = useState(false);
+  const [selectedRole, setSelectedRole] = useState("All");
   const [searchQuery, setSearchQuery] = useState("");
   const [filteredLogs, setFilteredLogs] = useState<any[]>([]);
   const [sortOrder, setSortOrder] = useState<"desc" | "asc">("desc");
@@ -43,45 +43,94 @@ export default function ActivityLogsScreen({ navigation }) {
   const [snackbarVisible, setSnackbarVisible] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState("");
 
-  // 🔄 Firestore listener
-  useEffect(() => {
-    let query = firestore().collection("activityLog").orderBy("timestamp", sortOrder);
-    if (filter !== "all") query = query.where("actionType", "==", filter);
+// 🔄 Firestore listener (smart auto-refresh)
+useEffect(() => {
+  setIsLoading(true);
 
-    const unsubscribe = query.onSnapshot(
-      (snapshot) => {
-        const logs = snapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        }));
-        setActivityLogs(logs);
-      },
-      (error) => console.error("Error fetching logs:", error)
-    );
+  let query = firestore().collection("activityLog");
 
-    return unsubscribe;
-  }, [filter, sortOrder]);
+  // 🧩 Only apply filter when needed
+  if (selectedRole !== "All") {
+    query = query.where("userRole", "in", [
+      selectedRole,
+      selectedRole.toLowerCase(),
+      selectedRole.toUpperCase(),
+    ]);
+  }
 
-  // 🔍 Search filter
+  const unsubscribe = query.onSnapshot(
+    (snapshot) => {
+      const logs = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+
+      // ✅ Update state
+      setActivityLogs(logs);
+      setIsLoading(false);
+
+      // Optional feedback
+      if (logs.length === 0) {
+        setSnackbarMessage(`ℹ️ No ${selectedRole} activity found.`);
+      } else {
+        setSnackbarMessage(`✅ Showing ${selectedRole} activities`);
+      }
+      setSnackbarVisible(true);
+    },
+    (error) => {
+      console.error("Error fetching logs:", error);
+      setSnackbarMessage("❌ Failed to fetch logs.");
+      setSnackbarVisible(true);
+      setIsLoading(false);
+    }
+  );
+
+  return unsubscribe;
+}, [selectedRole]);
+
+
+
+
+  // 🧮 Count logs by role
+  const counts = {
+    All: activityLogs.length,
+    Admin: activityLogs.filter((l) => l.userRole?.toLowerCase() === "admin").length,
+    Researcher: activityLogs.filter((l) => l.userRole?.toLowerCase() === "researcher").length,
+    Viewer: activityLogs.filter((l) => l.userRole?.toLowerCase() === "viewer").length,
+  };
+
+  // 🔍 Search + Filter logic
   useEffect(() => {
     const lower = searchQuery.toLowerCase();
-    setFilteredLogs(
-      activityLogs.filter(
-        (log) =>
-          log.description?.toLowerCase().includes(lower) ||
-          log.uid?.toLowerCase().includes(lower) ||
-          log.userRole?.toLowerCase().includes(lower)
-      )
-    );
-  }, [searchQuery, activityLogs]);
+    const filtered = activityLogs.filter((log) => {
+      const matchesSearch =
+        log.description?.toLowerCase().includes(lower) ||
+        log.uid?.toLowerCase().includes(lower) ||
+        log.userRole?.toLowerCase().includes(lower);
+      const matchesRole =
+        selectedRole === "All" ||
+        log.userRole?.toLowerCase() === selectedRole.toLowerCase();
+      return matchesSearch && matchesRole;
+    });
 
-  const toggleSortOrder = () => setSortOrder((prev) => (prev === "desc" ? "asc" : "desc"));
+    const sorted = [...filtered].sort((a, b) => {
+      const aTime = a.timestamp?.seconds || 0;
+      const bTime = b.timestamp?.seconds || 0;
+      return sortOrder === "desc" ? bTime - aTime : aTime - bTime;
+    });
+
+    setFilteredLogs(sorted);
+  }, [searchQuery, activityLogs, selectedRole, sortOrder]);
+
+  const toggleSortOrder = () =>
+    setSortOrder((prev) => (prev === "desc" ? "asc" : "desc"));
+
   const toggleExpand = (id: string) => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setExpandedId((prev) => (prev === id ? null : id));
   };
 
-  // 🗑️ Admin-only clear logs
+  // 🗑️ Clear logs
   const handleClearLogs = async () => {
     Alert.alert("Confirm", "Are you sure you want to delete all activity logs?", [
       { text: "Cancel", style: "cancel" },
@@ -107,7 +156,7 @@ export default function ActivityLogsScreen({ navigation }) {
   };
 
   const getIcon = (type: string) => {
-    switch (type) {
+    switch (type?.toLowerCase()) {
       case "create":
         return "tree";
       case "harvest":
@@ -115,20 +164,7 @@ export default function ActivityLogsScreen({ navigation }) {
       case "collected":
         return "package-variant-closed";
       default:
-        return "clock-outline";
-    }
-  };
-
-  const getFilterLabel = () => {
-    switch (filter) {
-      case "create":
-        return "Created";
-      case "harvest":
-        return "Harvested";
-      case "collected":
-        return "Collected";
-      default:
-        return "All Activity";
+        return "account-clock-outline";
     }
   };
 
@@ -138,7 +174,10 @@ export default function ActivityLogsScreen({ navigation }) {
       <Appbar.Header
         style={[
           styles.appbarHeader,
-          { backgroundColor: theme.colors.card, borderBottomColor: theme.dark ? "#333" : "#eee" },
+          {
+            backgroundColor: theme.colors.card,
+            borderBottomColor: theme.dark ? "#333" : "#eee",
+          },
         ]}
       >
         <Appbar.BackAction onPress={() => navigation.goBack()} color={theme.colors.text} />
@@ -160,52 +199,101 @@ export default function ActivityLogsScreen({ navigation }) {
         )}
       </Appbar.Header>
 
-      {/* 🔍 Search & Filter */}
-      <View style={styles.searchFilterContainer}>
-        <Searchbar
-          placeholder="Search researcher, role, or tree ID..."
-          placeholderTextColor={theme.dark ? "#aaa" : "#666"}
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-          style={[
-            styles.searchBar,
-            { backgroundColor: theme.dark ? "#2a2a2a" : "#f5f5f5", color: theme.colors.text },
-          ]}
-          inputStyle={{ fontSize: 14, color: theme.colors.text }}
-          iconColor={theme.colors.primary}
-        />
 
-        <Menu
-          visible={menuVisible}
-          onDismiss={() => setMenuVisible(false)}
-          anchor={
-            <Button
-              mode="outlined"
-              icon="filter-variant"
-              onPress={() => setMenuVisible(true)}
-              textColor={theme.colors.primary}
-              style={[styles.filterButton, { borderColor: theme.colors.primary }]}
-            >
-              {getFilterLabel()}
-            </Button>
-          }
+
+
+      {/* 🧩 Fixed Filter Buttons */}
+      <View
+        style={[
+          styles.fixedFilterBar,
+          { backgroundColor: theme.colors.card, borderBottomColor: theme.dark ? "#333" : "#ccc" },
+        ]}
+      >
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.filterContainer}
         >
-          <Menu.Item onPress={() => { setFilter("all"); setMenuVisible(false); }} title="All Activity" />
-          <Menu.Item onPress={() => { setFilter("create"); setMenuVisible(false); }} title="Created Trees" />
-          <Menu.Item onPress={() => { setFilter("harvest"); setMenuVisible(false); }} title="Harvested Trees" />
-          <Menu.Item onPress={() => { setFilter("collected"); setMenuVisible(false); }} title="Collected Trees" />
-        </Menu>
+          {["All", "Admin", "Researcher", "Viewer"].map((role) => (
+            <View key={role} style={{ position: "relative" }}>
+              <Chip
+                mode="outlined"
+                onPress={() => setSelectedRole(role)}
+                style={[
+                  styles.roleChip,
+                  {
+                    borderColor: theme.colors.primary,
+                    backgroundColor:
+                      selectedRole === role
+                        ? theme.colors.primary
+                        : theme.dark
+                        ? "#2a2a2a"
+                        : theme.colors.background,
+                  },
+                ]}
+                textStyle={{
+                  color: selectedRole === role ? "#fff" : theme.colors.primary,
+                  fontWeight: selectedRole === role ? "bold" : "normal",
+                }}
+              >
+                {role}
+              </Chip>
+
+              {/* 🔢 Count Badge */}
+              {counts[role] > 0 && (
+                <Badge
+                  size={18}
+                  style={[
+                    styles.badge,
+                    {
+                      backgroundColor:
+                        selectedRole === role ? "#fff" : theme.colors.primary,
+                      color:
+                        selectedRole === role ? theme.colors.primary : "#fff",
+                    },
+                  ]}
+                >
+                  {counts[role]}
+                </Badge>
+              )}
+            </View>
+          ))}
+        </ScrollView>
       </View>
 
-      {/* 🪵 Activity Logs */}
-      <ScrollView contentContainerStyle={styles.scrollContainer}>
+
+      {/* 🔍 Search Bar */}
+      <Searchbar
+        placeholder="Search activity, user, or role..."
+        placeholderTextColor={theme.dark ? "#aaa" : "#666"}
+        value={searchQuery}
+        onChangeText={setSearchQuery}
+        style={[
+          styles.searchBar,
+          {
+            backgroundColor: theme.dark ? "#2a2a2a" : "#f5f5f5",
+            color: theme.colors.text,
+          },
+        ]}
+        inputStyle={{ fontSize: 14, color: theme.colors.text }}
+        iconColor={theme.colors.primary}
+      />
+
+      {/* 🪵 Activity Logs (below fixed filter) */}
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={[styles.scrollContainer, { paddingTop: 10 }]} // ensure space for fixed bar
+      >
         {filteredLogs.length > 0 ? (
           filteredLogs.map((log) => (
             <Card
               key={log.id}
               style={[
                 styles.logCard,
-                { backgroundColor: theme.colors.card, shadowColor: theme.dark ? "#000" : "#ccc" },
+                {
+                  backgroundColor: theme.colors.card,
+                  shadowColor: theme.dark ? "#000" : "#ccc",
+                },
               ]}
             >
               <Card.Content>
@@ -217,7 +305,9 @@ export default function ActivityLogsScreen({ navigation }) {
                       color={theme.colors.primary}
                       style={{ marginRight: 8 }}
                     />
-                    <Text style={[styles.logText, { color: theme.colors.text }]}>{log.description}</Text>
+                    <Text style={[styles.logText, { color: theme.colors.text }]}>
+                      {log.description}
+                    </Text>
                   </View>
 
                   <TouchableOpacity onPress={() => toggleExpand(log.id)}>
@@ -229,23 +319,13 @@ export default function ActivityLogsScreen({ navigation }) {
                   </TouchableOpacity>
                 </View>
 
-                {(() => {
-                  let dateValue = null;
-                  const ts = log.timestamp;
-
-                  if (ts) {
-                    if (typeof ts.toDate === "function") dateValue = ts.toDate();
-                    else if (typeof ts === "number") dateValue = new Date(ts);
-                    else if (typeof ts === "string") dateValue = new Date(ts);
-                    else if (ts.seconds) dateValue = new Date(ts.seconds * 1000);
-                  }
-
-                  return (
-                    <Text style={[styles.timestampText, { color: theme.dark ? "#aaa" : "#888" }]}>
-                      {dateValue ? dateValue.toLocaleString() : "No timestamp"}
-                    </Text>
-                  );
-                })()}
+                <Text
+                  style={[styles.timestampText, { color: theme.dark ? "#aaa" : "#888" }]}
+                >
+                  {log.timestamp?.seconds
+                    ? new Date(log.timestamp.seconds * 1000).toLocaleString()
+                    : "No timestamp"}
+                </Text>
 
                 {expandedId === log.id && (
                   <View
@@ -254,22 +334,18 @@ export default function ActivityLogsScreen({ navigation }) {
                       { backgroundColor: theme.dark ? "#2a2a2a" : "#f9f9f9" },
                     ]}
                   >
-                    {log.userRole && (
-                      <Text style={[styles.detailText, { color: theme.colors.text }]}>
-                        <Text style={[styles.detailLabel, { color: theme.colors.primary }]}>
-                          Role:
-                        </Text>{" "}
-                        {log.userRole}
-                      </Text>
-                    )}
-                    {log.uid && (
-                      <Text style={[styles.detailText, { color: theme.colors.text }]}>
-                        <Text style={[styles.detailLabel, { color: theme.colors.primary }]}>
-                          User ID:
-                        </Text>{" "}
-                        {log.uid}
-                      </Text>
-                    )}
+                    <Text style={[styles.detailText, { color: theme.colors.text }]}>
+                      <Text style={[styles.detailLabel, { color: theme.colors.primary }]}>
+                        Role:
+                      </Text>{" "}
+                      {log.userRole}
+                    </Text>
+                    <Text style={[styles.detailText, { color: theme.colors.text }]}>
+                      <Text style={[styles.detailLabel, { color: theme.colors.primary }]}>
+                        User ID:
+                      </Text>{" "}
+                      {log.uid}
+                    </Text>
                     {log.treeID && (
                       <Text style={[styles.detailText, { color: theme.colors.text }]}>
                         <Text style={[styles.detailLabel, { color: theme.colors.primary }]}>
@@ -285,7 +361,7 @@ export default function ActivityLogsScreen({ navigation }) {
           ))
         ) : (
           <Text style={[styles.noLogsText, { color: theme.dark ? "#aaa" : "#888" }]}>
-            No logs found.
+            Loading...
           </Text>
         )}
       </ScrollView>
@@ -303,34 +379,52 @@ export default function ActivityLogsScreen({ navigation }) {
     </View>
   );
 }
-
-// 🎨 Styles (unchanged layout)
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  appbarHeader: {
-    elevation: 0,
-    borderBottomWidth: 1,
-  },
+  appbarHeader: { elevation: 0, borderBottomWidth: 1 },
   appbarTitle: { fontSize: 20, fontWeight: "bold" },
-  searchFilterContainer: {
+
+  // ✅ Moved search bar below filter buttons
+  searchBar: {
+    marginHorizontal: 12,
+    marginTop: 50, // space below fixed filter bar
+    marginBottom: 20, // space before first log
+    elevation: 0,
+    borderRadius: 10,
+  },
+
+  // ✅ Filter bar now sits at very top (under Appbar)
+  fixedFilterBar: {
+    position: "absolute",
+    top: 60, // directly under Appbar
+    left: 0,
+    right: 0,
+    zIndex: 10,
+    borderBottomWidth: 1,
+    paddingVertical: 8,
+    shadowColor: "#000",
+    shadowOpacity: 0.1,
+    shadowOffset: { width: 0, height: 1 },
+    shadowRadius: 2,
+    elevation: 3,
+  },
+
+  filterContainer: {
     flexDirection: "row",
     alignItems: "center",
+    paddingHorizontal: 10,
+    gap: 10,
+  },
+  roleChip: { borderRadius: 8 },
+  badge: {
+    position: "absolute",
+    top: -5,
+    right: -5,
+  },
+  scrollContainer: {
     paddingHorizontal: 15,
-    paddingVertical: 10,
-    gap: 8,
+    paddingBottom: 100,
   },
-  searchBar: {
-    flex: 1,
-    elevation: 0,
-    height: 40,
-    borderRadius: 8,
-  },
-  filterButton: {
-    borderRadius: 8,
-    height: 40,
-    justifyContent: "center",
-  },
-  scrollContainer: { padding: 15 },
   logCard: {
     marginBottom: 10,
     borderRadius: 10,

@@ -209,6 +209,31 @@ const handleSelectSource = async () => {
         timestamp: firestore.FieldValue.serverTimestamp(),
       });
 
+    // ✅ Also Notify Admin
+       await firestore().collection("notification").add({
+         type: "tree-ripe",
+         message: `Viewer detected ripe fruit on tree ${treeID}.`,
+         recipientRole: "Admin",
+         lat: tree.coordinates.latitude,
+         lng: tree.coordinates.longitude,
+         relatedTreeID: treeID,
+         reporterName: currentUser?.displayName || "Viewer",
+         read: false,
+         seen: false,
+         timestamp: firestore.FieldValue.serverTimestamp(),
+       });
+
+    // 📝 Log activity
+       await firestore().collection("activityLog").add({
+             actionType: "ripe-alert",
+             description: `Viewer reported ripe fruit on tree ${treeID}.`,
+             treeID: treeID,
+             uid: viewerId,
+             userRole: "viewer",
+             timestamp: firestore.FieldValue.serverTimestamp(),
+           });
+
+
 
       Alert.alert(
         "🍈 Ripe Alert Sent!",

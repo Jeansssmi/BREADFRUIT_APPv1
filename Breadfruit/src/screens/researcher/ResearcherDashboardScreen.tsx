@@ -29,7 +29,7 @@ export default function ResearcherDashboardScreen() {
   const [showActivity, setShowActivity] = useState(true);
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedActivity, setSelectedActivity] = useState<any>(null);
-
+  const [pendings, setPendings] = useState(0);
   const currentUser = auth().currentUser;
   const trackedStatuses = ['verified', 'harvest-ready', 'not-ready', 'harvested'];
 
@@ -69,7 +69,6 @@ export default function ResearcherDashboardScreen() {
     try {
       const treesSnap = await firestore()
         .collection('trees')
-        .where('trackedById', '==', currentUser.uid)
         .where('status', 'in', trackedStatuses)
         .get();
       setAllTrees(treesSnap.size);
@@ -172,17 +171,38 @@ export default function ResearcherDashboardScreen() {
       data: recentActivity,
     },
   ];
+
+  // 🔧 Reword activity descriptions for the current user
+  const formatActivityDescription = (description: string, user: any) => {
+    if (!description || !user) return description;
+
+    // Replace the user's name or the word 'Researcher' with 'You'
+    let updated = description;
+
+    // Common phrases to replace
+    const namePattern = new RegExp(user.displayName || "", "gi");
+    updated = updated.replace(namePattern, "You");
+
+    // Replace generic term "Researcher" or "researcher"
+    updated = updated.replace(/\b[Rr]esearcher\b/g, "You");
+
+    // Ensure it sounds natural
+    updated = updated.replace(/\b[Yy]ou added\b/g, "You added");
+    updated = updated.replace(/\b[Yy]ou has\b/g, "You have");
+
+    return updated;
+  };
+
+
 return (
   <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-
     {/* ✅ App Bar with Bell */}
     <Appbar.Header style={styles.appbarHeader}>
       <Appbar.Content title="Dashboard" titleStyle={styles.appbarTitle} />
-
       <View style={styles.bellWrapper}>
         <Appbar.Action
-          icon="bell-outline"
-          color={theme.colors.primary}
+          icon="bell-ring"
+          color="#FFD700"
           onPress={() => navigation.navigate("NotificationsScreen")}
         />
         {unreadCount > 0 && (
@@ -195,26 +215,24 @@ return (
       </View>
     </Appbar.Header>
 
-    {/* ✅ Main ScrollView stays inside root View */}
+    {/* ✅ Main ScrollView */}
     <ScrollView
       style={{ flex: 1 }}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={fetchAllCounts} />}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={fetchAllCounts} />
+      }
     >
-
-      {/* Dashboard cards */}
+      {/* --- Dashboard Section --- */}
       <View style={styles.scrollContent}>
         <View style={styles.titleContainer}>
-          <MaterialCommunityIcons
-            name="chart-bar"
-            size={20}
-            color={theme.colors.primary}
-          />
+          <MaterialCommunityIcons name="chart-bar" size={20} color={theme.colors.primary} />
           <Text style={[styles.mainTitle, { color: theme.colors.text }]}>
             Breadfruit Analytics
           </Text>
         </View>
 
-        <Pressable onPress={() => navigation.navigate('TreeList')}>
+        {/* ✅ Total Trees Tracked */}
+        <Pressable onPress={() => navigation.navigate('ResearcherTreeListDashboard')}>
           <Card
             style={[
               styles.card,
@@ -228,78 +246,100 @@ return (
               </Text>
             </Card.Content>
             <Card.Content>
+
               <Text style={[styles.largeStat, { color: theme.colors.text }]}>
                 {allTrees}
               </Text>
             </Card.Content>
           </Card>
         </Pressable>
-      </View>
 
-      {/* ✅ Recent Activity Section */}
-      <Card style={[styles.card, { backgroundColor: theme.colors.card, marginHorizontal: 20 }]}>
-        <Card.Content>
+        {/* ✅ Harvest Ready */}
+        <Card style={styles.card}>
+          <Card.Content style={styles.cardContentRow}>
+            <MaterialCommunityIcons name="fruit-cherries" size={18} color="#2ecc71" />
+            <Text style={styles.cardTitle}>Harvest Ready</Text>
+          </Card.Content>
+          <Card.Content>
+            <View style={styles.buttonRow}>
+              <Button
+                mode="contained"
+                compact
+                onPress={() => navigation.navigate('HarvestList', { filter: 'ripe' })}
+                style={styles.ripeButton}
+              >
+                View Ripe
+              </Button>
+              <Button
+                mode="contained"
+                compact
+                onPress={() => navigation.navigate('HarvestedList', { filter: 'harvested' })}
+                style={styles.harvestedButton}
+              >
+                View Harvested
+              </Button>
+            </View>
+          </Card.Content>
+        </Card>
 
+        {/* ✅ Recent Activity Section */}
+        <Card style={[styles.card, { backgroundColor: theme.colors.card }]}>
+          <Card.Content>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <MaterialCommunityIcons name="clock-time-three-outline" size={20} color={theme.colors.primary} />
+                <Text style={[styles.cardTitle, { color: theme.colors.primary }]}>
+                  Recent Activity
+                </Text>
+              </View>
 
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <MaterialCommunityIcons
-                name="clock-time-three-outline"
-                size={20}
-                color={theme.colors.primary}
+              <View style={{ flexDirection: 'row' }}>
+                <Button
+                  mode="text"
+                  compact
+                  onPress={() => setShowActivity(!showActivity)}
+                  labelStyle={{ color: theme.colors.primary, fontWeight: 'bold' }}
+                >
+                  {showActivity ? 'Hide' : 'Show'}
+                </Button>
+                <Button
+                  mode="text"
+                  compact
+                  onPress={() => navigation.navigate('ActivityLogsScreen')}
+                  labelStyle={{ color: theme.colors.primary, fontWeight: 'bold' }}
+                >
+                  View All
+                </Button>
+              </View>
+            </View>
+
+            <Divider style={{ marginVertical: 10 }} />
+
+            {showActivity && (
+              <SectionList
+                sections={[{ title: 'Today', data: recentActivity }]}
+                keyExtractor={(item) => item.id}
+                scrollEnabled={false}
+                renderItem={({ item }) => (
+                  <Pressable onPress={() => navigation.navigate('ActivityLogsScreen')}>
+                    <View
+                      style={[
+                        styles.activityItem,
+                        { borderBottomColor: theme.dark ? '#333' : '#eee' },
+                      ]}
+                    >
+                      <Text style={{ color: theme.colors.text }}>
+                        • {formatActivityDescription(item.description, currentUser)}
+                      </Text>
+
+                    </View>
+                  </Pressable>
+                )}
               />
-              <Text style={[styles.cardTitle, { color: theme.colors.primary }]}>
-                Recent Activity
-              </Text>
-            </View>
-
-            <View style={{ flexDirection: 'row' }}>
-              {/* ✅ New Show/Hide Button */}
-              <Button
-                mode="text"
-                compact
-                onPress={() => setShowActivity(!showActivity)}
-                labelStyle={{ color: theme.colors.primary, fontWeight: 'bold' }}
-              >
-                {showActivity ? 'Hide' : 'Show'}
-              </Button>
-
-              {/* Existing View All Button (unchanged) */}
-              <Button
-                mode="text"
-                compact
-                onPress={() => navigation.navigate('ActivityLogsScreen')}
-                labelStyle={{ color: theme.colors.primary, fontWeight: 'bold' }}
-              >
-                View All
-              </Button>
-            </View>
-          </View>
-
-
-
-
-          <Divider style={{ marginVertical: 10 }} />
-
-         {showActivity && (
-           <SectionList
-             sections={[{ title: 'Today', data: recentActivity }]}
-             keyExtractor={(item) => item.id}
-             scrollEnabled={false}
-             renderItem={({ item }) => (
-               <Pressable onPress={() => navigation.navigate('ActivityLogsScreen')}>
-                 <View style={[styles.activityItem, { borderBottomColor: theme.dark ? '#333' : '#eee' }]}>
-                   <Text style={{ color: theme.colors.text }}>• {item.description}</Text>
-                 </View>
-               </Pressable>
-             )}
-           />
-         )}
-
-
-        </Card.Content>
-      </Card>
-
+            )}
+          </Card.Content>
+        </Card>
+      </View>
     </ScrollView>
   </View>
 );
@@ -308,7 +348,7 @@ return (
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  appbarHeader: { elevation: 0, borderBottomWidth: 1 },
+  appbarHeader: { elevation: 0, borderBottomWidth: 0, shadowOpacity: 0 },
   appbarTitle: { fontWeight: 'bold', fontSize: 20 },
   scrollContent: { padding: 20 },
   titleContainer: { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },

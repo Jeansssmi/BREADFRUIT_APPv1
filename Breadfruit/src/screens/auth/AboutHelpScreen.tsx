@@ -54,7 +54,7 @@ export default function AboutHelpScreen() {
 
             <Text style={[styles.sectionTitle, { color: titleColor }]}>👩‍💻 Developer Info:</Text>
             <Text style={[styles.listItem, { color: textColor }]}>Developed by: ALT F4</Text>
-            <Text style={[styles.listItem, { color: textColor }]}>Institution: Your Institution</Text>
+            <Text style={[styles.listItem, { color: textColor }]}>Institution: Cebu Technological University Argao-Campus</Text>
             <Text style={[styles.listItem, { color: textColor }]}>Version: 1.0.0</Text>
 
             <Text style={[styles.footer, { color: textColor }]}>

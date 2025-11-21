@@ -18,7 +18,7 @@ export default function TrackedTreesScreen() {
   // ✅ Fetch trees tracked by this user
   const { trees, isLoading, error } = useTreeData({
     mode: 'criteria',
-    field: 'trackedBy',
+    field: "trackedById",
     operator: '==',
     value: trackedBy,
   });

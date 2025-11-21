@@ -1,32 +1,44 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { ActivityIndicator, FlatList, StyleSheet, TouchableOpacity, View } from 'react-native';
-import { Card, Chip, FAB, Text, useTheme } from 'react-native-paper'; // ✅ useTheme added
+import React, { useState, useEffect, useMemo, useLayoutEffect } from 'react';
+import {
+  ActivityIndicator,
+  FlatList,
+  StyleSheet,
+  TouchableOpacity,
+  View,
+  ScrollView
+} from 'react-native';
+import { Card, Chip, Text, useTheme } from 'react-native-paper';
 import { useNavigation } from '@react-navigation/native';
 import firestore from '@react-native-firebase/firestore';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
+import { Appbar } from 'react-native-paper';
 
-const TreeListItem = ({ tree, onPress, theme }) => (
-  <TouchableOpacity onPress={onPress} activeOpacity={0.9}>
-    <Card
-      style={[
-        styles.card,
-        { backgroundColor: theme.colors.card, shadowColor: theme.dark ? '#000' : '#ccc' },
-      ]}
-    >
+
+// ----------------------
+//  Tree Item Component
+// ----------------------
+const TreeListItem = ({ tree, onMapPress }) => {
+  const theme = useTheme();
+
+  return (
+    <Card style={[styles.card, { backgroundColor: theme.colors.card }]}>
       <Card.Content style={styles.cardContent}>
+
+        {/* Left Icon */}
         <View
           style={[
             styles.iconWrapper,
-            { backgroundColor: theme.dark ? '#1f3d2e' : '#eafaf1' },
+            { backgroundColor: theme.dark ? '#1e1e1e' : '#eafaf1' }
           ]}
         >
           <MaterialCommunityIcons
-            name="tree"
+            name="tree-outline"
             size={28}
             color={theme.colors.primary}
           />
         </View>
 
+        {/* Text Section */}
         <View style={styles.textContainer}>
           <Text style={[styles.treeIdText, { color: theme.colors.text }]}>
             {tree.treeID}
@@ -38,17 +50,16 @@ const TreeListItem = ({ tree, onPress, theme }) => (
               size={14}
               color={theme.dark ? '#aaa' : '#888'}
             />
-            <Text
-              style={[styles.locationText, { color: theme.dark ? '#bbb' : '#666' }]}
-            >
+            <Text style={[styles.locationText, { color: theme.colors.text }]}>
               {tree.barangay ? `${tree.barangay}, ${tree.city}` : tree.city}
             </Text>
           </View>
 
           <View style={styles.statusRow}>
-            <Text style={[styles.statusLabel, { color: theme.dark ? '#aaa' : '#555' }]}>
+            <Text style={[styles.statusLabel, { color: theme.dark ? '#bbb' : '#555' }]}>
               Status:
             </Text>
+
             <Text
               style={[
                 styles.statusValue,
@@ -58,7 +69,7 @@ const TreeListItem = ({ tree, onPress, theme }) => (
                   ? { color: '#f1c40f' }
                   : tree.status === 'harvested'
                   ? { color: '#8e5b32' }
-                  : { color: '#7f8c8d' },
+                  : { color: theme.dark ? '#bbb' : '#7f8c8d' }
               ]}
             >
               {tree.status.charAt(0).toUpperCase() +
@@ -66,31 +77,56 @@ const TreeListItem = ({ tree, onPress, theme }) => (
             </Text>
           </View>
         </View>
+
+        {/* 🌲 TREE BUTTON */}
+        <TouchableOpacity
+          onPress={onMapPress}
+          style={{
+            width: 42,
+            height: 42,
+            borderRadius: 21,
+            backgroundColor: theme.colors.primary,
+            justifyContent: 'center',
+            alignItems: 'center',
+            marginLeft: 10
+          }}
+        >
+          <MaterialCommunityIcons name="pine-tree" size={22} color="#fff" />
+        </TouchableOpacity>
+
       </Card.Content>
     </Card>
-  </TouchableOpacity>
-);
+  );
+};
+
+
+
 
 export default function TreeListScreen() {
   const navigation = useNavigation();
-  const theme = useTheme(); // ✅ Access global theme
+  const theme = useTheme();
 
   const [trees, setTrees] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('All');
+  const [sortOrder, setSortOrder] = useState('asc');
+
+  useLayoutEffect(() => {
+    navigation.setOptions({ headerShown: false });
+  }, []);
 
   useEffect(() => {
     const unsubscribe = firestore()
       .collection('trees')
       .where('status', 'in', ['verified', 'harvest-ready', 'harvested', 'not-ready'])
       .onSnapshot(
-        (querySnapshot) => {
-          const data = querySnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+        snap => {
+          const data = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
           setTrees(data);
           setIsLoading(false);
         },
-        (error) => {
-          console.error('Error fetching trees:', error);
+        err => {
+          console.error(err);
           setIsLoading(false);
         }
       );
@@ -99,169 +135,152 @@ export default function TreeListScreen() {
   }, []);
 
   const filteredTrees = useMemo(() => {
-    if (statusFilter === 'All') return trees;
-    return trees.filter((tree) => tree.status === statusFilter);
-  }, [trees, statusFilter]);
+    let data =
+      statusFilter === 'All'
+        ? [...trees]
+        : trees.filter(tree => tree.status === statusFilter);
+
+    data.sort((a, b) =>
+      sortOrder === 'asc'
+        ? a.treeID.localeCompare(b.treeID)
+        : b.treeID.localeCompare(a.treeID)
+    );
+
+    return data;
+  }, [trees, statusFilter, sortOrder]);
 
   if (isLoading) {
     return (
-      <View style={[styles.center, { backgroundColor: theme.colors.background }]}>
+      <View style={[styles.center]}>
         <ActivityIndicator size="large" color={theme.colors.primary} />
       </View>
     );
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      {/* 🔹 Status Filter */}
-      <View
-        style={[
-          styles.filterContainer,
-          {
-            backgroundColor: theme.colors.card,
-            borderBottomColor: theme.dark ? '#333' : '#e0e0e0',
-          },
-        ]}
-      >
-        {(['All', 'verified', 'harvest-ready', 'harvested', 'not-ready'] as const).map(
-          (status) => (
+    <View style={styles.container}>
+
+      {/* APPBAR */}
+      <Appbar.Header mode="small" statusBarHeight={0}>
+
+        {/* 🔙 Back Button */}
+        <Appbar.BackAction onPress={() => navigation.goBack()} />
+
+        <Appbar.Content title="Tree List" />
+
+        <Appbar.Action
+          icon="sort-ascending"
+          color={sortOrder === "asc" ? theme.colors.primary : undefined}
+          onPress={() => setSortOrder("asc")}
+        />
+
+        <Appbar.Action
+          icon="sort-descending"
+          color={sortOrder === "desc" ? theme.colors.primary : undefined}
+          onPress={() => setSortOrder("desc")}
+        />
+
+      </Appbar.Header>
+
+
+      {/* Filter Chips */}
+      <View style={[styles.filterWrapper, { backgroundColor: theme.colors.card }]}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+          {['All', 'verified', 'harvest-ready', 'harvested', 'not-ready'].map(s => (
             <Chip
-              key={status}
+              key={s}
               mode="outlined"
-              selected={statusFilter === status}
-              onPress={() => setStatusFilter(status)}
-              style={[
-                styles.filterChip,
-                {
-                  backgroundColor:
-                    statusFilter === status
-                      ? theme.dark
-                        ? '#1f3d2e'
-                        : '#eafaf1'
-                      : theme.colors.card,
-                  borderColor:
-                    statusFilter === status ? theme.colors.primary : '#ccc',
-                },
-              ]}
+              selected={statusFilter === s}
+              onPress={() => setStatusFilter(s)}
+              style={styles.filterChip}
               textStyle={{
-                color:
-                  statusFilter === status
-                    ? theme.colors.primary
-                    : theme.colors.text,
-                fontWeight: statusFilter === status ? 'bold' : 'normal',
+                color: statusFilter === s ? '#fff' : theme.colors.primary
               }}
             >
-              {status === 'All'
-                ? 'All'
-                : status.replace('-', ' ').replace(/\b\w/g, (l) => l.toUpperCase())}
+              {s.replace('-', ' ').replace(/\b\w/g, l => l.toUpperCase())}
             </Chip>
-          )
-        )}
+          ))}
+        </ScrollView>
       </View>
 
-      {/* 🔹 Tree List */}
+      {/* Tree List */}
       <FlatList
         data={filteredTrees}
-        keyExtractor={(item) => item.id || item.treeID}
+        keyExtractor={item => item.id}
+        contentContainerStyle={styles.listContent}
         renderItem={({ item }) => (
           <TreeListItem
             tree={item}
-            onPress={() =>
-              navigation.navigate('EditTreeScreen', {
-                treeID: item.id,
+            onMapPress={() =>
+              navigation.navigate('TreeDetails', {
+                treeID: item.id
               })
             }
-            theme={theme}
           />
         )}
-        contentContainerStyle={styles.listContent}
-        ItemSeparatorComponent={() => <View style={styles.divider} />}
-        ListEmptyComponent={
-          <View style={styles.emptyState}>
-            <MaterialCommunityIcons
-              name="magnify-close"
-              size={40}
-              color={theme.dark ? '#aaa' : '#888'}
-            />
-            <Text style={[styles.emptyText, { color: theme.colors.text }]}>
-              No trees found for this filter.
-            </Text>
-          </View>
-        }
-      />
-
-      {/* 🔹 Add Button */}
-      <FAB
-        icon="plus"
-        style={[
-          styles.fab,
-          {
-            backgroundColor: theme.colors.primary,
-            shadowColor: theme.dark ? '#000' : '#333',
-          },
-        ]}
-        color="white"
-        onPress={() => navigation.navigate('AddTree')}
       />
     </View>
   );
 }
 
+
+
+
+// ----------------------
+//   Styles
+// ----------------------
 const styles = StyleSheet.create({
   container: { flex: 1 },
+
+  filterWrapper: {
+    position: 'absolute',
+    top: 60,
+    left: 0,
+    right: 0,
+    zIndex: 10,
+    paddingVertical: 8
+  },
+
+  filterChip: {
+    marginHorizontal: 6,
+    borderWidth: 1
+  },
+
+  listContent: {
+    padding: 12,
+    paddingTop: 60
+  },
+
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  filterContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 8,
-    borderBottomWidth: 1,
-  },
-  filterChip: { margin: 4 },
-  listContent: { padding: 12 },
-  divider: { height: 8 },
-  emptyState: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 40,
-    marginTop: 50,
-  },
-  emptyText: { fontSize: 16, marginTop: 16 },
+
   card: {
     borderRadius: 14,
     elevation: 3,
-    shadowOpacity: 0.15,
-    shadowOffset: { width: 0, height: 2 },
-    shadowRadius: 4,
+    marginBottom: 10
   },
+
   cardContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 14,
+    paddingVertical: 14
   },
+
   iconWrapper: {
     width: 48,
     height: 48,
     borderRadius: 24,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 14,
+    marginRight: 14
   },
+
   textContainer: { flex: 1 },
   treeIdText: { fontSize: 16, fontWeight: 'bold' },
-  locationContainer: { flexDirection: 'row', alignItems: 'center', marginTop: 4 },
+
+  locationContainer: { flexDirection: 'row', marginTop: 4 },
   locationText: { marginLeft: 4, fontSize: 13 },
-  statusRow: { flexDirection: 'row', alignItems: 'center', marginTop: 6 },
+
+  statusRow: { flexDirection: 'row', marginTop: 6 },
   statusLabel: { fontSize: 13, marginRight: 4 },
-  statusValue: { fontSize: 13, fontWeight: 'bold' },
-  fab: {
-    position: 'absolute',
-    margin: 16,
-    right: 0,
-    bottom: 0,
-    borderRadius: 28,
-    elevation: 5,
-  },
+  statusValue: { fontSize: 13, fontWeight: 'bold' }
 });

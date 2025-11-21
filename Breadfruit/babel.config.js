@@ -7,6 +7,8 @@ module.exports = {
         root: ['./src'], // ✅ same as tsconfig
         alias: {
           '@': './src',
+          '@screens': './src/screens',
+                    '@utils': './src/utils',
         },
       },
     ],
@@ -17,6 +19,6 @@ module.exports = {
         path: '.env',
       },
     ],
-    'react-native-worklets/plugin',
+     'react-native-reanimated/plugin',
   ],
 };

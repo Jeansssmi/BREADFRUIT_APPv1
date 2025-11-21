@@ -121,33 +121,36 @@ export function AuthProvider({ children }) {
     setUser(prevUser => (prevUser ? { ...prevUser, ...updatedData } : null));
   }, []);
 
-  // ✅ FIXED: Added guard for undefined firebaseUser on initial load
-  useEffect(() => {
-    const unsubscribe = auth().onAuthStateChanged(async (firebaseUser) => {
-      if (!firebaseUser) {
-        setUser(null);
-        setInitialized(true);
-        return;
-      }
 
-      const userData = await fetchUserData(firebaseUser);
-    // 🚫 Researchers & Admins must be approved
-         if (
-           userData &&
-           (userData.role === 'researcher' || userData.role === 'admin') &&
-           userData.status === 'approved'
-         ) {
-           await auth().signOut();
-           setUser(null);
-           setInitialized(true);
-           return;
-         }
-      setUser(userData);
+useEffect(() => {
+  const unsubscribe = auth().onAuthStateChanged(async (firebaseUser) => {
+    if (!firebaseUser) {
+      setUser(null);
       setInitialized(true);
-    });
+      return;
+    }
 
-    return unsubscribe;
-  }, [fetchUserData]);
+    const userData = await fetchUserData(firebaseUser);
+    if (
+      userData &&
+      (userData.role === 'researcher' || userData.role === 'admin') &&
+      userData.status === 'pending'
+    ) {
+      // Force logout
+      await auth().signOut();
+      setUser(null);
+      setInitialized(true);
+      return;
+    }
+
+    // 🟢 Allow everyone else (approved researchers/admins & viewers)
+    setUser(userData);
+    setInitialized(true);
+  });
+
+  return unsubscribe;
+}, [fetchUserData]);
+
 
   const value = useMemo(
     () => ({

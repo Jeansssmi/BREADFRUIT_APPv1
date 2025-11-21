@@ -4,6 +4,7 @@ import { PaperProvider, MD3LightTheme, MD3DarkTheme } from 'react-native-paper';
 import { AuthProvider } from './src/context/AuthContext';
 import RootNavigator from './src/navigators/RootNavigator';
 import { ThemeProvider, useTheme } from './src/context/ThemeContext';
+import { ToastProvider } from './src/context/ToastProvider'; // ✅ Import global toast system
 
 import { firebase } from '@react-native-firebase/app';
 import 'react-native-gesture-handler';
@@ -11,7 +12,7 @@ import 'react-native-reanimated';
 import { Buffer } from 'buffer';
 global.Buffer = global.Buffer || Buffer;
 
-// ✅ Geocoder initialization
+// ✅ Initialize Geocoder
 import Geocoder from 'react-native-geocoding';
 Geocoder.init("AIzaSyDkaDuJ4kRUpUJiXZrj7MHczYUFIcCIZNk");
 
@@ -52,9 +53,11 @@ function ThemedApp() {
   return (
     <AuthProvider>
       <PaperProvider theme={theme}>
-        <NavigationContainer theme={theme}>
-          <RootNavigator />
-        </NavigationContainer>
+        <ToastProvider> {/* ✅ Wrap here so it works across all screens */}
+          <NavigationContainer theme={theme}>
+            <RootNavigator />
+          </NavigationContainer>
+        </ToastProvider>
       </PaperProvider>
     </AuthProvider>
   );

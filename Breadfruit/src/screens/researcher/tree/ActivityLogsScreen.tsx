@@ -6,6 +6,7 @@ import {
   View,
   Alert,
   Pressable,
+  ScrollView,
 } from "react-native";
 import { Appbar, Card, Chip, Text } from "react-native-paper";
 import { useRoute, useNavigation } from "@react-navigation/native";
@@ -21,7 +22,7 @@ export default function ActivityLogsScreen() {
   const [activityLogs, setActivityLogs] = useState([]);
   const [hiddenLogs, setHiddenLogs] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState("today");
+  const [filter, setFilter] = useState("today"); // 🟢 today | week | month | all
   const [userRole, setUserRole] = useState(null);
   const [currentUID, setCurrentUID] = useState(null);
 
@@ -47,8 +48,15 @@ export default function ActivityLogsScreen() {
     if (!currentUID) return;
     setLoading(true);
 
+    const now = new Date();
     const startOfDay = new Date();
     startOfDay.setHours(0, 0, 0, 0);
+
+    const startOfWeek = new Date();
+    startOfWeek.setDate(now.getDate() - 7);
+    startOfWeek.setHours(0, 0, 0, 0);
+
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     const endOfDay = new Date();
     endOfDay.setHours(23, 59, 59, 999);
 
@@ -62,18 +70,39 @@ export default function ActivityLogsScreen() {
             ...doc.data(),
           }));
 
-          // 🔸 Show only today’s logs if filter is “today”
-          if (filter === "today") {
-            data = data.filter((item) => {
-              const t = item.timestamp?.toDate
-                ? item.timestamp.toDate()
-                : new Date(item.timestamp);
+          // 🧭 Apply filters
+          data = data.filter((item) => {
+            const t = item.timestamp?.toDate
+              ? item.timestamp.toDate()
+              : new Date(item.timestamp);
+
+            if (filter === "today") {
               return t >= startOfDay && t <= endOfDay;
-            });
-          }
+            } else if (filter === "week") {
+              return t >= startOfWeek && t <= endOfDay;
+            } else if (filter === "month") {
+              return t >= startOfMonth && t <= endOfDay;
+            }
+            return true; // all
+          });
 
           // 🧹 Remove locally deleted logs
           data = data.filter((item) => !hiddenLogs.includes(item.id));
+
+           // ✨ Personalize messages for current user
+                    data = data.map((log) => {
+                      let description = log.description || "";
+                      if (
+                        log.uid === currentUID &&
+                        /researcher added a new tree/i.test(description)
+                      ) {
+                        description = description.replace(
+                          /researcher added a new tree/i,
+                          "you added a new tree"
+                        );
+                      }
+                      return { ...log, description };
+                    });
 
           // 🔽 Sort newest first
           data.sort(
@@ -92,17 +121,26 @@ export default function ActivityLogsScreen() {
     return () => unsubscribe();
   }, [filter, currentUID, hiddenLogs]);
 
-  /** 🧹 Locally delete one log (not Firestore delete) **/
-  const handleDeleteLog = (id: string) => {
-    Alert.alert("Delete Activity", "Do you want to delete this activity log?", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Delete",
-        style: "destructive",
-        onPress: () => setHiddenLogs((prev) => [...prev, id]),
-      },
-    ]);
-  };
+ // 🗑️ Delete one log with confirmation
+ const handleDeleteLog = (id: string) => {
+   Alert.alert(
+     "Delete Activity Log",
+     "Are you sure you want to delete this activity? This will remove it from your view.",
+     [
+       { text: "Cancel", style: "cancel" },
+       {
+         text: "Yes, Delete",
+         style: "destructive",
+         onPress: () => {
+           // Soft delete (local only)
+           setHiddenLogs((prev) => [...prev, id]);
+           Alert.alert("Deleted", "The activity has been removed successfully.");
+         },
+       },
+     ]
+   );
+ };
+
 
   /** 🧹 Delete all logs locally **/
   const handleDeleteAllLogs = () => {
@@ -134,7 +172,7 @@ export default function ActivityLogsScreen() {
   return (
     <View style={styles.container}>
       {/* 🔹 Header */}
-      <Appbar.Header style={{ backgroundColor: "#2ecc71" }}>
+      <Appbar.Header style={{ backgroundColor: "#27ae60" }}>
         <Appbar.BackAction onPress={() => navigation.goBack()} color="#fff" />
         <Appbar.Content title="Activity Logs" color="#fff" />
         {activityLogs.length > 0 && (
@@ -146,37 +184,72 @@ export default function ActivityLogsScreen() {
         )}
       </Appbar.Header>
 
-      {/* 🔹 Filters */}
-      <View style={styles.filterContainer}>
-        <Chip
-          selected={filter === "today"}
-          onPress={() => setFilter("today")}
-          style={[
-            styles.chip,
-            filter === "today" && { backgroundColor: "#2ecc71" },
-          ]}
-          textStyle={{
-            color: filter === "today" ? "#fff" : "#2ecc71",
-            fontWeight: "bold",
-          }}
+
+      {/* 🔹 Filter Chips (same UI as Notifications) */}
+      <View style={styles.filterBar}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.filtersScroll}
         >
-          Today
-        </Chip>
-        <Chip
-          selected={filter === "all"}
-          onPress={() => setFilter("all")}
-          style={[
-            styles.chip,
-            filter === "all" && { backgroundColor: "#2ecc71" },
-          ]}
-          textStyle={{
-            color: filter === "all" ? "#fff" : "#2ecc71",
-            fontWeight: "bold",
-          }}
-        >
-          All
-        </Chip>
+          <Chip
+            style={[
+              styles.filterChip,
+              { backgroundColor: filter === "today" ? "#2ecc71" : "#e8f5e9" },
+            ]}
+            textStyle={{
+              color: filter === "today" ? "#fff" : "#2ecc71",
+              fontWeight: "600",
+            }}
+            onPress={() => setFilter("today")}
+          >
+            Today
+          </Chip>
+
+          <Chip
+            style={[
+              styles.filterChip,
+              { backgroundColor: filter === "week" ? "#2ecc71" : "#e8f5e9" },
+            ]}
+            textStyle={{
+              color: filter === "week" ? "#fff" : "#2ecc71",
+              fontWeight: "600",
+            }}
+            onPress={() => setFilter("week")}
+          >
+            This Week
+          </Chip>
+
+          <Chip
+            style={[
+              styles.filterChip,
+              { backgroundColor: filter === "month" ? "#2ecc71" : "#e8f5e9" },
+            ]}
+            textStyle={{
+              color: filter === "month" ? "#fff" : "#2ecc71",
+              fontWeight: "600",
+            }}
+            onPress={() => setFilter("month")}
+          >
+            This Month
+          </Chip>
+
+          <Chip
+            style={[
+              styles.filterChip,
+              { backgroundColor: filter === "all" ? "#2ecc71" : "#e8f5e9" },
+            ]}
+            textStyle={{
+              color: filter === "all" ? "#fff" : "#2ecc71",
+              fontWeight: "600",
+            }}
+            onPress={() => setFilter("all")}
+          >
+            All
+          </Chip>
+        </ScrollView>
       </View>
+
 
       {/* 🔹 Activity List */}
       {activityLogs.length > 0 ? (
@@ -205,7 +278,6 @@ export default function ActivityLogsScreen() {
                     </Text>
                   </View>
 
-                  {/* 🗑️ Local Delete Button (not Firestore delete) */}
                   <Pressable onPress={() => handleDeleteLog(item.id)}>
                     <MaterialCommunityIcons
                       name="delete-outline"
@@ -229,6 +301,10 @@ export default function ActivityLogsScreen() {
           <Text style={styles.emptyText}>
             {filter === "today"
               ? "No activity recorded today."
+              : filter === "week"
+              ? "No activity recorded this week."
+              : filter === "month"
+              ? "No activity recorded this month."
               : "No activity logs found."}
           </Text>
         </View>
@@ -243,6 +319,7 @@ const styles = StyleSheet.create({
   filterContainer: {
     flexDirection: "row",
     justifyContent: "center",
+    flexWrap: "wrap",
     marginVertical: 10,
     gap: 10,
   },
@@ -286,4 +363,23 @@ const styles = StyleSheet.create({
     marginTop: 10,
     fontStyle: "italic",
   },
+
+filterBar: {
+  zIndex: 10,
+  elevation: 3,
+  paddingVertical: 6,
+  borderBottomWidth: 1,
+  borderColor: "#ddd",
+  backgroundColor: "#fff",
+},
+filtersScroll: {
+  paddingHorizontal: 12,
+  paddingVertical: 6,
+  alignItems: "center",
+},
+filterChip: {
+  marginRight: 8,
+  borderRadius: 12,
+},
+
 });

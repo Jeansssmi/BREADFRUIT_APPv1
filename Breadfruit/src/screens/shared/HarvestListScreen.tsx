@@ -19,37 +19,49 @@ export default function HarvestListScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  // 🔄 Fetch trees (real-time listener)
-  const fetchTrees = useCallback(() => {
-    if (!currentUser) return;
+ const fetchTrees = useCallback(() => {
+   if (!currentUser) return;
 
-    setLoading(true);
-    let query = firestore().collection("trees").where("status", "==", "harvest-ready");
+   setLoading(true);
 
-    // 🧩 Researchers only see their own trees
-    if (currentUser.role === "researcher") {
-      query = query.where("trackedById", "==", currentUser.uid);
-    }
+   let query = firestore()
+     .collection("trees")
+     .where("status", "==", "harvest-ready");
 
-    const unsubscribe = query.onSnapshot(
-      (snapshot) => {
-        const data = snapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        }));
-        setTrees(data);
-        setLoading(false);
-        setRefreshing(false);
-      },
-      (error) => {
-        console.error("Error fetching trees:", error);
-        setLoading(false);
-        setRefreshing(false);
-      }
-    );
+   // 🧩 Researchers only see their own trees
+   if (currentUser.role === "researcher") {
+     query = query.where("trackedById", "==", currentUser.uid);
+   }
 
-    return unsubscribe;
-  }, [currentUser]);
+   const unsubscribe = query.onSnapshot(
+     (snapshot) => {
+       // ✅ Fetch all docs, then sort locally (newest first)
+       const data = snapshot.docs
+         .map((doc) => ({
+           id: doc.id,
+           ...doc.data(),
+         }))
+         .sort((a, b) => {
+           const aDate = a.createdAt?.toDate?.() || new Date(0);
+           const bDate = b.createdAt?.toDate?.() || new Date(0);
+           return bDate - aDate; // newest first
+         });
+
+       setTrees(data);
+       setLoading(false);
+       setRefreshing(false);
+     },
+     (error) => {
+       console.error("Error fetching trees:", error);
+       setLoading(false);
+       setRefreshing(false);
+     }
+   );
+
+   return unsubscribe;
+ }, [currentUser]);
+
+
 
   // ✅ Refresh manually
   const handleRefresh = async () => {

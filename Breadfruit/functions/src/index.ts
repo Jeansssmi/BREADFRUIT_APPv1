@@ -2,10 +2,16 @@ import * as admin from "firebase-admin";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { logger } from "firebase-functions";
 import { setGlobalOptions } from "firebase-functions/v2/options";
+import { defineSecret } from "firebase-functions/params";
+import * as nodemailer from "nodemailer";
+
 
 // Initialize Firebase services
 admin.initializeApp();
 setGlobalOptions({ region: "us-central1" });
+
+const GMAIL_USER = defineSecret("GMAIL_USER");
+const GMAIL_PASS = defineSecret("GMAIL_PASS");
 
 // --- Interfaces for data validation ---
 interface NewUserRequest {
@@ -31,6 +37,11 @@ interface NewTreeRequest {
   image?: string;
   status: string;
   trackedBy: string;
+}
+
+interface EmailOtp {
+  otp: string;
+  expiry: number;
 }
 
 // ==============================
@@ -211,4 +222,86 @@ export const addNewTree = onCall(async (request) => {
     
     throw new HttpsError("internal", error.message || "Internal server error.");
   }
+});
+
+
+// ==============================
+// 📧 SEND EMAIL OTP
+// ==============================
+export const sendEmailOtp = onCall(
+  { secrets: [GMAIL_USER, GMAIL_PASS] },
+  async (request) => {
+    const { email } = request.data || {};
+    const db = admin.firestore();
+
+    if (!email) throw new HttpsError("invalid-argument", "Email is required.");
+
+    // Prevent rapid OTP requests
+    const existing = await db.collection("emailOtps").doc(email).get();
+    if (existing.exists) {
+      const { expiry } = existing.data() as EmailOtp;
+      if (Date.now() < expiry - 4 * 60 * 1000) {
+        throw new HttpsError("resource-exhausted", "Wait 1 minute before requesting again.");
+      }
+    }
+
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiry = Date.now() + 5 * 60 * 1000;
+
+    await db.collection("emailOtps").doc(email).set({ otp, expiry });
+
+    const transporter = nodemailer.createTransport({
+      service: "gmail",
+      auth: {
+        user: GMAIL_USER.value(),
+        pass: GMAIL_PASS.value(),
+      },
+    });
+
+    const mailOptions = {
+      from: `"Breadfruit Tracker" <${GMAIL_USER.value()}>`,
+      to: email,
+      subject: "Your Breadfruit Tracker Verification Code",
+      html: `
+        <p>Hello,</p>
+        <p>Your verification code is: <b>${otp}</b></p>
+        <p>This code expires in 5 minutes.</p>
+        <p>Thank you,<br/>Breadfruit Tracker Team</p>
+      `,
+    };
+
+    await transporter.sendMail(mailOptions);
+    logger.info(`✅ OTP sent to ${email}`);
+    return { success: true, message: "OTP sent successfully." };
+  }
+);
+
+// ==============================
+// ✅ VERIFY EMAIL OTP
+// ==============================
+export const verifyEmailOtp = onCall(async (request) => {
+  const { email, otp } = request.data || {};
+  const db = admin.firestore();
+
+  if (!email || !otp) {
+    throw new HttpsError("invalid-argument", "Email and OTP required.");
+  }
+
+  const doc = await db.collection("emailOtps").doc(email).get();
+
+  if (!doc.exists) throw new HttpsError("not-found", "No OTP found.");
+  const { otp: storedOtp, expiry } = doc.data() as EmailOtp;
+
+  if (Date.now() > expiry) {
+    await db.collection("emailOtps").doc(email).delete();
+    throw new HttpsError("deadline-exceeded", "OTP expired.");
+  }
+
+  if (otp !== storedOtp) {
+    throw new HttpsError("permission-denied", "Invalid OTP.");
+  }
+
+  await db.collection("emailOtps").doc(email).delete();
+  logger.info(`✅ OTP verified for ${email}`);
+  return { success: true, message: "OTP verified successfully." };
 });

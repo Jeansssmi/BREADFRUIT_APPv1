@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { FlatList, StyleSheet, View, TextInput } from 'react-native';
+import React, { useEffect, useMemo, useState} from 'react';
+import { FlatList, StyleSheet, View, TextInput , ScrollView} from 'react-native';
 import { Appbar, ActivityIndicator, Chip, Text, useTheme } from 'react-native-paper'; // ✅ useTheme added
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useNavigation, useRoute } from '@react-navigation/native';
@@ -96,37 +96,46 @@ export default function UserListScreen() {
         onChangeText={setSearchQuery}
       />
 
-      {/* 🧩 Role Filter Chips */}
-      <View style={styles.filterContainer}>
-        {['All', 'admin', 'researcher', 'viewer'].map((role) => (
-          <Chip
-            key={role}
-            mode="outlined"
-            onPress={() => setSelectedRole(role)}
-            style={[
-              styles.filterChip,
-              {
-                borderColor: theme.colors.primary,
-                backgroundColor:
-                  selectedRole === role
-                    ? theme.colors.primary
-                    : theme.dark
-                    ? '#2a2a2a'
-                    : theme.colors.card,
-              },
-            ]}
-            textStyle={{
-              color:
-                selectedRole === role
-                  ? '#fff'
-                  : theme.colors.primary,
-              fontWeight: selectedRole === role ? 'bold' : 'normal',
-            }}
-          >
-            {role.charAt(0).toUpperCase() + role.slice(1)}
-          </Chip>
-        ))}
-      </View>
+     {/* 🧩 Role Filter Chips (Draggable / Scrollable) */}
+     <View style={styles.filterWrapper}>
+       <ScrollView
+         horizontal
+         showsHorizontalScrollIndicator={false}
+         contentContainerStyle={styles.filterContainer}
+       >
+         {['All', 'admin', 'researcher', 'viewer'].map((role) => (
+           <Chip
+             key={role}
+             mode="outlined"
+             onPress={() => setSelectedRole(role)}
+             style={[
+               styles.filterChip,
+               {
+                 borderColor: theme.colors.primary,
+                 backgroundColor:
+                   selectedRole === role
+                     ? theme.colors.primary
+                     : theme.dark
+                     ? '#2a2a2a'
+                     : theme.colors.card,
+               },
+             ]}
+             textStyle={{
+               color:
+                 selectedRole === role
+                   ? '#fff'
+                   : theme.colors.primary,
+               fontWeight: selectedRole === role ? 'bold' : 'normal',
+             }}
+           >
+             {role.charAt(0).toUpperCase() + role.slice(1)}
+           </Chip>
+         ))}
+       </ScrollView>
+     </View>
+
+
+
 
       {/* 📋 Verified Users List */}
       <FlatList

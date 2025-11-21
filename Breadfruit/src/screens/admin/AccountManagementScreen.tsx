@@ -50,15 +50,19 @@ export default function AccountManagementScreen() {
   }
 
   const cards = [
-    {
-      title: 'Researchers',
-      value: researchers,
-      icon: 'account-tie',
-      onPress: () => navigation.navigate('UserList', { filter: 'researcher' }),
-    },
-    { title: 'All Users', value: allUsers, icon: 'account-group', onPress: () => navigation.navigate('UserList') },
-    { title: 'Pending Approvals', value: pendings, icon: 'account-clock', onPress: () => navigation.navigate('PendingUsers') },
-  ];
+      {
+        title: 'All Users',
+        value: allUsers,
+        icon: 'account-group',
+        onPress: () => navigation.navigate('UserList')
+      },
+      {
+        title: 'Pending Approvals',
+        value: pendings,
+        icon: 'account-clock',
+        onPress: () => navigation.navigate('PendingUsers')
+      },
+    ];
 
   return (
     <View style={[styles.screen, { backgroundColor: theme.colors.background }]}>
@@ -139,11 +143,20 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   gridItem: {
-    width: '48%',
-    marginBottom: 16,
+     width: '48%',
+      marginBottom: 16,
+      height: 170,
   },
   card: {
-    borderRadius: 12,
+     borderRadius: 12,
+      elevation: 3,
+      shadowColor: '#000',
+      shadowOpacity: 0.1,
+      shadowRadius: 2,
+      shadowOffset: { width: 0, height: 1 },
+
+      minHeight: 150,       // ⭐ Bigger card
+      justifyContent: "center",borderRadius: 12,
     elevation: 3,
     shadowColor: '#000',
     shadowOpacity: 0.1,

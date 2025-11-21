@@ -113,6 +113,13 @@ export default function ProfileScreen() {
             Settings
           </Text>
 
+          <SettingsItem
+                      icon="help-outline"
+                      name="About App"
+                      onPress={() => navigation.navigate('AboutHelp')}
+                      theme={theme}
+                    />
+
 
           <SettingsItem
             icon="palette"

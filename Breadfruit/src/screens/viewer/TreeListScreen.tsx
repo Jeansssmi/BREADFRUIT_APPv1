@@ -1,68 +1,110 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { ActivityIndicator, FlatList, StyleSheet, TouchableOpacity, View } from 'react-native';
-import { Card, Chip, FAB, Text, useTheme } from 'react-native-paper'; // ✅ Added useTheme
+import React, { useState, useEffect, useMemo, useLayoutEffect } from 'react';
+import {
+  ActivityIndicator,
+  FlatList,
+  StyleSheet,
+  TouchableOpacity,
+  View,
+  ScrollView,
+} from 'react-native';
+import { Card, Chip, FAB, Text, useTheme } from 'react-native-paper';
 import { useNavigation } from '@react-navigation/native';
 import firestore from '@react-native-firebase/firestore';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
+import { Appbar } from 'react-native-paper';
 
-const TreeListItem = ({ tree, onPress }) => {
-  const theme = useTheme(); // ✅ use theme for card and text colors
+const TreeListItem = ({ tree, onMapPress }) => {
+  const theme = useTheme();
 
   return (
-    <TouchableOpacity onPress={onPress} activeOpacity={0.9}>
-      <Card style={[styles.card, { backgroundColor: theme.colors.card }]}>
-        <Card.Content style={styles.cardContent}>
-          <View style={[styles.iconWrapper, { backgroundColor: theme.dark ? '#1e1e1e' : '#eafaf1' }]}>
-            <MaterialCommunityIcons name="tree" size={28} color={theme.colors.primary} />
+    <Card style={[styles.card, { backgroundColor: theme.colors.card }]}>
+      <Card.Content style={styles.cardContent}>
+        <View
+          style={[
+            styles.iconWrapper,
+            { backgroundColor: theme.dark ? '#1e1e1e' : '#eafaf1' },
+          ]}
+        >
+          <MaterialCommunityIcons
+            name="tree"
+            size={28}
+            color={theme.colors.primary}
+          />
+        </View>
+
+        <View style={styles.textContainer}>
+          <Text style={[styles.treeIdText, { color: theme.colors.text }]}>
+            {tree.treeID}
+          </Text>
+
+          <View style={styles.locationContainer}>
+            <MaterialCommunityIcons
+              name="map-marker"
+              size={14}
+              color={theme.dark ? '#aaa' : '#888'}
+            />
+            <Text style={[styles.locationText, { color: theme.colors.text }]}>
+              {tree.barangay ? `${tree.barangay}, ${tree.city}` : tree.city}
+            </Text>
           </View>
 
-          <View style={styles.textContainer}>
-            <Text style={[styles.treeIdText, { color: theme.colors.text }]}>{tree.treeID}</Text>
+          <View style={styles.statusRow}>
+            <Text
+              style={[styles.statusLabel, { color: theme.dark ? '#bbb' : '#555' }]}
+            >
+              Status:
+            </Text>
 
-            <View style={styles.locationContainer}>
-              <MaterialCommunityIcons
-                name="map-marker"
-                size={14}
-                color={theme.dark ? '#aaa' : '#888'}
-              />
-              <Text style={[styles.locationText, { color: theme.colors.text }]}>
-                {tree.barangay ? `${tree.barangay}, ${tree.city}` : tree.city}
-              </Text>
-            </View>
-
-            <View style={styles.statusRow}>
-              <Text style={[styles.statusLabel, { color: theme.dark ? '#bbb' : '#555' }]}>
-                Status:
-              </Text>
-              <Text
-                style={[
-                  styles.statusValue,
-                  tree.status === 'verified'
-                    ? { color: '#27ae60' }
-                    : tree.status === 'harvest-ready'
-                    ? { color: '#f1c40f' }
-                    : tree.status === 'harvested'
-                    ? { color: '#8e5b32' }
-                    : { color: theme.dark ? '#bbb' : '#7f8c8d' },
-                ]}
-              >
-                {tree.status.charAt(0).toUpperCase() +
-                  tree.status.slice(1).replace('-', ' ')}
-              </Text>
-            </View>
+            <Text
+              style={[
+                styles.statusValue,
+                tree.status === 'verified'
+                  ? { color: '#27ae60' }
+                  : tree.status === 'harvest-ready'
+                  ? { color: '#f1c40f' }
+                  : tree.status === 'harvested'
+                  ? { color: '#8e5b32' }
+                  : { color: theme.dark ? '#bbb' : '#7f8c8d' },
+              ]}
+            >
+              {tree.status.charAt(0).toUpperCase() +
+                tree.status.slice(1).replace('-', ' ')}
+            </Text>
           </View>
-        </Card.Content>
-      </Card>
-    </TouchableOpacity>
+        </View>
+
+        {/* MAP BUTTON ONLY */}
+        <TouchableOpacity
+          onPress={onMapPress}
+          style={{
+            width: 42,
+            height: 42,
+            borderRadius: 21,
+            backgroundColor: theme.colors.primary,
+            justifyContent: 'center',
+            alignItems: 'center',
+            marginLeft: 10,
+          }}
+        >
+          <MaterialCommunityIcons name="map-marker" size={22} color="#fff" />
+        </TouchableOpacity>
+      </Card.Content>
+    </Card>
   );
 };
 
 export default function TreeListScreen() {
   const navigation = useNavigation();
-  const theme = useTheme(); // ✅ access global theme
+  const theme = useTheme();
+
   const [trees, setTrees] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('All');
+  const [sortOrder, setSortOrder] = useState("asc");
+
+  useLayoutEffect(() => {
+    navigation.setOptions({ headerShown: false });
+  }, []);
 
   useEffect(() => {
     const unsubscribe = firestore()
@@ -70,7 +112,10 @@ export default function TreeListScreen() {
       .where('status', 'in', ['verified', 'harvest-ready', 'harvested', 'not-ready'])
       .onSnapshot(
         (querySnapshot) => {
-          const data = querySnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+          const data = querySnapshot.docs.map((doc) => ({
+            id: doc.id,
+            ...doc.data(),
+          }));
           setTrees(data);
           setIsLoading(false);
         },
@@ -84,9 +129,18 @@ export default function TreeListScreen() {
   }, []);
 
   const filteredTrees = useMemo(() => {
-    if (statusFilter === 'All') return trees;
-    return trees.filter((tree) => tree.status === statusFilter);
-  }, [trees, statusFilter]);
+    let data =
+      statusFilter === "All"
+        ? [...trees]
+        : trees.filter((tree) => tree.status === statusFilter);
+
+    data.sort((a, b) => {
+      if (sortOrder === "asc") return a.treeID.localeCompare(b.treeID);
+      return b.treeID.localeCompare(a.treeID);
+    });
+
+    return data;
+  }, [trees, statusFilter, sortOrder]);
 
   if (isLoading) {
     return (
@@ -98,65 +152,88 @@ export default function TreeListScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      {/* 🔹 Status Filter */}
+
+      {/* APPBAR */}
+      <Appbar.Header mode="small" statusBarHeight={0}>
+        <Appbar.Content title="Tree List" />
+
+        <Appbar.Action
+          icon="sort-ascending"
+          color={sortOrder === "asc" ? theme.colors.primary : undefined}
+          onPress={() => setSortOrder("asc")}
+        />
+
+        <Appbar.Action
+          icon="sort-descending"
+          color={sortOrder === "desc" ? theme.colors.primary : undefined}
+          onPress={() => setSortOrder("desc")}
+        />
+      </Appbar.Header>
+
+      {/* FILTER BAR FIXED */}
       <View
         style={[
-          styles.filterContainer,
-          {
-            backgroundColor: theme.colors.card,
-            borderBottomColor: theme.dark ? '#333' : '#e0e0e0',
-          },
+          styles.filterWrapper,
+          { backgroundColor: theme.colors.card } // DARK MODE FIX
         ]}
       >
-        {['All', 'verified', 'harvest-ready', 'harvested', 'not-ready'].map((status) => (
-          <Chip
-            key={status}
-            mode="outlined"
-            selected={statusFilter === status}
-            onPress={() => setStatusFilter(status)}
-            style={[
-              styles.filterChip,
-              {
-                borderColor: theme.colors.primary,
-                backgroundColor:
-                  statusFilter === status
-                    ? theme.colors.primary
-                    : theme.colors.background,
-              },
-            ]}
-            textStyle={{
-              color:
-                statusFilter === status
-                  ? '#fff'
-                  : theme.colors.primary,
-              fontWeight: statusFilter === status ? 'bold' : 'normal',
-            }}
-          >
-            {status === 'All'
-              ? 'All'
-              : status.replace('-', ' ').replace(/\b\w/g, (l) => l.toUpperCase())}
-          </Chip>
-        ))}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.filterContainer}
+        >
+          {['All', 'verified', 'harvest-ready', 'harvested', 'not-ready'].map(
+            (status) => (
+              <Chip
+                key={status}
+                mode="outlined"
+                selected={statusFilter === status}
+                onPress={() => setStatusFilter(status)}
+                style={[
+                  styles.filterChip,
+                  {
+                    borderColor: theme.colors.primary,
+                    backgroundColor:
+                      statusFilter === status
+                        ? theme.colors.primary
+                        : theme.colors.card,
+                  },
+                ]}
+                textStyle={{
+                  color:
+                    statusFilter === status ? '#fff' : theme.colors.primary,
+                  fontWeight: statusFilter === status ? 'bold' : 'normal',
+                }}
+              >
+                {status === 'All'
+                  ? 'All'
+                  : status.replace('-', ' ').replace(/\b\w/g, (l) => l.toUpperCase())}
+              </Chip>
+            )
+          )}
+        </ScrollView>
       </View>
 
-      {/* 🔹 Tree List */}
+      {/* TREE LIST */}
       <FlatList
         data={filteredTrees}
         keyExtractor={(item) => item.id || item.treeID}
         renderItem={({ item }) => (
           <TreeListItem
             tree={item}
-            onPress={() =>
-              navigation.navigate('Map', {
-                treeID: item.id,
-                lat: item.coordinates?.latitude,
-                lng: item.coordinates?.longitude,
+            onMapPress={() =>
+              navigation.navigate("Map", {
+                focusTree: {
+                  treeID: item.treeID,
+                  latitude: item.coordinates?.latitude,
+                  longitude: item.coordinates?.longitude,
+                  zoomIn: true,
+                },
               })
             }
           />
         )}
         contentContainerStyle={styles.listContent}
-        ItemSeparatorComponent={() => <View style={styles.divider} />}
         ListEmptyComponent={
           <View style={styles.emptyState}>
             <MaterialCommunityIcons
@@ -170,41 +247,63 @@ export default function TreeListScreen() {
           </View>
         }
       />
-
-
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+
+  filterWrapper: {
+    position: 'absolute',
+    top: 60,
+    left: 0,
+    right: 0,
+    zIndex: 10,
+    paddingVertical: 8,
+    elevation: 4,
+  },
+
   filterContainer: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 8,
-    borderBottomWidth: 1,
+    alignItems: 'center',
+    paddingHorizontal: 12,
   },
-  filterChip: { margin: 4, borderWidth: 1 },
-  listContent: { padding: 12 },
-  divider: { height: 8 },
-  emptyState: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 40, marginTop: 50 },
+
+  filterChip: {
+    marginHorizontal: 6,
+    borderWidth: 1,
+  },
+
+  listContent: {
+    padding: 12,
+    paddingTop: 60,
+  },
+
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+
+  emptyState: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 40,
+    marginTop: 50,
+  },
+
   emptyText: { fontSize: 16, marginTop: 16 },
+
   card: {
     borderRadius: 14,
     elevation: 3,
-    shadowColor: '#000',
-    shadowOpacity: 0.15,
-    shadowOffset: { width: 0, height: 2 },
-    shadowRadius: 4,
+    marginBottom: 10,
   },
+
   cardContent: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 14,
   },
+
   iconWrapper: {
     width: 48,
     height: 48,
@@ -213,19 +312,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginRight: 14,
   },
+
   textContainer: { flex: 1 },
   treeIdText: { fontSize: 16, fontWeight: 'bold' },
-  locationContainer: { flexDirection: 'row', alignItems: 'center', marginTop: 4 },
+
+  locationContainer: { flexDirection: 'row', marginTop: 4 },
   locationText: { marginLeft: 4, fontSize: 13 },
-  statusRow: { flexDirection: 'row', alignItems: 'center', marginTop: 6 },
+
+  statusRow: { flexDirection: 'row', marginTop: 6 },
   statusLabel: { fontSize: 13, marginRight: 4 },
   statusValue: { fontSize: 13, fontWeight: 'bold' },
-  fab: {
-    position: 'absolute',
-    margin: 16,
-    right: 0,
-    bottom: 0,
-    borderRadius: 28,
-    elevation: 5,
-  },
 });

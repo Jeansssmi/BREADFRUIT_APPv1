@@ -28,8 +28,15 @@ import ProcessFruitScreen from '../screens/researcher/tree/ProcessFruitScreen';
 import TreeDetailsScreen from '../screens/researcher/tree/TreeDetailsScreen';
 import TreeListScreen from '../screens/researcher/tree/TreeListScreen';
 import NotificationsScreen from '../screens/researcher/tree/NotificationsScreen';
+import ApprovedDetailsScreen from '../screens/researcher/tree/ApprovedDetailsScreen';
+import RejectedDetailsScreen from '../screens/researcher/tree/RejectedDetailsScreen';
 import TrackedTreesScreen from '../screens/researcher/tree/TrackedTreesScreen';
+import ResearcherTreeListDashboard from '../screens/researcher/tree/ResearcherTreeListDashboard';
+import ArchivedNotificationsScreen from '../screens/researcher/tree/ArchivedNotificationsScreen';
+import RejectedTreeList from '../screens/researcher/tree/RejectedTreeList';
+import TreeRipeTree from '../screens/researcher/tree/TreeRipeTree';
 import EditUserScreen from '../screens/researcher/user/EditUserScreen';
+
 
 // Create the necessary navigators
 const Tab = createBottomTabNavigator();
@@ -46,7 +53,7 @@ function TreeStack() {
   return (
     <TreeStackNav.Navigator initialRouteName="TreeManagement">
       <TreeStackNav.Screen name="TreeManagement" component={TreeManagementScreen} options={{ headerShown: false }} />
-      <TreeStackNav.Screen name="PendingTrees" component={PendingTreesScreen} options={{ headerTitle: 'Pending Trees' }} />
+
     </TreeStackNav.Navigator>
   );
 }
@@ -58,7 +65,7 @@ function ProfileStack() {
            <ProfileStackNav.Screen name="ProfileScreen" component={ProfileScreen} options={{ headerShown: false }} />
 
 
-           <ProfileStackNav.Screen name="AboutHelp" component={AboutHelpScreen} options={{ headerTitle: 'About & Help' }} />
+           <ProfileStackNav.Screen name="AboutHelp" component={AboutHelpScreen} options={{ headerShown: false }} />
        {/* ✅ Add Appearance Screen here */}
                    <ProfileStackNav.Screen
                       name="Appearance"
@@ -113,7 +120,7 @@ export default function ResearcherNavigator() {
       <MainStack.Screen name="TreeDetails" component={TreeDetailsScreen} options={{ headerTitle: 'Tree Details' }} />
 
       <MainStack.Screen name="AddTree" component={AddTreeScreen} options={{ headerTitle: 'Add Tree' }} />
-      <MainStack.Screen name="PendingDetails" component={PendingDetailsScreen} options={{ headerTitle: 'Pending Details' }} />
+      <MainStack.Screen name="PendingDetails" component={PendingDetailsScreen} options={{ headerShown: false }} />
       <MainStack.Screen name="ProcessFruit" component={ProcessFruitScreen} options={{ headerTitle: 'Process Fruit' }} />
       <MainStack.Screen name="TrackedTrees" component={TrackedTreesScreen} options={{ headerTitle: 'Tracked Trees' }} />
 
@@ -131,7 +138,14 @@ export default function ResearcherNavigator() {
       <MainStack.Screen name="HarvestedList" component={HarvestedListScreen} />
       <MainStack.Screen name="ActivityLogsScreen" component={ActivityLogsScreen} options={{ headerShown: false }} />
       <MainStack.Screen name="Search" component={SearchScreen} options={{ headerShown: false }} />
-      <MainStack.Screen name="NotificationsScreen" component={NotificationsScreen} options={{ headerShown: false }} />
+      <MainStack.Screen name="NotificationsScreen" component={NotificationsScreen}  options={{ headerShown: false }} />
+      <MainStack.Screen name="ResearcherTreeListDashboard" component={ResearcherTreeListDashboard}  options={{ headerTitle: 'Total Trees Tracked' }} />
+      <MainStack.Screen name="ApprovedDetails" component={ApprovedDetailsScreen} options={{ headerTitle: 'Approved Tree Details' }} />
+      <MainStack.Screen name="RejectedDetails" component={RejectedDetailsScreen} options={{ headerTitle: 'Rejected Tree Details' }} />
+      <MainStack.Screen name="ArchivedNotificationsScreen" component={ArchivedNotificationsScreen}  options={{ headerShown: false }} />
+      <MainStack.Screen name="PendingTrees" component={PendingTreesScreen} options={{ headerShown: false }} />
+      <MainStack.Screen name="TreeRipeTree" component={TreeRipeTree} options={{ headerShown: false }} />
+
     </MainStack.Navigator>
   );
 }

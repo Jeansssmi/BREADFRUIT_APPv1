@@ -74,8 +74,9 @@ export default function HarvestedListScreen() {
         renderItem={({ item }) => (
           <Pressable
             onPress={() =>
-              navigation.navigate("TreeList", {
-                treeID: item.treeID, // ✅ Pass only this treeID
+              navigation.navigate("EditTree", {
+                docId: item.id,
+                treeID: item.treeID,
               })
             }
           >

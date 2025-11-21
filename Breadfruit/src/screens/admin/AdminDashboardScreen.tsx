@@ -5,6 +5,7 @@ import {
   ScrollView,
   StyleSheet,
   View,
+  InteractionManager,
 } from "react-native";
 import {
   Card,
@@ -27,6 +28,8 @@ export default function AdminDashboardScreen() {
   const navigation = useNavigation();
   const theme = useTheme();
 
+  const [unreadCount, setUnreadCount] = useState(0);
+
   const [allTrees, setAllTrees] = useState(0);
   const [allUsers, setAllUsers] = useState(0);
   const [researchers, setResearchers] = useState(0);
@@ -34,125 +37,147 @@ export default function AdminDashboardScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [recentActivity, setRecentActivity] = useState([]);
   const [unseenCount, setUnseenCount] = useState(0);
-  const [showActivity, setShowActivity] = useState(false); // ✅ toggle state
+  const [showActivity, setShowActivity] = useState(false);
+  const [trackedTrees, setTrackedTrees] = useState(0);
+  const [pendings, setPendings] = useState(0);
+  const [pendingTrees, setPendingTrees] = useState(0);
 
-  // ✅ Fetch dashboard statistics
-  const fetchAllCounts = useCallback(async () => {
-    setRefreshing(true);
-    try {
-      const statuses = ["verified", "harvest-ready", "not-ready", "harvested"];
-      let totalTrees = 0;
 
-      for (const status of statuses) {
-        const snap = await firestore()
-          .collection("trees")
-          .where("status", "==", status)
-          .get();
-        totalTrees += snap.size;
+ // ✅ Fetch dashboard statistics directly from Firestore (optimized + fixed)
+ const fetchAllCounts = async () => {
+   setRefreshing(true);
+   try {
+
+     const trackedSnap = await firestore()
+       .collection("trees")
+       .where("status", "in", ["verified", "harvest-ready", "not-ready", "harvested"])
+       .get();
+     setAllTrees(trackedSnap.size);
+
+
+     const usersSnap = await firestore().collection("users").get();
+     setAllUsers(usersSnap.size);
+
+     const researchersSnap = await firestore()
+       .collection("users")
+       .where("role", "==", "researcher")
+       .get();
+     setResearchers(researchersSnap.size);
+
+
+         const pendingUsersSnap = await firestore()
+           .collection("users")
+           .where("status", "==", "pending")
+           .get();
+         setPendingUsers(pendingUsersSnap.size)
+
+    const unsubPending = firestore()
+      .collection('trees')
+      .where('status', '==', 'pending')
+
+     .onSnapshot((snapshot) => {
+       if (!snapshot) {
+         setPendings(0);
+         return;
+       }
+       setPendings(snapshot.size ?? 0);
+     });
+  const pendingTreesSnap = await firestore()
+    .collection("trees")
+    .where("status", "==", "pending")
+    .get();
+
+  setPendingTrees(pendingTreesSnap.size);
+
+
+
+   } catch (error) {
+     console.error("Error fetching counts:", error);
+   } finally {
+     setRefreshing(false);
+   }
+ };
+
+// ✅ Count ALL unread notifications for admin (read == false)
+useEffect(() => {
+  const user = auth().currentUser;
+  if (!user) return;
+
+  const unsubUser = firestore()
+    .collection("users")
+    .doc(user.uid)
+    .onSnapshot((userDoc) => {
+      const role = userDoc.data()?.role;
+      let unsubNotif;
+
+      // RESET COUNT
+      setUnseenCount(0);
+
+      // ✅ ADMIN → count where recipientRole = "Admin"
+      if (role === "admin") {
+        unsubNotif = firestore()
+          .collection("notification")
+          .where("recipientRole", "==", "Admin")
+          .where("read", "==", false)    // ← FIXED HERE
+          .onSnapshot((snap) => setUnseenCount(snap?.size ?? 0));
+
+        return;
       }
 
-      setAllTrees(totalTrees);
+      // ✅ Researcher → count own unread notifications
+      if (role === "researcher") {
+        unsubNotif = firestore()
+          .collection("notification")
+          .where("recipientID", "==", user.uid)
+          .where("read", "==", false)    // ← FIXED HERE
+          .onSnapshot((snap) => setUnseenCount(snap?.size ?? 0));
 
-      const usersSnap = await firestore().collection("users").get();
-      setAllUsers(usersSnap.size);
+        return;
+      }
 
-      const researcherSnap = await firestore()
-        .collection("users")
-        .where("role", "==", "researcher")
-        .get();
-      setResearchers(researcherSnap.size);
+      // ❌ Viewer → no notifications
+      setUnseenCount(null);
+    });
 
-      const pendingSnap = await firestore()
-        .collection("users")
-        .where("status", "==", "pending")
-        .get();
-      setPendingUsers(pendingSnap.size);
-    } catch (error) {
-      console.error("Error fetching counts: ", error);
-    } finally {
-      setRefreshing(false);
-    }
-  }, []);
-
-  // ✅ Fetch unseen notifications count
- useEffect(() => {
-   let userUnsub: (() => void) | undefined;
-   let notifUnsub: (() => void) | undefined;
-
-   const init = async () => {
-     const user = auth().currentUser;
-     if (!user) return;
-
-     userUnsub = firestore()
-       .collection("users")
-       .doc(user.uid)
-       .onSnapshot((userDoc) => {
-         const role = userDoc.data()?.role;
-
-         // ✅ Reset badge each time role changes
-         setUnseenCount(0);
-
-         // ✅ Admin → fetch notifications from viewers
-         if (role === "admin") {
-           notifUnsub = firestore()
-             .collection("notification")
-             .where("recipientRole", "==", "Admin")
-             .where("seen", "==", false)
-             .onSnapshot(
-               (snap) => setUnseenCount(snap?.size ?? 0),
-               (err) => console.log("Admin notif fetch error:", err.code)
-             );
-           return;
-         }
-
-         // ✅ Researcher → fetch notifications from Admin
-         if (role === "researcher") {
-           notifUnsub = firestore()
-             .collection("notification")
-             .where("recipientID", "==", user.uid)
-             .where("read", "==", false)
-             .onSnapshot(
-               (snap) => setUnseenCount(snap?.size ?? 0),
-               (err) => console.log("Researcher notif fetch error:", err.code)
-             );
-           return;
-         }
-
-         // ❌ Viewer → no bell
-         setUnseenCount(null);
-       });
-   };
-
-   init();
-
-   return () => {
-     if (userUnsub) userUnsub();
-     if (notifUnsub) notifUnsub();
-   };
- }, []);
+  return () => unsubUser();
+}, []);
 
 
-  // ✅ Fetch recent activity
-  useEffect(() => {
-    const unsubscribe = firestore()
-      .collection("activityLog")
-      .orderBy("timestamp", "desc")
-      .limit(5)
-      .onSnapshot(
-        (snapshot) => {
-          const data = snapshot.docs.map((doc) => {
-            const raw = doc.data();
-            let tsDate = raw.timestamp?.toDate
-              ? raw.timestamp.toDate()
-              : new Date(raw.timestamp);
-            return { id: doc.id, ...raw, timestampDate: tsDate };
-          });
-          setRecentActivity(data);
-        },
-        (error) => console.error("Error fetching activity:", error)
-      );
-    return () => unsubscribe();
-  }, []);
+// ✅ Real-time Recent Activity with reliable timestamp updates
+useEffect(() => {
+  const unsubscribe = firestore()
+    .collection("activityLog")
+    .orderBy("timestamp", "desc")
+    .limit(5)
+    .onSnapshot(
+      (snapshot) => {
+        const updatedData = snapshot.docs.map((doc) => {
+          const raw = doc.data();
+          const timestamp = raw.timestamp;
+
+          // Handle various timestamp formats safely
+          let tsDate = null;
+          if (timestamp) {
+            if (typeof timestamp.toDate === "function") tsDate = timestamp.toDate();
+            else if (typeof timestamp === "number") tsDate = new Date(timestamp);
+            else if (typeof timestamp === "string") tsDate = new Date(timestamp);
+            else if (timestamp.seconds) tsDate = new Date(timestamp.seconds * 1000);
+          }
+
+          return { id: doc.id, ...raw, timestampDate: tsDate };
+        });
+
+        // Always sort again to handle late Firestore timestamp updates
+        updatedData.sort((a, b) => (b.timestampDate || 0) - (a.timestampDate || 0));
+
+        setRecentActivity(updatedData);
+      },
+      (error) => console.error("Error fetching activity:", error)
+    );
+
+  return () => unsubscribe();
+}, []);
+
 
   const getActivityIcon = (type) => {
     switch (type) {
@@ -166,36 +191,59 @@ export default function AdminDashboardScreen() {
         return "clock-outline";
     }
   };
-useEffect(() => {
-  // ✅ Live total trees count
-  const unsubTrees = firestore()
-    .collection("trees")
-    .onSnapshot((snapshot) => setAllTrees(snapshot.size));
 
-  // ✅ Live users count
-  const unsubUsers = firestore()
-    .collection("users")
-    .onSnapshot((snapshot) => setAllUsers(snapshot.size));
+// ✅ Debounced + cleaned real-time Firestore listeners
+  useFocusEffect(
+    useCallback(() => {
+      let timeoutId;
 
-  // ✅ Live researchers count
-  const unsubResearchers = firestore()
-    .collection("users")
-    .where("role", "==", "researcher")
-    .onSnapshot((snapshot) => setResearchers(snapshot.size));
+     const unsubTrees = firestore()
+       .collection("trees")
+       .where("status", "in", ["verified", "harvest-ready", "not-ready", "harvested"])
+       .onSnapshot((snapshot) => {
+         clearTimeout(timeoutId);
+         timeoutId = setTimeout(() => setAllTrees(snapshot.size), 150);
+       });
 
-  // ✅ Live pending users count
-  const unsubPending = firestore()
-    .collection("users")
-    .where("status", "==", "pending")
-    .onSnapshot((snapshot) => setPendingUsers(snapshot.size));
+      const unsubUsers = firestore()
+        .collection("users")
+        .onSnapshot((snapshot) => {
+          clearTimeout(timeoutId);
+          timeoutId = setTimeout(() => setAllUsers(snapshot.size), 150);
+        });
 
-  return () => {
-    unsubTrees();
-    unsubUsers();
-    unsubResearchers();
-    unsubPending();
-  };
-}, []);
+      const unsubResearchers = firestore()
+        .collection("users")
+        .where("role", "==", "researcher")
+        .onSnapshot((snapshot) => {
+          clearTimeout(timeoutId);
+          timeoutId = setTimeout(() => setResearchers(snapshot.size), 150);
+        });
+
+      const unsubPending = firestore()
+        .collection("users")
+        .where("status", "==", "pending")
+        .onSnapshot((snapshot) => {
+          clearTimeout(timeoutId);
+          timeoutId = setTimeout(() => setPendingUsers(snapshot.size), 150);
+        });
+
+      return () => {
+        if (timeoutId) clearTimeout(timeoutId);
+        unsubTrees();
+        unsubUsers();
+        unsubResearchers();
+        unsubPending();
+      };
+    }, [])
+  );
+
+  useEffect(() => {
+    const task = InteractionManager.runAfterInteractions(() => {
+      fetchAllCounts();
+    });
+    return () => task.cancel();
+  }, []);
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
@@ -212,24 +260,42 @@ useEffect(() => {
           title="Dashboard"
           titleStyle={[styles.appbarTitle, { color: theme.colors.text }]}
         />
+
         <View style={{ marginRight: 10 }}>
           <Appbar.Action
-            icon="bell-outline"
-            color={theme.colors.text}
+            icon="bell-ring"
+            color="#FFD700" // 🟡 Yellow bell icon
             onPress={() => navigation.navigate("NotificationsScreen")}
           />
           {unseenCount > 0 && (
-            <Badge
-              size={12}
+            <View
               style={{
                 position: "absolute",
-                top: 5,
-                right: 5,
+                top: 2,
+                right: 4,
                 backgroundColor: "#e74c3c",
+                borderRadius: 10,
+                minWidth: 18,
+                height: 18,
+                justifyContent: "center",
+                alignItems: "center",
+                paddingHorizontal: 3,
               }}
-            />
+            >
+              <Text
+                style={{
+                  color: "#fff",
+                  fontSize: 10,
+                  fontWeight: "bold",
+                  textAlign: "center",
+                }}
+              >
+                {unseenCount > 9 ? "9+" : unseenCount}
+              </Text>
+            </View>
           )}
         </View>
+
       </Appbar.Header>
 
       <ScrollView
@@ -253,12 +319,15 @@ useEffect(() => {
         {/* ✅ Dashboard Cards */}
         <View style={styles.gridContainer}>
           {[
+
             {
-              title: "Trees Tracked",
+              title: "Map Trees",
               value: allTrees,
               icon: "forest",
-              onPress: () => navigation.navigate("TreeListToMap"),
+              onPress: () => navigation.navigate("Map"),
             },
+
+
             {
               title: "All Users",
               value: allUsers,
@@ -266,14 +335,13 @@ useEffect(() => {
               onPress: () => navigation.navigate("UserList"),
             },
             {
-              title: "Researchers",
-              value: researchers,
-              icon: "account-tie",
-              onPress: () =>
-                navigation.navigate("UserListScreen", { filter: "researcher" }),
+              title: "Pending Trees",
+              value: pendingTrees,
+              icon: "account-clock",
+              onPress: () => navigation.navigate("PendingTrees"),
             },
             {
-              title: "User Approval",
+              title: "Pending Users",
               value: pendingUsers,
               icon: "account-clock",
               onPress: () => navigation.navigate("PendingUsers"),
@@ -303,96 +371,107 @@ useEffect(() => {
           ))}
         </View>
 
-        {/* ✅ Clean Toggleable Recent Activity */}
-        <Card style={[styles.activityCard, { backgroundColor: theme.colors.card }]}>
-          <Card.Content>
-            <View
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                justifyContent: "space-between",
-              }}
-            >
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                <MaterialCommunityIcons
-                  name="clock-time-three-outline"
-                  size={20}
-                  color={theme.colors.primary}
-                />
-                <Text style={[styles.cardTitle, { color: theme.colors.primary }]}>
-                  Recent Activity
-                </Text>
-              </View>
 
-              <Button
-                mode="text"
-                compact
-                onPress={() => setShowActivity((prev) => !prev)}
-                labelStyle={{ color: theme.colors.primary, fontWeight: "bold" }}
-              >
-                {showActivity ? "Hide" : "Show"}
-              </Button>
-            </View>
+     {/* ✅ Clean Toggleable Recent Activity */}
+     <Card style={[styles.activityCard, { backgroundColor: theme.colors.card }]}>
+       <Card.Content>
+         <View
+           style={{
+             flexDirection: "row",
+             alignItems: "center",
+             justifyContent: "space-between",
+           }}
+         >
+           <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+             <MaterialCommunityIcons
+               name="clock-time-three-outline"
+               size={20}
+               color={theme.colors.primary}
+             />
+             <Text style={[styles.cardTitle, { color: theme.colors.primary }]}>
+               Recent Activity
+             </Text>
+           </View>
+
+           <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+             <Button
+               mode="text"
+               compact
+               onPress={() => navigation.navigate("ActivityLogsScreen")}
+               labelStyle={{ color: theme.colors.primary, fontWeight: "bold" }}
+             >
+               Show All
+             </Button>
+
+             <Button
+               mode="text"
+               compact
+               onPress={() => setShowActivity((prev) => !prev)}
+               labelStyle={{ color: theme.colors.primary, fontWeight: "bold" }}
+             >
+               {showActivity ? "Hide" : "Show"}
+             </Button>
+           </View>
+         </View>
+
+         {showActivity && (
+           <>
+             <Divider style={{ marginVertical: 10 }} />
+             {recentActivity.length > 0 ? (
+               recentActivity.map((activity) => (
+                 <Pressable
+                   key={activity.id}
+                   style={({ pressed }) => [
+                     styles.activityItem,
+                     {
+                       backgroundColor: pressed
+                         ? theme.dark
+                           ? "#333"
+                           : "#f0f0f0"
+                         : "transparent",
+                       borderRadius: 6,
+                       paddingVertical: 6,
+                       paddingHorizontal: 4,
+                     },
+                   ]}
+                   onPress={() =>
+                     navigation.navigate("ActivityLogsScreen", {
+                       highlightId: activity.id,
+                     })
+                   }
+                 >
+                   <Text
+                     style={{ color: theme.colors.text, fontWeight: "500" }}
+                     numberOfLines={1}
+                   >
+                     • {activity.description}
+                   </Text>
+                   {activity.timestampDate && (
+                     <Text
+                       style={{
+                         color: theme.dark ? "#aaa" : "#888",
+                         fontSize: 12,
+                       }}
+                     >
+                       {activity.timestampDate.toLocaleString()}
+                     </Text>
+                   )}
+                 </Pressable>
+               ))
+             ) : (
+               <Text
+                 style={[styles.activityItem, { color: theme.colors.text }]}
+               >
+                 No recent activity to show.
+               </Text>
+             )}
+           </>
+         )}
+       </Card.Content>
+     </Card>
 
 
-            {showActivity && (
-              <>
-                <Divider style={{ marginVertical: 10 }} />
-                {recentActivity.length > 0 ? (
-                  recentActivity.map((activity) => (
-                    <Pressable
-                      key={activity.id}
-                      style={({ pressed }) => [
-                        styles.activityItem,
-                        {
-                          backgroundColor: pressed
-                            ? theme.dark
-                              ? "#333"
-                              : "#f0f0f0"
-                            : "transparent",
-                          borderRadius: 6,
-                          paddingVertical: 6,
-                          paddingHorizontal: 4,
-                        },
-                      ]}
-                      onPress={() =>
-                        navigation.navigate("ActivityLogsScreen", {
-                          highlightId: activity.id,
-                        })
-                      }
-                    >
-                      <Text
-                        style={{ color: theme.colors.text, fontWeight: "500" }}
-                        numberOfLines={1}
-                      >
-                        • {activity.description}
-                      </Text>
-                      {activity.timestampDate && (
-                        <Text
-                          style={{
-                            color: theme.dark ? "#aaa" : "#888",
-                            fontSize: 12,
-                          }}
-                        >
-                          {activity.timestampDate.toLocaleString()}
-                        </Text>
-                      )}
-                    </Pressable>
-                  ))
-                ) : (
-                  <Text
-                    style={[styles.activityItem, { color: theme.colors.text }]}
-                  >
-                    No recent activity to show.
-                  </Text>
-                )}
-              </>
-            )}
 
-
-
-          </Card.Content>
-        </Card>
       </ScrollView>
     </View>
   );

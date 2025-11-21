@@ -8,7 +8,7 @@ import firestore from '@react-native-firebase/firestore';
 // ✅ Role Filter Component (theme-aware)
 const RoleFilter = React.memo(({ selected, onSelect }) => {
   const theme = useTheme();
-  const roles = ['All', 'Admin', 'Researcher'];
+  const roles = [ 'Researcher'];
 
   return (
     <View style={[styles.filterContainer, { backgroundColor: theme.colors.background }]}>

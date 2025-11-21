@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Background color -->
+    <item android:drawable="@color/white" />
+
+    <!-- Centered splash logo -->
+    <item>
+        <bitmap
+            android:gravity="center"
+            android:src="@drawable/splashscreen_logo"
+            android:antialias="true"
+            android:filter="true"
+            android:tileMode="disabled" />
+    </item>
+
+</layer-list>

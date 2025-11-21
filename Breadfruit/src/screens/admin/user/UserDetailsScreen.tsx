@@ -9,6 +9,127 @@ import functions from "@react-native-firebase/functions";
 import { LoadingAlert, NotificationAlert } from "@/components/NotificationModal";
 import { useUserData } from "@/hooks/useUserData";
 
+
+const TrackedTreesList = ({ researcherID, navigation, theme }) => {
+  const [trees, setTrees] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const unsubscribe = firestore()
+      .collection("trees")
+      .where("trackedById", "==", researcherID)
+      .onSnapshot(
+        (snap) => {
+          const data: any[] = [];
+          snap.forEach((doc) => data.push({ id: doc.id, ...doc.data() }));
+          setTrees(data);
+          setLoading(false);
+        },
+        (err) => {
+          console.error("Error fetching tracked trees:", err);
+          setLoading(false);
+        }
+      );
+
+    return () => unsubscribe();
+  }, [researcherID]);
+
+  if (loading) {
+    return (
+      <View style={{ padding: 10 }}>
+        <ActivityIndicator color={theme.colors.primary} />
+      </View>
+    );
+  }
+
+  if (trees.length === 0) {
+    return <Text style={{ color: "#777" }}>No tracked trees found.</Text>;
+  }
+
+  return (
+    <View>
+      {trees.map((tree) => (
+        <TouchableOpacity
+          key={tree.id}
+          style={{
+            padding: 12,
+            marginBottom: 10,
+            backgroundColor: theme.colors.surface,
+            borderRadius: 10,
+            borderWidth: 1,
+            borderColor: "#ddd",
+          }}
+        >
+          <Text style={{ fontWeight: "bold", fontSize: 16, color: theme.colors.text }}>
+            {tree.treeID}
+          </Text>
+
+          <Text style={{ color: "#666", marginTop: 2 }}>
+            {tree.barangay}, {tree.city}
+          </Text>
+
+          {/* Button Group */}
+          <View style={{ flexDirection: "row", marginTop: 10, gap: 8 }}>
+            <TouchableOpacity
+              style={{
+                backgroundColor: theme.colors.primary,
+                paddingVertical: 6,
+                paddingHorizontal: 12,
+                borderRadius: 8,
+                flexDirection: "row",
+                alignItems: "center",
+              }}
+              onPress={() => {
+                if (tree.status === "pending") {
+                  // 🔵 Go to Pending Approval
+                  navigation.navigate("PendingApprovalScreen", { treeID: tree.id });
+                } else {
+                  // 🟢 Already approved → Go to Updated Details Screen
+                  navigation.navigate("TreeDetails", { treeID: tree.id });
+                }
+              }}
+            >
+              <MaterialCommunityIcons name="eye" size={16} color="#fff" />
+              <Text style={{ color: "#fff", marginLeft: 6, fontWeight: "600" }}>
+                View
+              </Text>
+            </TouchableOpacity>
+
+
+            <TouchableOpacity
+              style={{
+                backgroundColor: "#2ecc71",
+                paddingVertical: 6,
+                paddingHorizontal: 12,
+                borderRadius: 8,
+                flexDirection: "row",
+                alignItems: "center",
+              }}
+              onPress={() =>
+                navigation.navigate("Map", {
+                  focusTree: {
+                    id: tree.id,
+                    treeID: tree.treeID,
+                    latitude: tree.coordinates?.latitude,
+                    longitude: tree.coordinates?.longitude,
+                    zoomIn: true,
+                  },
+                })
+              }
+            >
+              <MaterialCommunityIcons name="map-marker" size={16} color="#fff" />
+              <Text style={{ color: "#fff", marginLeft: 6, fontWeight: "600" }}>
+                View Map
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      ))}
+    </View>
+  );
+};
+
+
 export default function UserDetailsScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute();
@@ -182,6 +303,20 @@ export default function UserDetailsScreen() {
             </View>
           </Card.Content>
         </Card>
+
+        {/* 🌳 Researcher Tracked Trees */}
+        {user?.role === "researcher" && (
+          <Card style={[styles.detailsCard, { marginTop: 20, backgroundColor: theme.colors.card }]}>
+            <Card.Content>
+              <Text style={{ fontSize: 18, fontWeight: "bold", marginBottom: 10, color: theme.colors.primary }}>
+                Tracked Trees
+              </Text>
+
+              <TrackedTreesList researcherID={user.uid} navigation={navigation} theme={theme} />
+            </Card.Content>
+          </Card>
+        )}
+
       </ScrollView>
 
       {/* 🔘 Bottom Buttons */}

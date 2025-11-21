@@ -15,6 +15,7 @@ import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 
 import storage from '@react-native-firebase/storage';
 import functions from '@react-native-firebase/functions';
+import firestore from "@react-native-firebase/firestore";
 
 import { LoadingAlert, NotificationAlert } from '@/components/NotificationModal';
 
@@ -54,71 +55,85 @@ export default function AddUserScreen() {
     setImage(result.assets[0].uri || null);
   };
 
-  const handleSubmit = async () => {
-    if (!name || !email || !password || !confirmPassword || !role) {
-      setNotificationMessage('All fields are required.');
-      setNotificationType('error');
-      setNotificationVisible(true);
-      return;
-    }
+const handleSubmit = async () => {
+  if (!name || !email || !password || !confirmPassword || !role) {
+    setNotificationMessage("All fields are required.");
+    setNotificationType("error");
+    setNotificationVisible(true);
+    return;
+  }
 
-    if (password !== confirmPassword) {
-      setNotificationMessage('Passwords do not match.');
-      setNotificationType('error');
-      setNotificationVisible(true);
-      return;
-    }
+  if (password !== confirmPassword) {
+    setNotificationMessage("Passwords do not match.");
+    setNotificationType("error");
+    setNotificationVisible(true);
+    return;
+  }
 
-    setLoading(true);
-    try {
-      let downloadURL: string | null = null;
+  setLoading(true);
 
-      if (image) {
-        try {
-          const fileName = `images/user-profile/${Date.now()}_${image.split('/').pop()}`;
-          const reference = storage().ref(fileName);
-          await reference.putFile(image.replace('file://', ''));
-          downloadURL = await reference.getDownloadURL();
-        } catch (uploadError: any) {
-          console.warn('⚠️ Image upload failed, continuing without image:', uploadError.code);
-        }
+  try {
+    let downloadURL: string | null = null;
+
+    // ✅ Upload image if selected
+    if (image) {
+      try {
+        const fileName = `images/user-profile/${Date.now()}_${image.split("/").pop()}`;
+        const reference = storage().ref(fileName);
+        await reference.putFile(image.replace("file://", ""));
+        downloadURL = await reference.getDownloadURL();
+      } catch (uploadError: any) {
+        console.warn("⚠️ Image upload failed, continuing without image:", uploadError.code);
       }
+    }
 
-      const createUser = functions().httpsCallable('createNewUser');
-      const result = await createUser({
-        name,
-        email,
-        password,
-        role,
-        status: 'verified',
-        image: downloadURL,
+    // ✅ Call Firebase Function to create user
+    const createUser = functions().httpsCallable("createNewUser");
+    const result = await createUser({
+      name,
+      email,
+      password,
+      role,
+      status: "verified",
+      image: downloadURL,
+    });
+
+    if (result.data?.success) {
+      // ✅ Log the action in Firestore
+      const adminName = "Admin";
+      const newUserName = name || "Unnamed User";
+
+      await firestore().collection("activityLog").add({
+        userRole: "admin",
+        uid: "system", // Replace with user?.uid if available
+        actionType: "create",
+        description: `${adminName} added a new ${role} account for ${newUserName}`,
+        timestamp: firestore.FieldValue.serverTimestamp(),
       });
 
-      if (result.data?.success) {
-        setNotificationMessage(`✅ ${role} account created successfully!`);
-        setNotificationType('success');
-        setNotificationVisible(true);
-        setName('');
-        setEmail('');
-        setPassword('');
-        setConfirmPassword('');
-        setRole('');
-        setImage(null);
-      } else {
-        throw new Error('User creation failed.');
-      }
-    } catch (error: any) {
-      console.error('❌ Error creating user:', error);
-      let message = 'Failed to create user. Please try again.';
-      if (error.message?.includes('already registered')) message = 'This email is already in use.';
-      if (error.message?.includes('invalid')) message = 'Invalid email or password.';
-      setNotificationMessage(message);
-      setNotificationType('error');
+      // ✅ Show success message (stay on AddUserScreen)
+      setNotificationMessage(`✅ ${role} account for ${newUserName} created successfully!`);
+      setNotificationType("success");
       setNotificationVisible(true);
-    } finally {
-      setLoading(false);
+
+      // ✅ Clear form fields for next user entry
+      setName("");
+      setEmail("");
+      setPassword("");
+      setConfirmPassword("");
+      setRole("");
+      setImage(null);
     }
-  };
+  } catch (error: any) {
+    console.error("❌ Error creating user:", error);
+    setNotificationMessage("❌ Failed to create user. Please try again.");
+    setNotificationType("error");
+    setNotificationVisible(true);
+  } finally {
+    setLoading(false);
+  }
+};
+
 
   return (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
@@ -131,15 +146,24 @@ export default function AddUserScreen() {
       >
         <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
           <LoadingAlert visible={loading} message="Creating user..." />
-          <NotificationAlert
-            visible={notificationVisible}
-            message={notificationMessage}
-            type={notificationType}
-            onClose={() => {
-              setNotificationVisible(false);
-              if (notificationType === 'success') navigation.goBack();
-            }}
-          />
+
+         <NotificationAlert
+           visible={notificationVisible}
+           message={notificationMessage}
+           type={notificationType}
+           onClose={() => {
+             setNotificationVisible(false);
+             // ✅ When success → refresh form but STAY on AddUserScreen
+             if (notificationType === "success") {
+               setName("");
+               setEmail("");
+               setPassword("");
+               setConfirmPassword("");
+               setRole("");
+               setImage(null);
+             }
+           }}
+         />
 
           {/* Profile picture */}
           <TouchableOpacity onPress={pickImage} style={[
@@ -214,7 +238,7 @@ export default function AddUserScreen() {
               </Button>
             }
           >
-            <Menu.Item title="Admin" onPress={() => { setRole('admin'); setShowRoleMenu(false); }} />
+
             <Menu.Item title="Researcher" onPress={() => { setRole('researcher'); setShowRoleMenu(false); }} />
             <Menu.Item title="Viewer" onPress={() => { setRole('viewer'); setShowRoleMenu(false); }} />
           </Menu>

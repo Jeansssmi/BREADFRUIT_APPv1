@@ -1,14 +1,24 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
-import { Card, FAB, Text, Appbar, useTheme } from 'react-native-paper'; // ✅ useTheme added
+import { Card, FAB, Text, Appbar } from 'react-native-paper';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import firestore from '@react-native-firebase/firestore';
 import auth from '@react-native-firebase/auth';
 
+// ⭐ Use YOUR dark mode
+import { useTheme } from "../../../context/ThemeContext";
+
 export default function TreeManagementScreen() {
   const navigation = useNavigation<any>();
-  const theme = useTheme(); // ✅ Access global theme
+  const { dark } = useTheme();  // <-- your dark mode value
+
+  // ⭐ Dynamic theme colors
+  const bgColor = dark ? "#000000" : "#FFFFFF";
+  const cardColor = dark ? "#111111" : "#FFFFFF";
+  const textColor = dark ? "#FFFFFF" : "#222222";
+  const borderColor = dark ? "#333" : "#eee";
+  const primary = "#2ecc71";
 
   const [allTrees, setAllTrees] = useState(0);
   const [pendings, setPendings] = useState(0);
@@ -41,14 +51,13 @@ export default function TreeManagementScreen() {
     }
   };
 
-  // ✅ Real-time updates
   useEffect(() => {
     if (!currentUser) return;
 
     const unsubscribeVerified = firestore()
       .collection('trees')
       .where('trackedById', '==', currentUser.uid)
-      .where('status', '==', 'verified')
+      .where('status', 'in', trackedStatuses)
       .onSnapshot((snap) => setAllTrees(snap?.size ?? 0));
 
     const unsubscribePending = firestore()
@@ -74,83 +83,108 @@ export default function TreeManagementScreen() {
   );
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+    <View style={[styles.container, { backgroundColor: bgColor }]}>
+
+      {/* ⭐ APPBAR */}
       <Appbar.Header
-        style={[
-          styles.appbarHeader,
-          { backgroundColor: theme.colors.card, borderBottomColor: theme.dark ? '#333' : '#eee' },
-        ]}
+        style={{
+          backgroundColor: cardColor,
+          borderBottomColor: borderColor,
+          borderBottomWidth: 1,
+        }}
       >
         <Appbar.Content
           title="Trees"
-          titleStyle={[styles.appbarTitle, { color: theme.colors.text }]}
+          titleStyle={{ color: textColor, fontWeight: 'bold' }}
         />
+
         <Appbar.Action
           icon="magnify"
-          color={theme.colors.text}
-          onPress={() => navigation.navigate('Search')}
+          color={primary}
+          onPress={() => navigation.navigate("Search")}
         />
       </Appbar.Header>
 
+      {/* ⭐ MAIN CONTENT */}
       <ScrollView
         contentContainerStyle={styles.scrollContent}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={fetchAllCounts} />}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={fetchAllCounts} tintColor={textColor} />
+        }
       >
+
         <View style={styles.titleContainer}>
-          <MaterialCommunityIcons
-            name="forest"
-            size={20}
-            color={theme.colors.primary}
-            style={{ textShadowColor: theme.colors.primary, textShadowRadius: 4 }}
-          />
-          <Text style={[styles.mainTitle, { color: theme.colors.text }]}>Tree Management</Text>
+          <MaterialCommunityIcons name="forest" size={22} color={primary} />
+          <Text style={[styles.mainTitle, { color: textColor }]}>Tree Management</Text>
         </View>
 
         <View style={styles.gridContainer}>
+
+          {/* 🌲 Trees Tracked */}
           <Pressable style={styles.gridItem} onPress={() => navigation.navigate('TreeList')}>
             <Card
               style={[
                 styles.card,
-                { backgroundColor: theme.colors.card, borderLeftColor: theme.colors.primary },
+                {
+                  backgroundColor: cardColor,
+                  borderLeftColor: primary,   // SAME GREEN BORDER
+                },
               ]}
             >
               <Card.Content>
                 <View style={styles.cardHeader}>
-                  <MaterialCommunityIcons name="forest" size={20} color={theme.colors.primary} />
-                  <Text style={[styles.cardTitle, { color: theme.colors.primary }]}>
-                    Trees Tracked
-                  </Text>
+                  <MaterialCommunityIcons name="forest" size={22} color={primary} />
+                  <Text style={[styles.cardTitle, { color: primary }]}>Trees Tracked</Text>
                 </View>
-                <Text style={[styles.cardValue, { color: theme.colors.text }]}>{allTrees}</Text>
+                <Text style={[styles.cardValue, { color: textColor }]}>{allTrees}</Text>
               </Card.Content>
             </Card>
           </Pressable>
 
-          <Pressable style={styles.gridItem} onPress={() => navigation.navigate('PendingTrees')}>
-            <Card style={[styles.card, { backgroundColor: theme.colors.card }]}>
+          {/* ⏳ Pending Approvals */}
+          <Pressable
+            style={styles.gridItem}
+            onPress={() =>
+              navigation.navigate("PendingTrees", { researcherId: currentUser.uid })
+            }
+          >
+            <Card
+              style={[
+                styles.card,
+                {
+                  backgroundColor: cardColor,
+                  borderLeftColor: primary,   // ⭐ ADDED: SAME GREEN BORDER
+                },
+              ]}
+            >
               <Card.Content>
                 <View style={styles.cardHeader}>
                   <MaterialCommunityIcons
                     name="clock-time-three-outline"
-                    size={20}
-                    color={theme.colors.primary}
+                    size={22}
+                    color={primary}
                   />
-                  <Text style={[styles.cardTitle, { color: theme.colors.primary }]}>
-                    Pending Approvals
-                  </Text>
+                  <Text style={[styles.cardTitle, { color: primary }]}>Pending Approvals</Text>
                 </View>
-                <Text style={[styles.cardValue, { color: theme.colors.text }]}>{pendings}</Text>
+
+                <Text style={[styles.cardValue, { color: textColor }]}>{pendings}</Text>
               </Card.Content>
             </Card>
           </Pressable>
+
         </View>
+
+
+
+
       </ScrollView>
 
+      {/* ⭐ Floating Action Button */}
       <FAB
         icon="plus"
-        style={[styles.fab, { backgroundColor: theme.colors.primary }]}
         color="white"
-        onPress={() => navigation.navigate('AddTree')}
+        style={[styles.fab, { backgroundColor: primary }]}
+        onPress={() => navigation.navigate("AddTree", { from: "TreeManagement" })}
       />
     </View>
   );
@@ -159,8 +193,6 @@ export default function TreeManagementScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   scrollContent: { padding: 20 },
-  appbarHeader: { elevation: 0, shadowOpacity: 0, borderBottomWidth: 1 },
-  appbarTitle: { fontWeight: 'bold', fontSize: 20 },
   titleContainer: { flexDirection: 'row', alignItems: 'center', marginBottom: 20 },
   mainTitle: { fontSize: 24, fontWeight: 'bold', marginLeft: 8 },
   gridContainer: { flexDirection: 'row', justifyContent: 'space-between' },
@@ -168,16 +200,12 @@ const styles = StyleSheet.create({
   card: {
     borderRadius: 12,
     elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
     minHeight: 140,
     justifyContent: 'center',
     borderLeftWidth: 5,
   },
   cardHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
   cardTitle: { fontWeight: '600', marginLeft: 8 },
-  cardValue: { fontWeight: 'bold', fontSize: 40, textAlign: 'center', marginTop: 8 },
-  fab: { position: 'absolute', margin: 16, right: 0, bottom: 0, borderRadius: 28 },
+  cardValue: { fontWeight: 'bold', fontSize: 40, textAlign: 'center' },
+  fab: { position: 'absolute', margin: 16, right: 0, bottom: 0 },
 });

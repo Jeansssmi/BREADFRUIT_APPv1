@@ -7,8 +7,10 @@ import LoginScreen from '../screens/auth/LoginScreen';
 import RegisterFormScreen from '../screens/auth/Register/RegisterFormScreen';
 import UserTypeSelectionScreen from '../screens/auth/Register/UserTypeSelectionScreen';
 import AboutHelpScreen from '../screens/auth/AboutHelpScreen';
-// --- Type Definitions for Navigation ---
-// This defines the screens in the nested registration stack
+import SendOtpScreen from '../screens/auth/SendOtpScreen';
+import VerifyOtpScreen from '../screens/auth/VerifyOtpScreen';
+import ForgotPasswordScreen from '../screens/auth/ForgotPasswordScreen';
+
 export type RegisterStackParamList = {
   UserTypeSelection: undefined;
   RegisterForm: { type: 'viewer' | 'researcher' | 'admin' }; // Expects a 'type' parameter
@@ -40,15 +42,14 @@ function RegisterNavigator() {
 export default function AuthNavigator() {
   return (
     <Stack.Navigator initialRouteName="Welcome">
-      {/* 🟢 NEW: The Welcome screen is the entry point */}
+
       <Stack.Screen name="Welcome" component={WelcomeScreen} options={{ headerShown: false }} />
-
-      {/* Login Screen */}
       <Stack.Screen name="Login" component={LoginScreen} options={{ headerShown: false }} />
-
-      {/* Register Stack */}
       <Stack.Screen name="Register" component={RegisterNavigator} options={{ headerShown: false }} />
-<Stack.Screen name="AboutHelp" component={AboutHelpScreen} />
+      <Stack.Screen name="AboutHelp" component={AboutHelpScreen}options={{ headerShown: false }} />
+      <Stack.Screen name="SendOtp" component={SendOtpScreen} options={{ title: 'Email Verification' }} />
+      <Stack.Screen name="VerifyOtp" component={VerifyOtpScreen} options={{ title: 'Enter OTP' }} />
+      <Stack.Screen name="ForgotPassword"  component={ForgotPasswordScreen} options={{ headerShown: false }} />
 
     </Stack.Navigator>
   );

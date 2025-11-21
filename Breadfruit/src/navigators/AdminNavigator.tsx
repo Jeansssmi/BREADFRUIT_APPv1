@@ -17,7 +17,7 @@ import AboutHelpScreen from "../screens/shared/AboutHelpScreen";
 //import NotificationPreferencesScreen from "../screens/shared/NotificationPreferencesScreen";
 import AppearanceScreen from '../screens/shared/AppearanceScreen'; // relative path example
 
-//import AboutHelpScreen from "../screens/shared/AboutHelpScreen";
+
 import AdminAddTreeScreen from "../screens/admin/tree/AdminAddTreeScreen";
 import SearchScreen from "../screens/admin/tree/SearchScreen";
 import TreeListToMap from "../screens/admin/tree/TreeListToMap";
@@ -28,8 +28,13 @@ import AdminPendingTreesScreen from "../screens/admin/tree/AdminPendingTreesScre
 import PendingApprovalScreen from "../screens/admin/tree/PendingApprovalScreen";
 import TreeDetailsScreen from "../screens/admin/tree/TreeDetailsScreen";
 import TreeListScreen from "../screens/admin/tree/TreeListScreen";
+import TreeRipeTree from "../screens/admin/tree/TreeRipeTree";
 import NotificationsScreen from "../screens/admin/tree/NotificationsScreen";
+import ArchivedNotificationsScreen from "../screens/admin/tree/ArchivedNotificationsScreen";
 import TrackedTreesScreen from "../screens/admin/tree/TrackedTreesScreen";
+import TreeHistoryScreen from "../screens/admin/tree/TreeHistoryScreen";
+import TreeReportsScreen from "../screens/admin/tree/TreeReportsScreen";
+import TreeReportsTrashScreen from "../screens/admin/tree/TreeReportsTrashScreen";
 import AddUserScreen from "../screens/admin/user/AddUserScreen";
 import EditUserScreen from "../screens/admin/user/EditUserScreen";
 import PendingUsersScreen from "../screens/admin/user/PendingUsersScreen";
@@ -114,7 +119,7 @@ function ProfileStack() {
       />
 
       <ProfileStackNav.Screen
-        name="AboutApp"
+        name="AboutHelp"
         component={AboutHelpScreen}
         options={{ headerShown: false }}
       />
@@ -189,9 +194,15 @@ export default function AdminNavigator() {
      <MainStack.Screen name="EditDiameterScanner" component={EditDiameterScannerScreen} options={{ headerTitle: "Re-Scan Diameter" }} />
      <MainStack.Screen name="PendingApprovalScreen" component={PendingApprovalScreen} options={{ headerTitle: "Pending Approval Trees" }} />
      <MainStack.Screen name="PendingTrees" component={AdminPendingTreesScreen} options={{ headerTitle: "Pending Trees" }} />
+     <MainStack.Screen name="TreeHistory" component={TreeHistoryScreen} options={{ headerTitle: "Tree History" }} />
      <MainStack.Screen name="NotificationsScreen" component={NotificationsScreen} options={{ headerShown: false }} />
      <MainStack.Screen name="HarvestedList" component={HarvestedListScreen}  />
      <MainStack.Screen name="ActivityLogsScreen" component={ActivityLogsScreen} options={{ headerShown: false }} />
+          <MainStack.Screen name="ArchivedNotificationsScreen" component={ArchivedNotificationsScreen} options={{ headerShown: false }} />
+     <MainStack.Screen name="AboutHelpScreen" component={AboutHelpScreen} options={{ headerShown: false }} />
+     <MainStack.Screen name="TreeRipeTree" component={TreeRipeTree} options={{ headerTitle: "Tree Ripe" }} />
+     <MainStack.Screen name="TreeReportsScreen" component={TreeReportsScreen} options={{ headerTitle: "Tree Report List" }} />
+     <MainStack.Screen name="TreeReportsTrashScreen" component={TreeReportsTrashScreen} options={{ headerTitle: "Trash Reports" }} />
       <MainStack.Screen
         name="ResearchersScreen"
         component={UserListScreen}

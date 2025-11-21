@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState, useCallback } from 'react';
-import { Alert, FlatList, StyleSheet, View, Vibration } from 'react-native';
-import { Appbar, Badge, Button, Card, Chip, Divider, List, Snackbar, Text, useTheme } from 'react-native-paper';
+import { Alert, FlatList, StyleSheet, View, Vibration, ScrollView, Pressable } from 'react-native';
+import { Appbar, Button, Card, Chip, Divider, List, Snackbar, Text, useTheme, Badge } from 'react-native-paper';
 import { useNavigation } from '@react-navigation/native';
 import firestore, { FirebaseFirestoreTypes } from '@react-native-firebase/firestore';
 import auth from '@react-native-firebase/auth';
@@ -17,7 +17,9 @@ type NotifDoc = {
   recipientID?: string;
   seen?: boolean;
   read?: boolean;
+  archived?: boolean;
   reporterName?: string;
+  researcherName?: string;
   timestamp?: FirebaseFirestoreTypes.Timestamp;
   count?: number;
 };
@@ -33,10 +35,12 @@ export default function NotificationsScreen() {
 
   const [userRole, setUserRole] = useState<string | null>(null);
   const [notifications, setNotifications] = useState<NotifDoc[]>([]);
-  const [filter, setFilter] = useState<'all' | 'unseen' | 'tree-report'>('all');
+  const [filter, setFilter] = useState<'all' | 'unseen' | 'tree-report' | 'archived' | 'tree-approval'>('all');
   const [loading, setLoading] = useState(true);
   const [snack, setSnack] = useState({ visible: false, text: '' });
+  const [archivedCount, setArchivedCount] = useState(0);
 
+  // Fetch user role
   useEffect(() => {
     if (!user) return;
     const unsub = firestore()
@@ -46,6 +50,7 @@ export default function NotificationsScreen() {
     return () => unsub();
   }, [user]);
 
+  // Fetch notifications
   useEffect(() => {
     if (!user || !userRole) return;
 
@@ -74,31 +79,14 @@ export default function NotificationsScreen() {
           raw.push({ id: d.id, ...data });
         }
 
-        if (userRole === "admin") {
-          const grouped: Record<string, NotifDoc> = {};
-          for (const n of raw) {
-            if (n.type !== "tree-report" || typeof n.lat !== "number") {
-              grouped[n.id] = n;
-              continue;
-            }
-            const key = `${n.lat.toFixed(5)}_${n.lng.toFixed(5)}`;
-            if (!grouped[key]) grouped[key] = { ...n, count: 1 };
-            else grouped[key].count = (grouped[key].count ?? 1) + 1;
-          }
-          const list = Object.values(grouped);
-          alertNew(list, notifications);
-          setNotifications(list);
-        } else {
-          alertNew(raw, notifications);
-          setNotifications(raw);
-        }
-
+        setNotifications(raw);
         setLoading(false);
       });
 
     return () => unsub();
-  }, [userRole, notifications]);
+  }, [userRole, filter]);
 
+  // Sound/vibration for new notifications
   const alertNew = (newSet: NotifDoc[], oldSet: NotifDoc[]) => {
     const fresh = newSet.filter(n =>
       (n.seen === false || n.read === false || n.seen === undefined) &&
@@ -111,110 +99,191 @@ export default function NotificationsScreen() {
     }
   };
 
+  // Filters
   const filtered = useMemo(() => {
-    if (filter === 'unseen') return notifications.filter(n => !n.seen && !n.read);
-    if (filter === 'tree-report') return notifications.filter(n => n.type === 'tree-report');
-    return notifications;
+    if (filter === 'unseen') return notifications.filter(n => !n.seen && !n.read && !n.archived);
+    if (filter === 'ripe-alert') return notifications.filter(n => n.type === 'tree-ripe' && !n.archived);
+    if (filter === 'tree-approval') return notifications.filter(n => n.type === 'tree-added' && !n.archived);
+    if (filter === 'tree-report') return notifications.filter(n => n.type === 'tree-report' && !n.archived);
+    if (filter === 'researcher-registered') return notifications.filter(n => n.type === 'researcher-registered' && !n.archived);
+    if (filter === 'archived') return notifications.filter(n => n.archived);
+    return notifications.filter(n => !n.archived);
   }, [filter, notifications]);
 
+  // Mark as read
   const markSeen = useCallback(async (id: string) => {
     try {
       await firestore().collection("notification").doc(id).update({
         seen: true,
         read: true,
       });
-      setSnack({ visible: true, text: "Marked seen" });
-    } catch {}
+
+      setNotifications(prev =>
+        prev.map(n => (n.id === id ? { ...n, seen: true, read: true } : n))
+      );
+
+      // If viewing unseen, remove it from UI
+      if (filter === "unseen") {
+        setNotifications(prev => prev.filter(n => n.id !== id));
+      }
+
+      setSnack({ visible: true, text: "Marked as read" });
+    } catch (e) {
+      console.log(e);
+      setSnack({ visible: true, text: "Failed to mark as read" });
+    }
+  }, [filter]);
+
+  // Archived Notifications Count (Badge)
+  // Archived Notifications Count (Badge)
+  useEffect(() => {
+    if (!user || !userRole) return;
+
+    let query = firestore().collection("notification");
+
+    if (userRole === "admin") {
+      query = query.where("recipientRole", "==", "Admin");
+    } else {
+      query = query.where("recipientID", "==", user.uid);
+    }
+
+    const unsub = query
+      .where("archived", "==", true)
+      .onSnapshot((snap) => {
+        setArchivedCount(snap.size);
+      });
+
+    return () => unsub();
+  }, [user, userRole]);
+
+
+  // Archive single notification
+  const archiveNotification = useCallback(async (id: string) => {
+    Alert.alert(
+      "Archive Notification",
+      "Do you want to move this notification to archive?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Archive",
+          onPress: async () => {
+            try {
+              await firestore().collection("notification").doc(id).update({
+                archived: true,
+                archivedAt: firestore.FieldValue.serverTimestamp(),
+              });
+
+              setSnack({ visible: true, text: "Notification archived" });
+              setNotifications((prev) => prev.filter((n) => n.id !== id));
+            } catch (err) {
+              console.error("Failed to archive notification:", err);
+              Alert.alert("Error", "Failed to archive notification.");
+            }
+          },
+        },
+      ]
+    );
   }, []);
 
+  // Soft-delete / mark deleted (keeps consistency with your prior behavior)
   const deleteNotification = useCallback(async (id: string) => {
-    Alert.alert("Delete Notification?", "This will remove it permanently.", [
+    Alert.alert("Delete Notification", "Are you sure you want to delete this notification?", [
       { text: "Cancel", style: "cancel" },
       {
         text: "Delete",
         style: "destructive",
         onPress: async () => {
           try {
-            await firestore().collection("notification").doc(id).delete();
-            setSnack({ visible: true, text: "Deleted" });
-          } catch {}
-        }
+            await firestore().collection("notification").doc(id).update({
+              deleted: true,
+              deletedAt: firestore.FieldValue.serverTimestamp(),
+            });
+            setSnack({ visible: true, text: "Notification deleted" });
+            setNotifications((prev) => prev.filter((n) => n.id !== id));
+          } catch (err) {
+            console.error("Failed to delete notification:", err);
+            setSnack({ visible: true, text: "Failed to delete" });
+          }
+        },
       },
     ]);
   }, []);
 
-  const handleDeleteAll = useCallback(() => {
-    Alert.alert(
-      "Delete All Notifications?",
-      "This action cannot be undone.",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete All",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              const batch = firestore().batch();
-              notifications.forEach(n =>
-                batch.delete(firestore().collection("notification").doc(n.id))
-              );
-              await batch.commit();
-              setSnack({ visible: true, text: "All deleted" });
-            } catch {}
-          }
-        }
-      ]
-    );
-  }, [notifications]);
-
   const handleViewOnMap = useCallback((n: NotifDoc) => {
-    if (typeof n.lat === 'number') {
-      if (userRole === "admin") markSeen(n.id);
-      navigation.navigate("MapScreen", { lat: n.lat, lng: n.lng });
-      return;
+    if (typeof n.lat === "number" && typeof n.lng === "number") {
+      navigation.navigate("Map", {
+        focusTree: {
+          latitude: n.lat,
+          longitude: n.lng,
+          treeID: n.reportID || null,
+          highlight: true,
+        },
+      });
+    } else {
+      Alert.alert("No Location", "This tree doesn't have coordinates yet.");
     }
+  }, [navigation]);
 
-    if (n.reportID) {
-      firestore()
-        .collection("treeReports")
-        .doc(n.reportID)
-        .get()
-        .then(doc => {
-          const gp = doc.data()?.coordinates;
-          if (!gp) return Alert.alert("Missing location");
-          markSeen(n.id);
-          navigation.navigate("MapScreen", { lat: gp.latitude, lng: gp.longitude });
-        });
-    }
-  }, [userRole]);
-
+  // UI
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+      <Appbar.Header style={{ backgroundColor: "#27ae60" }}>
+        <Appbar.BackAction onPress={() => navigation.goBack()} color="#fff" />
+        <Appbar.Content title={filter === "archived" ? "Archived Notifications" : "Notifications"} color="#fff" />
 
-      <Appbar.Header style={[styles.header, { backgroundColor: theme.colors.card }]}>
-        <Appbar.Content title="Notifications" />
-
-        {(userRole === "admin" && notifications.length > 0) && (
+        <View style={{ marginRight: 10 }}>
           <Appbar.Action
-            icon="delete-sweep"
-            color={theme.colors.error}
-            onPress={handleDeleteAll}
+            icon="archive-outline"
+            color="#fff"
+            onPress={() => navigation.navigate("ArchivedNotificationsScreen")}
           />
-        )}
+          {archivedCount > 0 && (
+            <Badge
+              style={{
+                position: "absolute",
+                top: 4,
+                right: 2,
+                backgroundColor: "#2ecc71",
+                color: "#fff",
+                fontWeight: "bold",
+                fontSize: 10,
+              }}
+              size={18}
+            >
+              {archivedCount}
+            </Badge>
+          )}
+        </View>
       </Appbar.Header>
 
-      <View style={styles.filters}>
-        <Chip selected={filter === 'tree-report'} onPress={() => setFilter('tree-report')}>
-          Tree Reports
-        </Chip>
-        <Chip selected={filter === 'unseen'} onPress={() => setFilter('unseen')}>
-          Unseen
-        </Chip>
-        <Chip selected={filter === 'all'} onPress={() => setFilter('all')}>
-          All
-        </Chip>
+      {/* Fixed filter chips */}
+      <View style={styles.fixedFilters}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipScroll}>
+          {[
+            { key: "all", label: "All" },
+            { key: "ripe-alert", label: "Ripe Alerts" },
+            { key: "tree-approval", label: "Tree Approvals" },
+            { key: "tree-report", label: "Tree Reports" },
+            { key: "researcher-registered", label: "New Researchers" },
+            { key: "unseen", label: "Unseen" },
+          ].map(({ key, label }) => (
+            <Chip
+              key={key}
+              selected={filter === key}
+              onPress={() => setFilter(key as any)}
+              style={[styles.chip, filter === key && { backgroundColor: "#2ecc71" }]}
+              textStyle={{
+                color: filter === key ? "#fff" : "#2ecc71",
+                fontWeight: "bold",
+              }}
+            >
+              {label}
+            </Chip>
+          ))}
+        </ScrollView>
       </View>
 
+      {/* Notification List */}
       <FlatList
         data={filtered}
         keyExtractor={i => i.id}
@@ -229,28 +298,32 @@ export default function NotificationsScreen() {
           return (
             <Card style={[styles.card, { backgroundColor: theme.colors.card }]}>
               <Card.Content>
+                <View style={[styles.row, { alignItems: "flex-start" }]}>
+                  <List.Icon
+                    icon={
+                      n.type === "researcher-registered"
+                        ? "account-plus"
+                        : "bell" // filled bell for all cards
+                    }
+                    color={n.type === "researcher-registered" ? "#2ecc71" : "#FFD700"} // yellow for bell
+                    style={{ margin: 0, marginRight: 6 }} // adjusted spacing
+                  />
 
-                <View style={styles.row}>
-                  <List.Icon icon="bell-ring" />
                   <View style={{ flex: 1 }}>
-                    <Text style={[styles.title, { color: theme.colors.text }]}>
-                      {n.message}
-                    </Text>
-                    {!!n.reporterName && (
+                    <Text style={[styles.title, { color: theme.colors.text }]}>{n.message}</Text>
+
+
+
+                    {!!n.reporterName && n.type !== "tree-added" && (
                       <Text style={{ fontSize: 13, color: theme.dark ? '#aaa' : '#666' }}>
-                        Reported by {n.reporterName}
+
                       </Text>
                     )}
+
                     {!!ts && (
-                      <Text style={{ fontSize: 12, color: theme.dark ? '#aaa' : '#888' }}>
+                      <Text style={{ fontSize: 12, color: theme.dark ? '#aaa' : '#888', marginTop: 6 }}>
                         {ts.toLocaleString()}
                       </Text>
-                    )}
-                    {!n.seen && !n.read && (
-                      <Badge style={{ alignSelf: 'flex-start', marginTop: 6 }} />
-                    )}
-                    {!!n.count && n.count > 1 && (
-                      <Chip compact style={{ marginTop: 6 }}>{n.count} reports</Chip>
                     )}
                   </View>
                 </View>
@@ -258,26 +331,55 @@ export default function NotificationsScreen() {
                 <Divider style={{ marginVertical: 10 }} />
 
                 <View style={[styles.row, { justifyContent: 'flex-end', gap: 8 }]}>
-                  {n.type === "tree-report" && (
-                    <Button icon="map-marker-radius" mode="text" onPress={() => handleViewOnMap(n)}>
-                      Map
+                  {/* Replaced View Tree with Mark as Read in action row */}
+                  {/* Mark as Read button (text only) */}
+                  {!n.read ? (
+                    <Button
+                      icon="check"
+                      mode="text"
+                      textColor="#27ae60"
+                      compact
+                      onPress={() => markSeen(n.id)}
+                      labelStyle={{ fontWeight: "bold" }}
+                    >
+                      Mark as Read
+                    </Button>
+                  ) : (
+                    <Button
+                      icon="check"
+                      mode="text"
+                      textColor="#bcbcbc"
+                      compact
+                      disabled
+                      labelStyle={{ fontWeight: "bold" }}
+                    >
+                      Read
                     </Button>
                   )}
 
-                  {(n.seen === false || n.read === false) && (
-                    <Button icon="check" mode="text" onPress={() => markSeen(n.id)} />
-                  )}
 
-                  {userRole === "admin" && (
-                    <Button
-                      icon="delete"
-                      mode="text"
-                      textColor={theme.colors.error}
-                      onPress={() => deleteNotification(n.id)}
-                    />
+                  {/* Archive / Unarchive / Delete */}
+                  {filter === "archived" ? (
+                    <Button icon="archive-arrow-up-outline" mode="text" onPress={() => archiveNotification(n.id)}>
+                      Unarchive
+                    </Button>
+                  ) : (
+                    <>
+                      <Button icon="archive-outline" mode="text" onPress={() => archiveNotification(n.id)}>
+                        Archive
+                      </Button>
+
+                      {userRole === "admin" && (
+                        <Button
+                          icon="delete"
+                          mode="text"
+                          textColor={theme.colors.error}
+                          onPress={() => deleteNotification(n.id)}
+                        />
+                      )}
+                    </>
                   )}
                 </View>
-
               </Card.Content>
             </Card>
           );
@@ -292,16 +394,29 @@ export default function NotificationsScreen() {
       >
         {snack.text}
       </Snackbar>
-
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  header: { elevation: 0 },
-  filters: { flexDirection: 'row', paddingHorizontal: 16, paddingTop: 10, gap: 8 },
-  chip: { borderRadius: 20 },
+  fixedFilters: {
+    backgroundColor: "#fff",
+    paddingVertical: 8,
+    elevation: 2,
+    zIndex: 10,
+  },
+  chipScroll: {
+    flexDirection: "row",
+    paddingHorizontal: 10,
+    gap: 8,
+  },
+  chip: {
+    borderColor: "#2ecc71",
+    borderWidth: 1,
+    backgroundColor: "#f0fdf4",
+    borderRadius: 12,
+  },
   row: { flexDirection: 'row', alignItems: 'center' },
   card: { marginBottom: 12, borderRadius: 12, elevation: 2 },
   title: { fontWeight: '600', marginBottom: 4 },

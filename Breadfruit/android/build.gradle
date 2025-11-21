@@ -1,3 +1,13 @@
+// --- Fix for React Native Reanimated: ensure rootProject.ext.react exists ---
+if (!rootProject.ext.has("react")) {
+    rootProject.ext.react = [:]
+}
+if (!rootProject.ext.react.containsKey("version")) {
+    rootProject.ext.react["version"] = "20.0.2"
+}
+if (!rootProject.ext.react.containsKey("minor")) {
+    rootProject.ext.react["minor"] = 20
+}
 buildscript {
     ext {
         buildToolsVersion = "34.0.0"
@@ -14,7 +24,7 @@ buildscript {
     dependencies {
         classpath("com.android.tools.build:gradle:8.1.1")
         classpath("com.facebook.react:react-native-gradle-plugin")
-        classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:2.1.20")
+        classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:1.9.24")
         classpath("com.google.gms:google-services:4.4.2")
     }
 }
@@ -43,3 +53,16 @@ subprojects { subproject ->
         }
     }
 }
+// --- ✅ Force all modules to use the same NDK version ---
+subprojects { subproject ->
+    afterEvaluate {
+        if (subproject.hasProperty("android")) {
+            subproject.android {
+                ndkVersion = "26.1.10909125"
+            }
+        }
+    }
+}
+// ---------------------------------------------------------
+
+apply plugin: "com.facebook.react.rootproject"

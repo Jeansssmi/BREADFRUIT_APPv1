@@ -12,7 +12,8 @@ import {
   Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Button, Text, TextInput, Menu } from "react-native-paper";
+import { Provider, Button, Text, TextInput, Menu } from "react-native-paper";
+
 import MaterialIcons from "react-native-vector-icons/MaterialIcons";
 import Geolocation from "react-native-geolocation-service";
 import { useNavigation, useRoute } from "@react-navigation/native";
@@ -30,26 +31,75 @@ export default function AddTreeScreen() {
   const navigation = useNavigation();
   const route = useRoute();
   const { user: currentUser } = useAuth();
+   const [showCoordinateNotice, setShowCoordinateNotice] = useState(!!route.params?.coordinates);
+    const isFromMap = !!route.params?.coordinates;
+
 
   const [image, setImage] = useState<string | null>(route.params?.imageUri || null);
   const [diameterInput, setDiameterInput] = useState(route.params?.diameter?.toString() || "");
-  const [latitudeInput, setLatitudeInput] = useState<string>("");
-  const [longitudeInput, setLongitudeInput] = useState<string>("");
+
+   const coordinates = route.params?.coordinates; // read coordinates passed from MapScreen
+
+    const [latitudeInput, setLatitudeInput] = useState<string>(
+      coordinates?.latitude ? coordinates.latitude.toString() : ""
+    );
+    const [longitudeInput, setLongitudeInput] = useState<string>(
+      coordinates?.longitude ? coordinates.longitude.toString() : ""
+    );
+
   const [city, setCity] = useState("");
   const [barangay, setBarangay] = useState("");
   const [fruitStatus, setFruitStatus] = useState("none");
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [showStatusMenu, setShowStatusMenu] = useState(false);
-  const [cityOptionsMenuVisible, setCityOptionsMenuVisible] = useState(false);
-  const [barangayOptionsMenuVisible, setBarangayOptionsMenuVisible] = useState(false);
-  const BARANGAY_OPTIONS = barangayData[city] || [];
+
+ const [isCityMenuVisible, setCityMenuVisible] = useState(false);
+   const [isBarangayMenuVisible, setBarangayMenuVisible] = useState(false);
+   const [isStatusMenuVisible, setStatusMenuVisible] = useState(false);
+
+   const toggleCityMenu = () => {
+       setCityMenuVisible((prev) => !prev);
+       setBarangayMenuVisible(false);
+       setStatusMenuVisible(false);
+     };
+
+     const toggleBarangayMenu = () => {
+       setBarangayMenuVisible((prev) => !prev);
+       setCityMenuVisible(false);
+       setStatusMenuVisible(false);
+     };
+
+     const toggleStatusMenu = () => {
+       setStatusMenuVisible((prev) => !prev);
+       setCityMenuVisible(false);
+       setBarangayMenuVisible(false);
+     };
+
+
+     const BARANGAY_OPTIONS = barangayData[city] || [];
 
   useEffect(() => {
     if (route.params?.diameter) {
       setDiameterInput(route.params.diameter.toString());
     }
   }, [route.params?.diameter]);
+
+   useEffect(() => {
+      if (showCoordinateNotice) {
+        const timer = setTimeout(() => setShowCoordinateNotice(false), 4000); // hide after 4 seconds
+        return () => clearTimeout(timer);
+      }
+    }, [showCoordinateNotice]);
+
+    useEffect(() => {
+      if (route.params?.coordinates) {
+        const { latitude, longitude } = route.params.coordinates;
+        setLatitudeInput(latitude.toString());
+        setLongitudeInput(longitude.toString());
+      }
+    }, [route.params?.coordinates]);
+
+
 
   const handleNavigateToScanner = () => { if (!image) { Alert.alert("Image Required", "Please select an image first."); return; } navigation.navigate("DiameterScannerScreen", { imageUri: image }); };
 
@@ -125,9 +175,11 @@ export default function AddTreeScreen() {
     );
   };
 
+
 const handleSaveTree = async () => {
   try {
     setSaving(true);
+
     if (!currentUser) {
       Alert.alert("Authentication Error", "You must be logged in.");
       setSaving(false);
@@ -135,37 +187,28 @@ const handleSaveTree = async () => {
     }
 
     const userRole = currentUser.role || "verifier";
-    let treeStatus = "";
+    let treeStatus = "verified";
 
-    // 🌳 Auto set tree status based on fruitStatus
-    if (fruitStatus === "ripe") {
-      treeStatus = "harvest-ready";
-    } else if (fruitStatus === "unripe") {
-      treeStatus = "not-ready";
-    } else if (fruitStatus === "none") {
-      treeStatus = "verified";
-    }
+    if (fruitStatus === "ripe") treeStatus = "harvest-ready";
+    else if (fruitStatus === "unripe") treeStatus = "not-ready";
+    else treeStatus = "verified";
 
-    // 🔄 Researchers still go to pending if required by your approval logic
-    if (userRole === "researcher") {
-      // researcher trees start as pending no matter what fruit status is
-      treeStatus = "pending";
-    }
+    if (userRole === "researcher") treeStatus = "pending";
 
     // 📸 Upload image if available
     let imageUrl = "";
     if (image) {
       const fileName = `images/trees/${currentUser.uid}_${Date.now()}.jpg`;
       const reference = storage().ref(fileName);
-      const filePath = image.startsWith("file://") ? image.replace("file://", "") : image;
+      const filePath = image.startsWith("file://")
+        ? image.replace("file://", "")
+        : image;
       await reference.putFile(filePath);
       imageUrl = await reference.getDownloadURL();
     }
 
-    // 🕒 Current year
+    // 🕒 Generate unique ID
     const year = new Date().getFullYear();
-
-    // 🔢 Get latest tree for the same year
     const treesRef = firestore().collection("trees");
     const lastDoc = await treesRef
       .where("treeID", ">=", `BFT-${year}-000000`)
@@ -178,15 +221,12 @@ const handleSaveTree = async () => {
     if (!lastDoc.empty) {
       const lastTreeID = lastDoc.docs[0].data().treeID;
       const lastNum = parseInt(lastTreeID.split("-")[2], 10);
-      if (!isNaN(lastNum)) {
-        newNumber = lastNum + 1;
-      }
+      if (!isNaN(lastNum)) newNumber = lastNum + 1;
     }
 
     const newTreeID = `BFT-${year}-${String(newNumber).padStart(6, "0")}`;
     const formattedDate = new Date().toISOString().split("T")[0];
 
-    // 🌳 Create the tree data
     const newTree = {
       barangay: barangay.trim().toLowerCase(),
       city: city.trim().toLowerCase(),
@@ -205,9 +245,14 @@ const handleSaveTree = async () => {
 
     await treesRef.doc(newTreeID).set(newTree);
 
-    Alert.alert("Success", "Tree added successfully!");
+    // ✅ Record to activity log for dashboard
+    await firestore().collection("activityLog").add({
+      type: "create",
+      description: `New tree ${newTreeID} added by Admin.`,
+      timestamp: firestore.FieldValue.serverTimestamp(),
+    });
 
-    // 🧹 Reset fields
+    // 🧹 Reset inputs
     setImage(null);
     setDiameterInput("");
     setLatitudeInput("");
@@ -216,16 +261,26 @@ const handleSaveTree = async () => {
     setBarangay("");
     setFruitStatus("none");
 
-    // 🔁 Navigation logic
-    if (userRole !== "researcher") {
-      navigation.navigate("Map", {
-        lat: parseFloat(latitudeInput),
-        lng: parseFloat(longitudeInput),
-        treeID: newTreeID,
-      });
-    } else {
-      navigation.navigate("PendingTrees");
-    }
+   Alert.alert(
+     "Success",
+     "Tree added successfully!",
+     [
+       {
+         text: "OK",
+         onPress: () => {
+           navigation.replace("Map", {
+             focusTree: {
+               treeID: newTreeID,
+               latitude: parseFloat(latitudeInput),
+               longitude: parseFloat(longitudeInput),
+               zoomIn: true,
+             },
+           });
+         },
+       },
+     ]
+   );
+
 
   } catch (error) {
     console.error("Error saving tree:", error);
@@ -256,135 +311,147 @@ const handleSaveTree = async () => {
             )}
           </TouchableOpacity>
 
-          <View style={styles.row}>
-            <View style={styles.halfWidth}>
-              <Menu
-                visible={cityOptionsMenuVisible}
-                onDismiss={() => setCityOptionsMenuVisible(false)}
-                anchor={
-                  <TouchableOpacity onPress={() => setCityOptionsMenuVisible(true)}>
-                    <TextInput
-                      label="City/Municipality"
-                      value={city}
-                      editable={false}
-                      right={<TextInput.Icon icon="menu-down" />}
-                      style={styles.menuInput}
-                      mode="outlined"
-                    />
-                  </TouchableOpacity>
-                }
-              >
-                {CITY_OPTIONS.map((option) => (
-                  <Menu.Item
-                    key={option}
-                    onPress={() => {
-                      setCity(option);
-                      setBarangay("");
-                      setCityOptionsMenuVisible(false);
-                    }}
-                    title={option}
-                  />
-                ))}
-              </Menu>
-            </View>
 
-            <View style={styles.halfWidth}>
-              <Menu
-                visible={barangayOptionsMenuVisible}
-                onDismiss={() => setBarangayOptionsMenuVisible(false)}
-                anchor={
-                  <TouchableOpacity onPress={() => setBarangayOptionsMenuVisible(true)} disabled={!city}>
-                    <TextInput
-                      label="Barangay"
-                      value={barangay}
-                      editable={false}
-                      right={<TextInput.Icon icon="menu-down" />}
-                      style={styles.menuInput}
-                      mode="outlined"
-                      disabled={!city}
-                    />
-                  </TouchableOpacity>
-                }
-              >
-                {BARANGAY_OPTIONS.map((option) => (
-                  <Menu.Item
-                    key={option}
-                    onPress={() => {
-                      setBarangay(option);
-                      setBarangayOptionsMenuVisible(false);
-                    }}
-                    title={option}
-                  />
-                ))}
-              </Menu>
-            </View>
-          </View>
+         <View style={styles.row}>
+           <View style={styles.halfWidth}>
+             <Menu
+               visible={isCityMenuVisible}
+               onDismiss={() => setCityMenuVisible(false)}
+               anchor={
+                 <TouchableOpacity onPress={toggleCityMenu}>
+                   <TextInput
+                     label="City/Municipality"
+                     value={city}
+                     editable={false}
+                     right={<TextInput.Icon icon="menu-down" />}
+                     style={styles.menuInput}
+                     mode="outlined"
+                   />
+                 </TouchableOpacity>
+               }
+             >
+               {CITY_OPTIONS.map((option) => (
+                 <Menu.Item
+                   key={option}
+                   onPress={() => {
+                     setCity(option);
+                     setBarangay("");
+                     setCityMenuVisible(false);
+                   }}
+                   title={option}
+                 />
+               ))}
+             </Menu>
+           </View>
 
-          <View style={styles.row}>
-            <View style={styles.halfWidth}>
-              <TextInput
-                label="Diameter (m)"
-                value={diameterInput}
-                onChangeText={setDiameterInput}
-                style={styles.input}
-                mode="outlined"
-              />
-            </View>
+           <View style={styles.halfWidth}>
+             <Menu
+               visible={isBarangayMenuVisible}
+               onDismiss={() => setBarangayMenuVisible(false)}
+               anchor={
+                 <TouchableOpacity onPress={toggleBarangayMenu} disabled={!city}>
+                   <TextInput
+                     label="Barangay"
+                     value={barangay}
+                     editable={false}
+                     right={<TextInput.Icon icon="menu-down" />}
+                     style={styles.menuInput}
+                     mode="outlined"
+                     disabled={!city}
+                   />
+                 </TouchableOpacity>
+               }
+             >
+               {BARANGAY_OPTIONS.map((option) => (
+                 <Menu.Item
+                   key={option}
+                   onPress={() => {
+                     setBarangay(option);
+                     setBarangayMenuVisible(false);
+                   }}
+                   title={option}
+                 />
+               ))}
+             </Menu>
+           </View>
+         </View>
 
-            <View style={styles.halfWidth}>
-              <Menu
-                visible={showStatusMenu}
-                onDismiss={() => setShowStatusMenu(false)}
-                anchor={
-                  <TouchableOpacity onPress={() => setShowStatusMenu(true)}>
-                    <TextInput
-                      label="Fruit Status"
-                      value={fruitStatus}
-                      editable={false}
-                      right={<TextInput.Icon icon="menu-down" />}
-                      style={styles.menuInput}
-                      mode="outlined"
-                    />
-                  </TouchableOpacity>
-                }
-              >
-                {FRUIT_STATUS_OPTIONS.map((option) => (
-                  <Menu.Item
-                    key={option}
-                    onPress={() => {
-                      setFruitStatus(option);
-                      setShowStatusMenu(false);
-                    }}
-                    title={option.charAt(0).toUpperCase() + option.slice(1)}
-                  />
-                ))}
-              </Menu>
-            </View>
-          </View>
+         <View style={styles.row}>
+           <View style={styles.halfWidth}>
+             <TextInput
+               label="Diameter (m)"
+               value={diameterInput}
+               onChangeText={setDiameterInput}
+               style={styles.input}
+               mode="outlined"
+             />
+           </View>
 
-          <View style={styles.coordinateGroup}>
-            <View style={styles.row}>
-              <TextInput
-                label="Latitude"
-                value={latitudeInput}
-                editable={false}
-                style={[styles.input, styles.halfWidth]}
-                mode="outlined"
-              />
-              <TextInput
-                label="Longitude"
-                value={longitudeInput}
-                editable={false}
-                style={[styles.input, styles.halfWidth]}
-                mode="outlined"
-              />
-            </View>
-            <TouchableOpacity onPress={getLocation} disabled={loading}>
-              <Text style={styles.useLocationText}>
-                {loading ? "Getting Location..." : "Get Current Location"}
-              </Text>
-            </TouchableOpacity>
-          </View>
+           <View style={styles.halfWidth}>
+             <Menu
+               visible={isStatusMenuVisible}
+               onDismiss={() => setStatusMenuVisible(false)}
+               anchor={
+                 <TouchableOpacity onPress={toggleStatusMenu}>
+                   <TextInput
+                     label="Fruit Status"
+                     value={fruitStatus}
+                     editable={false}
+                     right={<TextInput.Icon icon="menu-down" />}
+                     style={styles.menuInput}
+                     mode="outlined"
+                   />
+                 </TouchableOpacity>
+               }
+             >
+               {FRUIT_STATUS_OPTIONS.map((option) => (
+                 <Menu.Item
+                   key={option}
+                   onPress={() => {
+                     setFruitStatus(option);
+                     setStatusMenuVisible(false);
+                   }}
+                   title={option.charAt(0).toUpperCase() + option.slice(1)}
+                 />
+               ))}
+             </Menu>
+           </View>
+         </View>
+
+
+           {/* 📍 Location */}
+                      <View style={styles.coordinateGroup}>
+                        <View style={styles.row}>
+                          <TextInput
+                            label="Latitude"
+                            value={latitudeInput}
+                            editable={false}
+                            style={[styles.input, styles.halfWidth]}
+                            mode="outlined"
+                          />
+                          <TextInput
+                            label="Longitude"
+                            value={longitudeInput}
+                            editable={false}
+                            style={[styles.input, styles.halfWidth]}
+                            mode="outlined"
+                          />
+                        </View>
+
+                        {/* ✅ Add this small confirmation text here */}
+                        {showCoordinateNotice && (
+                          <Text style={{ color: "#2ecc71", textAlign: "center", marginBottom: 10, fontWeight: "600" }}>
+                            Coordinates loaded from map.
+                          </Text>
+                        )}
+
+
+                        <TouchableOpacity onPress={getLocation} disabled={loading}>
+                          <Text style={styles.useLocationText}>
+                            {loading ? "Getting Location..." : "Get Current Location"}
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
 
           <TextInput
             label="Date Tracked"

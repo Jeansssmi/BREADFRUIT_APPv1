@@ -33,70 +33,139 @@ export default function LoginScreen() {
   const [rememberMe, setRememberMe] = useState(false);
   const [menuVisible, setMenuVisible] = useState(false);
   const slideAnim = useRef(new Animated.Value(300)).current;
-  const [isDarkMode, setIsDarkMode] = useState(false);
+  const { dark, toggleTheme } = useTheme();
   const [pendingModalVisible, setPendingModalVisible] = useState(false);
+  const [snackbarVisible, setSnackbarVisible] = useState(false);
+  const [snackbarMessage, setSnackbarMessage] = useState('');
+  const [savedPassword, setSavedPassword] = useState('');
+
+
+  const opacityAnim = useRef(new Animated.Value(0)).current;
 
   // ✅ Load remembered email
   useEffect(() => {
-    const loadRememberedEmail = async () => {
+    const loadSavedCredentials = async () => {
       try {
-        const rememberedEmail = await AsyncStorage.getItem('rememberedEmail');
-        if (rememberedEmail) {
-          setEmail(rememberedEmail);
+        const savedEmail = await AsyncStorage.getItem("rememberedEmail");
+        const savedPass = await AsyncStorage.getItem("rememberedPassword");
+
+        if (savedEmail) {
+          setEmail(savedEmail);
           setRememberMe(true);
         }
+
+        if (savedPass) {
+          setPassword(savedPass);
+          setRememberMe(true);
+        }
+
       } catch (e) {
-        console.error('Failed to load remembered email.', e);
+        console.error("Failed to load saved credentials:", e);
       }
     };
-    loadRememberedEmail();
+
+    loadSavedCredentials();
   }, []);
 
-  // 🌙 Load saved theme mode on startup
-  useEffect(() => {
-    const loadTheme = async () => {
-      try {
-        const savedTheme = await AsyncStorage.getItem('themeMode');
-        if (savedTheme) setIsDarkMode(savedTheme === 'dark');
-      } catch (e) {
-        console.error('Failed to load theme mode.', e);
-      }
-    };
-    loadTheme();
-  }, []);
 
-  // ✅ Handle Login
- const handleLogin = async () => {
-   // 🧹 Clear old error message before new login
-   setError('');
 
-   if (!email || !password) {
-     setError('Email and password are required.');
-     return;
-   }
 
-   setLoading(true);
-   try {
-     await login(email, password);
-     // If login succeeds, everything else is handled by RootNavigator
-   } catch (err: any) {
-     let errorMessage = 'Login failed. Please check your credentials.';
+  const showSnackbar = (message: string) => {
+    setSnackbarMessage(message);
+    setSnackbarVisible(true);
 
-     if (err.code === 'auth/pending-approval') {
-       errorMessage = 'Your account is pending approval by an administrator.';
-     } else if (
-       err.code === 'auth/user-not-found' ||
-       err.code === 'auth/wrong-password' ||
-       err.code === 'auth/invalid-credential'
-     ) {
-       errorMessage = 'Invalid email or password.';
-     }
+    // Reset animation values
+    slideAnim.setValue(30);
+    opacityAnim.setValue(0);
 
-     setError(errorMessage);
-   } finally {
-     setLoading(false);
-   }
- };
+    // Slide + fade in
+    Animated.parallel([
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 300,
+        useNativeDriver: true,
+      }),
+      Animated.timing(opacityAnim, {
+        toValue: 1,
+        duration: 300,
+        useNativeDriver: true,
+      }),
+    ]).start();
+
+    // Auto-hide after 3 seconds
+    setTimeout(() => {
+      Animated.parallel([
+        Animated.timing(opacityAnim, {
+          toValue: 0,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+        Animated.timing(slideAnim, {
+          toValue: 30,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+      ]).start(() => setSnackbarVisible(false));
+    }, 3000);
+  };
+
+const handleLogin = async () => {
+  setError('');
+
+  if (!email || !password) {
+    setError('Email and password are required.');
+    return;
+  }
+
+  setLoading(true);
+
+  try {
+    // Temporary login
+    const temp = await auth().signInWithEmailAndPassword(email, password);
+    const uid = temp.user.uid;
+
+    // Get user data
+    const userDoc = await firestore().collection("users").doc(uid).get();
+    const userData = userDoc.data();
+
+    // Block pending accounts
+    if (userData?.role === "researcher" && userData?.status === "pending") {
+      showSnackbar("Your account is awaiting admin approval.");
+      await auth().signOut();
+      setLoading(false);
+      return;
+    }
+
+    // Real login
+    await login(email, password);
+
+    // ---------------------------------------
+    //  ✅ FIX REMEMBER ME LOGIC
+    // ---------------------------------------
+    if (rememberMe) {
+      await AsyncStorage.setItem("rememberedEmail", email);
+      await AsyncStorage.setItem("rememberedPassword", password);
+    } else {
+      await AsyncStorage.removeItem("rememberedEmail");
+      await AsyncStorage.removeItem("rememberedPassword");
+    }
+
+  } catch (err) {
+    let errorMessage = "Login failed. Please check your credentials.";
+
+    if (
+      err.code === 'auth/user-not-found' ||
+      err.code === 'auth/wrong-password' ||
+      err.code === 'auth/invalid-credential'
+    ) {
+      errorMessage = 'Invalid email or password.';
+    }
+
+    setError(errorMessage);
+  } finally {
+    setLoading(false);
+  }
+};
 
   // ✅ Drawer Menu Animation
   const toggleMenu = (show: boolean) => {
@@ -135,7 +204,7 @@ export default function LoginScreen() {
 
   return (
     <LinearGradient
-      colors={isDarkMode ? ['#121212', '#000'] : ['#e6ffe6', '#f7fdf7']}
+      colors={dark ? ['#121212', '#000'] : ['#e6ffe6', '#f7fdf7']}
       style={styles.gradientContainer}
     >
       {/* Background Blobs */}
@@ -148,11 +217,11 @@ export default function LoginScreen() {
         <View style={styles.topHeader}>
           <MaterialCommunityIcons name="leaf" size={40} color="#006400" style={styles.logoIcon} />
           <TouchableOpacity onPress={() => toggleMenu(true)} style={styles.menuIconContainer}>
-            <MaterialCommunityIcons name="menu" size={30} color={isDarkMode ? '#fff' : '#333'} />
+            <MaterialCommunityIcons name="menu" size={30} color={dark ? '#fff' : '#333'} />
           </TouchableOpacity>
         </View>
 
-        <Text style={[styles.loginTitle, { color: isDarkMode ? '#fff' : '#333' }]}>Login</Text>
+        <Text style={[styles.loginTitle, { color: dark ? '#fff' : '#333' }]}>Login</Text>
 
         <View style={styles.formSection}>
           {error ? <Text style={styles.errorText}>{error}</Text> : null}
@@ -161,61 +230,81 @@ export default function LoginScreen() {
            label="Email"
            value={email}
            onChangeText={setEmail}
-           style={[styles.input, { color: isDarkMode ? '#fff' : '#333' }]}
+           style={styles.input}
+           mode="flat"
            autoCapitalize="none"
            keyboardType="email-address"
-           mode="flat"
-           underlineColor={isDarkMode ? '#444' : '#e0e0e0'}
+           underlineColor={dark ? "#444" : "#e0e0e0"}
            activeUnderlineColor="#00c853"
-           left={<TextInput.Icon icon="email-outline" color={isDarkMode ? '#fff' : '#333'} />}
+
+           left={
+             <TextInput.Icon
+               icon="email-outline"
+               color={dark ? "#FFFFFF" : "#00C853"}   // Icon color
+             />
+           }
+
+           // 🔥 DIFFERENT TYPING COLOR BASED ON THEME
+           textColor={dark ? "#FFFFFF" : "#333"}
+
            theme={{
              colors: {
-               text: isDarkMode ? '#fff' : '#333',
-               placeholder: isDarkMode ? '#ccc' : '#666',
-               primary: '#00c853',
-               background: 'transparent',
+               primary: "#00c853",
+               placeholder: dark ? "#AAAAAA" : "#00C853",
+               background: "transparent",
              },
            }}
+
            selectionColor="#00c853"
          />
 
-         <TextInput
-           label="Password"
-           value={password}
-           onChangeText={setPassword}
-           secureTextEntry={!passwordVisible}
-           style={[styles.input, { color: isDarkMode ? '#fff' : '#333' }]}
-           mode="flat"
-           underlineColor={isDarkMode ? '#444' : '#e0e0e0'}
-           activeUnderlineColor="#00c853"
-           left={<TextInput.Icon icon="lock-outline" color={isDarkMode ? '#fff' : '#333'} />}
-           right={
-             <TextInput.Icon
-               icon={passwordVisible ? 'eye-outline' : 'eye-off-outline'}
-               onPress={() => setPasswordVisible(!passwordVisible)}
-               color={isDarkMode ? '#ccc' : '#666'}
-             />
-           }
-           theme={{
-             colors: {
-               text: isDarkMode ? '#fff' : '#333',
-               placeholder: isDarkMode ? '#ccc' : '#666',
-               primary: '#00c853',
-               background: 'transparent',
-             },
-           }}
-           selectionColor="#00c853"
-         />
+
+            <TextInput
+              label="Password"
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry={!passwordVisible}
+              style={styles.input}
+              mode="flat"
+              underlineColor={dark ? "#444" : "#e0e0e0"}
+              activeUnderlineColor="#00c853"
+              left={
+                <TextInput.Icon
+                  icon="lock-outline"
+                  color={dark ? "#FFFFFF" : "#00C853"}
+                />
+              }
+              right={
+                <TextInput.Icon
+                  icon={passwordVisible ? "eye-outline" : "eye-off-outline"}
+                  onPress={() => setPasswordVisible(!passwordVisible)}
+                  color={dark ? "#FFFFFF" : "#00C853"}
+                />
+              }
+
+              // 🔥 DIFFERENT TEXT COLOR BASED ON THEME
+              textColor={dark ? "#FFFFFF" : "#333"}
+
+              theme={{
+                colors: {
+                  primary: "#00c853",
+                  placeholder: dark ? "#AAAAAA" : "#00C853",
+                  background: "transparent",
+                },
+              }}
+
+              selectionColor="#00c853"
+            />
 
 
           <View style={styles.optionsContainer}>
             <View style={styles.rememberMe}>
               <Switch value={rememberMe} onValueChange={setRememberMe} color="#00c853" />
-              <Text style={[styles.optionText, { color: isDarkMode ? '#fff' : '#666' }]}>Remember me</Text>
+              <Text style={[styles.optionText, { color: dark ? '#fff' : '#666' }]}>Remember me</Text>
             </View>
 
-            <TouchableOpacity onPress={handleForgotPassword}>
-              <Text style={[styles.forgotPasswordText, { color: isDarkMode ? '#80ff80' : '#00c853' }]}>Forgot Password?</Text>
+            <TouchableOpacity onPress={() => navigation.navigate("ForgotPassword")} >
+              <Text style={[styles.forgotPasswordText, { color: dark ? '#80ff80' : '#00c853' }]}>Forgot Password?</Text>
             </TouchableOpacity>
           </View>
 
@@ -230,7 +319,7 @@ export default function LoginScreen() {
           </Button>
 
           <View style={styles.registerContainer}>
-            <Text style={[styles.registerText, { color: isDarkMode ? '#ccc' : '#666' }]}>Don't have an account? </Text>
+            <Text style={[styles.registerText, { color: dark ? '#ccc' : '#666' }]}>Don't have an account? </Text>
             <TouchableOpacity onPress={() => navigation.navigate('Register')}>
               <Text style={styles.signUpText}>Sign Up</Text>
             </TouchableOpacity>
@@ -243,53 +332,42 @@ export default function LoginScreen() {
         <TouchableOpacity activeOpacity={1} onPress={() => toggleMenu(false)} style={styles.overlay} />
 
         <Animated.View
-          style={[styles.drawerContainer, { backgroundColor: isDarkMode ? '#111' : '#fff', transform: [{ translateX: slideAnim }] }]}
+          style={[styles.drawerContainer, { backgroundColor: dark ? '#111' : '#fff', transform: [{ translateX: slideAnim }] }]}
         >
-          <Text style={[styles.drawerTitle, { color: isDarkMode ? '#fff' : '#333' }]}>Menu</Text>
+          <Text style={[styles.drawerTitle, { color: dark ? '#FFFFFF' : '#333' }]}>Menu</Text>
 
           <TouchableOpacity style={styles.drawerItem} onPress={() => navigation.navigate('AboutHelp')}>
-            <MaterialCommunityIcons name="information-outline" size={22} color={isDarkMode ? '#fff' : '#333'} />
-            <Text style={[styles.drawerText, { color: isDarkMode ? '#fff' : '#333' }]}>About App</Text>
+            <MaterialCommunityIcons name="information-outline" size={22} color={dark ? '#Fff' : '#F7F7F7'} />
+            <Text style={[styles.drawerText, { color: dark ? '#fff' : '#333' }]}>About App</Text>
 
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.drawerItem} onPress={() => navigation.navigate('NotificationPreferences')}>
-            <MaterialCommunityIcons name="bell-outline" size={22} color={isDarkMode ? '#fff' : '#333'} />
-            <Text style={[styles.drawerText, { color: isDarkMode ? '#fff' : '#333' }]}>Notifications</Text>
-          </TouchableOpacity>
+
 
           <TouchableOpacity
             style={styles.drawerItem}
             onPress={() => Alert.alert('Contact Us', 'Email: support@breadfruit.com')}
           >
-            <MaterialCommunityIcons name="email-outline" size={22} color={isDarkMode ? '#fff' : '#333'} />
-            <Text style={[styles.drawerText, { color: isDarkMode ? '#fff' : '#333' }]}>Contact Support</Text>
+            <MaterialCommunityIcons name="email-outline" size={22} color={dark ? '#FFFFFF' : '#333'} />
+            <Text style={[styles.drawerText, { color: dark ? '#FFFFFF' : '#333' }]}>Contact Support</Text>
           </TouchableOpacity>
 
           <View style={styles.themeContainer}>
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
               <MaterialCommunityIcons
-                name={isDarkMode ? 'weather-night' : 'white-balance-sunny'}
+                name={dark ? 'weather-night' : 'white-balance-sunny'}
                 size={22}
-                color={isDarkMode ? '#FFD700' : '#333'}
+                color={dark ? '#FFD700' : '#333'}
               />
-              <Text style={[styles.drawerText, { color: isDarkMode ? '#fff' : '#333' }]}>
-                {isDarkMode ? 'Dark Mode' : 'Light Mode'}
+              <Text style={[styles.drawerText, { color: dark ? '#fff' : '#333' }]}>
+                {dark ? 'Dark Mode' : 'Light Mode'}
               </Text>
             </View>
             <Switch
-              value={isDarkMode}
-              onValueChange={async (value) => {
-                try {
-                  setIsDarkMode(value);
-                  await AsyncStorage.setItem('themeMode', value ? 'dark' : 'light');
-                } catch (e) {
-                  console.error('Failed to save theme mode.', e);
-                }
-              }}
-              thumbColor={isDarkMode ? '#2ecc71' : '#f4f3f4'}
-              trackColor={{ false: '#767577', true: '#a5d6a7' }}
+              value={dark}
+              onValueChange={toggleTheme}
             />
+
           </View>
 
           <TouchableOpacity
@@ -302,25 +380,35 @@ export default function LoginScreen() {
         </Animated.View>
       </Modal>
 
-      {/* 🚫 Pending Approval Modal */}
-      <Modal transparent visible={pendingModalVisible} animationType="fade">
-
-      <View style={[styles.pendingBox, { backgroundColor: isDarkMode ? '#222' : '#fff' }]}>
-        <MaterialCommunityIcons name="clock-outline" size={48} color="#2ecc71" />
-        <Text style={[styles.pendingTitle, { color: isDarkMode ? '#fff' : '#2ecc71' }]}>Pending Approval</Text>
-        <Text style={[styles.pendingText, { color: isDarkMode ? '#ddd' : '#333' }]}>
-          Your account is awaiting admin approval. Please try again later.
-        </Text>
-        <Button
-          mode="contained"
-          onPress={() => setPendingModalVisible(false)}
-          style={[styles.pendingButton, { backgroundColor: '#2ecc71' }]}
+      {snackbarVisible && snackbarMessage ? (
+        <Animated.View
+          style={{
+            position: 'absolute',
+            bottom: 40,
+            left: 20,
+            right: 20,
+            borderRadius: 10,
+            backgroundColor: '#2ecc71',
+            padding: 12,
+            elevation: 5,
+            opacity: opacityAnim,
+            transform: [{ translateY: slideAnim }],
+          }}
         >
-          OK
-        </Button>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <MaterialCommunityIcons
+              name="clock-outline"
+              size={22}
+              color="#fff"
+              style={{ marginRight: 10 }}
+            />
+            <Text style={{ color: 'white', fontSize: 15 }}>
+              {snackbarMessage}
+            </Text>
+          </View>
+        </Animated.View>
+      ) : null}
 
-        </View>
-      </Modal>
     </LinearGradient>
   );
 }

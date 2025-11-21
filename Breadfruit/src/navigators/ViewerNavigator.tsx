@@ -25,7 +25,7 @@ function TreeStack() {
       <TreeStackNav.Screen
         name="TreeList"
         component={TreeListScreen}
-        options={{ headerTitle: 'Trees' }}
+
       />
     </TreeStackNav.Navigator>
   );
@@ -49,7 +49,7 @@ function ProfileStack() {
       <ProfileStackNav.Screen
         name="AboutHelp"
         component={AboutHelpScreen}
-        options={{ headerTitle: 'About & Help' }}
+        options={{ headerShown: false }}
       />
        {/* ✅ Add Appearance Screen here */}
                   <ProfileStackNav.Screen
